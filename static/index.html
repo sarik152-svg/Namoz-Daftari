@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0D1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Namoz Daftari">
+<title>Namoz Daftari</title>
+<style>
+:root{
+  --night:#0D1220; --panel:#151D2E; --panel2:#1B2436; --line:#26314A;
+  --brass:#C9A227; --jade:#4CAF8B; --clay:#C9584B; --text:#E7EBF3; --mut:#8895AE;
+  --serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+  --sans:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--night);color:var(--text);font-family:var(--sans);
+     padding-bottom:env(safe-area-inset-bottom)}
+#app{max-width:560px;margin:0 auto;padding:22px 16px 100px}
+h1,h2,h3{font-family:var(--serif);font-weight:400;margin:0}
+button{font:inherit}
+.eyebrow{color:var(--brass);font-size:10px;letter-spacing:.22em;text-transform:uppercase}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.p14{padding:14px}.p18{padding:18px}
+.mb10{margin-bottom:10px}.mb14{margin-bottom:14px}.mb18{margin-bottom:18px}.mt12{margin-top:12px}.mt14{margin-top:14px}
+.flex{display:flex}.between{justify-content:space-between}.center{align-items:center}
+.gap2{gap:8px}.gap3{gap:12px}.col{flex-direction:column}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.btn{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;
+     padding:7px 10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px}
+.btn:active{opacity:.7}
+.btn-gold{background:var(--brass);color:#0D1220;border:none;font-weight:600}
+.btn-green{background:var(--jade);color:#08140F;border:none;font-weight:600}
+.btn-wide{width:100%;padding:13px 0;border-radius:12px;font-size:14px}
+.mbtn{width:42px;height:42px;border-radius:11px;cursor:pointer;background:var(--panel2);
+      border:1px solid var(--line);color:var(--mut);display:flex;align-items:center;justify-content:center;font-size:20px}
+.input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+      border-radius:9px;padding:10px 11px;font-family:var(--sans);font-size:13px;outline:none}
+textarea{line-height:1.6;resize:vertical}
+.label{font-size:11px;color:var(--mut);letter-spacing:.06em;text-transform:uppercase;margin:16px 0 7px}
+.row{display:flex;justify-content:space-between;font-size:12px;padding:3px 0}
+.row span:first-child{color:var(--mut)}
+.stat{padding:12px;text-align:center}
+.stat b{font-family:var(--serif);font-size:25px;font-weight:400;display:block;line-height:1}
+.stat i{font-style:normal;font-size:10px;color:var(--mut);display:block;margin-top:5px}
+.bar{height:5px;background:var(--panel2);border-radius:3px;overflow:hidden;display:flex}
+.tabbar{position:fixed;bottom:0;left:0;right:0;background:rgba(13,18,32,.95);border-top:1px solid var(--line);
+        backdrop-filter:blur(8px);padding-bottom:env(safe-area-inset-bottom)}
+.tabbar div{max-width:560px;margin:0 auto;display:flex}
+.tabbar button{flex:1;padding:11px 0 14px;background:none;border:none;cursor:pointer;color:var(--mut);
+        display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;letter-spacing:.05em}
+.tabbar button.on{color:var(--brass)}
+.ayat{display:flex;gap:8px;padding:10px 12px;background:var(--panel);border-left:2px solid var(--brass);
+      border-radius:0 10px 10px 0;font-family:var(--serif);font-size:13.5px;color:var(--mut);line-height:1.55;font-style:italic}
+.muted{color:var(--mut)}.small{font-size:11px}.tiny{font-size:10.5px}
+.jade{color:var(--jade)}.clay{color:var(--clay)}.brass{color:var(--brass)}
+.arc{position:relative;height:6px;border-radius:3px;background:var(--panel2);
+     background-image:linear-gradient(90deg,#4CAF8B55,#4CAF8B33 55%,#C9A22744)}
+.arc i{position:absolute;top:-3px;width:6px;height:12px;border-radius:2px;background:var(--text)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.pname{font-family:var(--serif);font-size:17px}
+.chip{font-size:9px;border:1px solid #C9A22755;color:var(--brass);border-radius:4px;padding:1px 5px}
+.hd{width:6px;border-radius:3px}
+.sw{width:22px;height:22px;border-radius:5px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;padding:0}
+.sw.on{background:var(--brass);border-color:var(--brass)}
+.link{background:none;border:none;color:var(--brass);font-size:12px;cursor:pointer;padding:8px 0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ══════════════ SOZLAMALAR ══════════════ */
+const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#C97BC0","#E0885A","#58BFC9","#9BC95E","#D96C8B"];
+const P_QAZO=0.25,P_MISS=1,TASK_AT=4,STREAK_STEP=10,BONUS_MIN=2,BONUS_MAX=5;
+
+const CITIES=[
+ {n:"Toshkent",lat:41.2995,lng:69.2401,tz:5,asr:2,fa:18,ia:18},
+ {n:"Samarqand",lat:39.627,lng:66.975,tz:5,asr:2,fa:18,ia:18},
+ {n:"Buxoro",lat:39.767,lng:64.423,tz:5,asr:2,fa:18,ia:18},
+ {n:"Andijon",lat:40.783,lng:72.333,tz:5,asr:2,fa:18,ia:18},
+ {n:"Farg'ona",lat:40.386,lng:71.787,tz:5,asr:2,fa:18,ia:18},
+ {n:"Namangan",lat:40.998,lng:71.673,tz:5,asr:2,fa:18,ia:18},
+ {n:"Qarshi",lat:38.86,lng:65.79,tz:5,asr:2,fa:18,ia:18},
+ {n:"Nukus",lat:42.46,lng:59.61,tz:5,asr:2,fa:18,ia:18},
+ {n:"Urganch",lat:41.55,lng:60.63,tz:5,asr:2,fa:18,ia:18},
+ {n:"Termiz",lat:37.22,lng:67.28,tz:5,asr:2,fa:18,ia:18},
+ {n:"Navoiy",lat:40.104,lng:65.373,tz:5,asr:2,fa:18,ia:18},
+ {n:"Jizzax",lat:40.116,lng:67.842,tz:5,asr:2,fa:18,ia:18},
+ {n:"Guliston",lat:40.489,lng:68.783,tz:5,asr:2,fa:18,ia:18},
+ {n:"Dubay",lat:25.2048,lng:55.2708,tz:4,asr:1,fa:18.2,ia:18.2},
+ {n:"Abu-Dabi",lat:24.453,lng:54.377,tz:4,asr:1,fa:18.2,ia:18.2},
+ {n:"Sharja",lat:25.346,lng:55.42,tz:4,asr:1,fa:18.2,ia:18.2},
+ {n:"Makka",lat:21.3891,lng:39.8579,tz:3,asr:1,fa:18.5,ia:18.5},
+ {n:"Madina",lat:24.47,lng:39.61,tz:3,asr:1,fa:18.5,ia:18.5},
+ {n:"Jidda",lat:21.543,lng:39.173,tz:3,asr:1,fa:18.5,ia:18.5},
+ {n:"Riyod",lat:24.713,lng:46.675,tz:3,asr:1,fa:18.5,ia:18.5},
+ {n:"Doha",lat:25.286,lng:51.531,tz:3,asr:1,fa:18,ia:18},
+ {n:"Istanbul",lat:41.008,lng:28.978,tz:3,asr:2,fa:18,ia:17},
+ {n:"Moskva",lat:55.756,lng:37.617,tz:3,asr:2,fa:18,ia:17},
+ {n:"Almati",lat:43.238,lng:76.889,tz:5,asr:2,fa:18,ia:18},
+ {n:"Bishkek",lat:42.874,lng:74.612,tz:6,asr:2,fa:18,ia:18},
+ {n:"Dushanbe",lat:38.56,lng:68.787,tz:5,asr:2,fa:18,ia:18},
+ {n:"Kuala-Lumpur",lat:3.139,lng:101.687,tz:8,asr:1,fa:20,ia:18},
+ {n:"Seul",lat:37.567,lng:126.978,tz:9,asr:2,fa:18,ia:17},
+ {n:"London",lat:51.507,lng:-0.128,tz:1,asr:2,fa:18,ia:17},
+ {n:"Berlin",lat:52.52,lng:13.405,tz:2,asr:2,fa:18,ia:17},
+ {n:"Nyu-York",lat:40.713,lng:-74.006,tz:-4,asr:2,fa:18,ia:17}
+];
+const DEFAULT_MEMBERS=[
+ {id:"sardor",name:"Sardor Valixanov",city:"Toshkent",lat:41.2995,lng:69.2401,tz:5,asr:2,fa:18,ia:18,pin:""},
+ {id:"behruz",name:"Behruz Qurbonov",city:"Dubay",lat:25.2048,lng:55.2708,tz:4,asr:1,fa:18.2,ia:18.2,pin:""}
+];
+
+/* ══════════════ NAMOZ VAQTI ══════════════ */
+const D2R=Math.PI/180;
+const sinD=d=>Math.sin(d*D2R),cosD=d=>Math.cos(d*D2R),tanD=d=>Math.tan(d*D2R);
+const asinD=x=>Math.asin(x)/D2R,acosD=x=>Math.acos(x)/D2R;
+const atan2D=(y,x)=>Math.atan2(y,x)/D2R,acotD=x=>Math.atan(1/x)/D2R;
+const fixn=(a,b)=>{a-=b*Math.floor(a/b);return a<0?a+b:a};
+const fixAng=a=>fixn(a,360),fixHr=a=>fixn(a,24);
+function julian(y,m,d){if(m<=2){y--;m+=12}const A=Math.floor(y/100),B=2-A+Math.floor(A/4);
+ return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+d+B-1524.5}
+function sunPos(jd){const D=jd-2451545,g=fixAng(357.529+.98560028*D),q=fixAng(280.459+.98564736*D);
+ const L=fixAng(q+1.915*sinD(g)+.02*sinD(2*g)),e=23.439-.00000036*D;
+ const RA=fixHr(atan2D(cosD(e)*sinD(L),cosD(L))/15);
+ return{decl:asinD(sinD(e)*sinD(L)),eqt:q/15-RA}}
+function calcTimes(date,c){
+ const jd=julian(date.getFullYear(),date.getMonth()+1,date.getDate())-c.lng/(15*24);
+ const midDay=t=>fixHr(12-sunPos(jd+t).eqt);
+ const at=(ang,t,ccw)=>{const dc=sunPos(jd+t).decl;
+   let x=(-sinD(ang)-sinD(dc)*sinD(c.lat))/(cosD(dc)*cosD(c.lat));x=Math.max(-1,Math.min(1,x));
+   return midDay(t)+(ccw?-1:1)*(acosD(x)/15)};
+ const asrT=(f,t)=>{const dc=sunPos(jd+t).decl;return at(-acotD(f+tanD(Math.abs(c.lat-dc))),t,false)};
+ let t={fajr:5/24,sunrise:6/24,dhuhr:.5,asr:13/24,maghrib:.75,isha:19/24};
+ for(let i=0;i<3;i++){t={fajr:at(c.fa,t.fajr,true)/24,sunrise:at(.833,t.sunrise,true)/24,
+   dhuhr:(midDay(t.dhuhr)+1/60)/24,asr:asrT(c.asr,t.asr)/24,
+   maghrib:at(.833,t.maghrib,false)/24,isha:at(c.ia,t.isha,false)/24}}
+ const off=c.tz-c.lng/15,o={};for(const k in t)o[k]=fixHr(t[k]*24+off);return o}
+function daySchedule(date,c){
+ const T=calcTimes(date,c),pv=new Date(date);pv.setDate(pv.getDate()-1);
+ const P=calcTimes(pv,c),nl=24-P.maghrib+T.fajr;
+ return{tahajjud:fixHr(P.maghrib+2/3*nl),bomdod:T.fajr,peshin:T.dhuhr,asr:T.asr,shom:T.maghrib,xufton:T.isha,
+  endTahajjud:T.fajr,endBomdod:T.sunrise,endPeshin:T.asr,endAsr:T.maghrib,endShom:T.isha,endXufton:T.fajr}}
+const hm=d=>{if(d==null||isNaN(d))return"--:--";const m=fixn(Math.round(d*60),1440);
+ return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+const toMin=s=>{const p=String(s).split(":");return +p[0]*60+ +p[1]};
+const diffMin=(a,b)=>{let d=toMin(b)-toMin(a);if(d<-720)d+=1440;if(d>720)d-=1440;return d};
+const winLen=(s,e)=>{let d=toMin(e)-toMin(s);if(d<=0)d+=1440;return d};
+const inWin=(n,s,e)=>e>s?(n>=s&&n<e):(n>=s||n<e);
+
+/* ══════════════ NAMOZLAR / MATNLAR ══════════════ */
+const PRAYERS=[
+ {k:"tahajjud",n:"Tahajjud",ic:"☾",fard:false},
+ {k:"bomdod",n:"Bomdod",ic:"◐",fard:true},
+ {k:"peshin",n:"Peshin",ic:"☀",fard:true},
+ {k:"asr",n:"Asr",ic:"◑",fard:true},
+ {k:"shom",n:"Shom",ic:"◒",fard:true},
+ {k:"xufton",n:"Xufton",ic:"✦",fard:true}
+];
+const EKY={tahajjud:"endTahajjud",bomdod:"endBomdod",peshin:"endPeshin",asr:"endAsr",shom:"endShom",xufton:"endXufton"};
+const STATUS={
+ ontime:{label:"Vaqtida",ball:0,color:"var(--jade)"},
+ qazo:{label:"Qazo (kun ichida)",ball:-P_QAZO,color:"var(--brass)"},
+ late:{label:"Keyingi kunda qazo",ball:-P_MISS,color:"var(--clay)"},
+ missed:{label:"O'qilmagan",ball:-P_MISS,color:"var(--clay)"}
+};
+const SUNNATS=[
+{t:"Salomni birinchi berish",d:"Kichik kattaga, yurgan o'tirganga, ozchilik ko'pchilikka salom beradi. Salom — muhabbatning kaliti.",a:"Bugun kamida 5 kishiga birinchi bo'lib salom bering."},
+{t:"Har ishni o'ngdan boshlash",d:"Payg'ambarimiz (s.a.v.) poyabzal kiyish, taharat olish, taomlanish va tarashda o'ng tomonni ma'qul ko'rardilar.",a:"Bugun har bir ishni ongli ravishda o'ngdan boshlang."},
+{t:"Bismillah bilan boshlash",d:"Taomdan avval «Bismillah», unutilsa «Bismillahi avvalahu va oxirahu» aytiladi. So'ngida «Alhamdulillah».",a:"Har ovqatda ovoz chiqarib ayting — bola-chaqa ham eshitsin."},
+{t:"Qorinning uchdan biri",d:"Odam farzandi qorindan yomonroq idishni to'ldirmagan: uchdan biri taom, uchdan biri suv, uchdan biri nafas uchun.",a:"Bugun to'yishga bir qoshiq qolganda dasturxondan turing."},
+{t:"Suvni uch nafasda ichish",d:"Suv o'tirib, uch marta nafas olib, shukr bilan ichiladi.",a:"Bugun har ichganda uch nafasga bo'ling."},
+{t:"Misvok (tish tozaligi)",d:"«Ummatimga og'ir bo'lmaganda edi, har namoz oldidan misvokni buyurar edim.»",a:"Kamida ikki vaqt namozdan oldin tish tozalang."},
+{t:"Uyqu odobi",d:"O'ng yonboshga yotib, qo'lni yuz ostiga qo'yib, taharat bilan uxlash sunnat.",a:"Bugun taharat bilan, o'ng yonboshda yoting."},
+{t:"Yotishdan oldin himoya",d:"Oyatul Kursi, Ixlos, Falaq, Nos — o'qib, kaftga puflab, badanga surtiladi.",a:"Bugun kechqurun uch marta takrorlang."},
+{t:"Juma odobi",d:"G'usl, toza kiyim, xushbo'ylik, erta borish va Kahf surasini o'qish.",a:"Yaqin jumaga rejani bugundan yozib qo'ying."},
+{t:"Dushanba-payshanba ro'zasi",d:"Amallar shu ikki kunda ko'tariladi, Payg'ambarimiz ro'za tutishni yaxshi ko'rar edilar.",a:"Kelasi payshanbani belgilab qo'ying."},
+{t:"Ayyomul biyz ro'zasi",d:"Har oyning 13, 14, 15-kunlari ro'za tutish — butun umr ro'za tutgandek.",a:"Kalendarga uch kunni belgilang."},
+{t:"Ishroq namozi",d:"Bomdodni jamoat bilan o'qib, quyosh chiqquncha zikrda o'tirib, so'ng ikki rakat o'qigan kishiga to'liq haj va umra savobi bor.",a:"Bugun bomdoddan keyin 20 daqiqa o'tiring."},
+{t:"Duho namozi",d:"Har bir bo'g'in uchun sadaqa lozim — ikki rakat duho shuning o'rnini bosadi.",a:"Peshingacha 2-4 rakat duho o'qing."},
+{t:"Namozdan keyingi tasbeh",d:"33 Subhanalloh, 33 Alhamdulillah, 34 Allohu akbar.",a:"Bugun besh vaqtda ham to'liq bajaring."},
+{t:"Oyatul Kursi",d:"Har farz namozdan keyin o'qigan kishini jannatdan faqat o'lim to'sadi.",a:"Har namozdan keyin qoldirmang."},
+{t:"Tahajjud",d:"Farzdan keyingi eng afzal namoz — tun namozi. Kechaning oxirgi uchdan biri duo qabul bo'ladigan payt.",a:"Bugun kechada budilnik qo'ying."},
+{t:"Vitrni oxirga qoldirish",d:"Tunda uyg'onishga ishonchi bor kishi vitrni oxiriga qoldirsin.",a:"Bugun vitrni tahajjuddan keyin o'qing."},
+{t:"Aksirish odobi",d:"Aksirgan «Alhamdulillah», eshitgan «Yarhamukalloh», u esa «Yahdikumulloh va yuslih balakum» deydi.",a:"Bugun bu duolarni yodlab oling."},
+{t:"Bemorni yo'qlash",d:"Bemorni yo'qlagan kishi qaytguncha jannat mevalari ichida bo'ladi.",a:"Bir kasal tanishingizga qo'ng'iroq qiling yoki boring."},
+{t:"Qo'l berib ko'rishish",d:"Ikki musulmon ko'rishsa, ajralmasdan avval gunohlari kechiriladi.",a:"Bugun samimiy, ikki qo'llab ko'rishing."},
+{t:"Tabassum — sadaqa",d:"«Birodaringga tabassum qilishing ham sadaqadir.»",a:"Bugun uydagilarga birinchi bo'lib tabassum qiling."},
+{t:"Qo'shni haqqi",d:"Sho'rva pishirsang suvini ko'paytir va qo'shningga ulash.",a:"Bugun qo'shningizga hol so'rab kiring."},
+{t:"Ota-ona haqqi",d:"Alloh roziligi ota-ona roziligida. Duolari qaytarilmaydi.",a:"Bugun ota-onangizga qo'ng'iroq qiling va duo so'rang."},
+{t:"G'azabni bosish",d:"G'azablansang: a'uzu ayt, tik tursang o'tir, o'tirgan bo'lsang yonboshla, taharat ol.",a:"Bugun bir marta jim qolib, g'azabni yutib yuboring."},
+{t:"Istixora",d:"Har muhim ishda ikki rakat o'qib, Allohdan yaxshisini so'rash.",a:"Hozirgi bir qaroringiz uchun istixora qiling."},
+{t:"Uydan chiqish duosi",d:"«Bismillahi tavakkaltu alalloh, va la havla va la quvvata illa billah.»",a:"Bugun har chiqishda ayting."},
+{t:"Masjid odobi",d:"O'ng oyoq bilan kirib duo aytiladi, chap oyoq bilan chiqiladi.",a:"Bugun masjidga kirish-chiqish duosini yodlang."},
+{t:"Tahiyyatul masjid",d:"Masjidga kirgan kishi o'tirmasdan avval ikki rakat o'qisin.",a:"Bugun har masjidga kirganda bajaring."},
+{t:"Istig'for",d:"«Men bir kunda yuz martadan ko'p istig'for aytaman» — Payg'ambarimiz (s.a.v.).",a:"Bugun 100 marta «Astag'firullah» ayting."},
+{t:"Salavot",d:"Kim menga bir marta salavot aytsa, Alloh unga o'n marta rahmat qiladi. Juma kuni ko'paytiring.",a:"Bugun 100 marta salavot ayting."},
+{t:"Fitrat amallari",d:"Tozalik, tirnoq olish, soch-soqolni tartibga solish — fitratdan.",a:"Bugun tozalik ishlarini yakunlang."},
+{t:"Xushbo'ylik",d:"Payg'ambarimiz xushbo'y hidni sevar va hech qachon rad etmas edilar.",a:"Bugun atir sepib chiqing, ayniqsa namozga."},
+{t:"Mehmon izzati",d:"Allohga va oxirat kuniga imon keltirgan kishi mehmonini izzat qilsin.",a:"Bu hafta bir oilani mehmonga chaqiring."},
+{t:"Sadaqa",d:"Yarim xurmo bo'lsa ham do'zaxdan to'siq bo'ling. Yashirin sadaqa g'azabni o'chiradi.",a:"Bugun hech kim bilmaydigan bir sadaqa bering."},
+{t:"Kunlik Qur'on",d:"Amallarning Allohga suyukligi — oz bo'lsa ham davomiysi.",a:"Bugun kamida bir sahifa o'qing va ma'nosiga qarang."},
+{t:"Yaxshi so'z yoki sukut",d:"Kim Allohga va oxirat kuniga imon keltirsa, yaxshi gapirsin yoki jim tursin.",a:"Bugun keraksiz bir gapni aytmay qoldiring."},
+{t:"Va'daga vafo",d:"Munofiqning belgisi: gapirsa yolg'on, va'da bersa buzadi, omonatga xiyonat qiladi.",a:"Bugun bergan har va'dani yozib qo'ying va bajaring."},
+{t:"Kechki vaqt odobi",d:"Kun botganda bolalarni uyga kiriting, idish-eshiklarni yopib, Bismillah ayting.",a:"Bugun shom paytida oilani uyga yig'ing."},
+{t:"Xurmo bilan iftor",d:"Payg'ambarimiz ro'zani xurmo, bo'lmasa suv bilan ochardilar.",a:"Kelasi nafl ro'zangizni shunday oching."},
+{t:"Shubhalidan qochish",d:"Halol ham, harom ham ayon. Ikkisi orasidagi shubhalidan saqlangan dinini asragan bo'ladi.",a:"Bugun daromadingizdagi bir shubhali nuqtani tekshiring."},
+{t:"Erta turish barakasi",d:"«Allohim, ummatimning erta turishiga baraka ber.»",a:"Bugun bomdoddan keyin uxlamang, ishni boshlang."},
+{t:"Kamtarlik",d:"Kim Alloh uchun tavozu qilsa, Alloh uni ko'taradi.",a:"Bugun eng oddiy ishni o'zingiz qiling."},
+{t:"Hojat chiqarish",d:"Alloh bandaga, banda birodariga yordam berib turgan ekan, yordam beradi.",a:"Bugun bir kishining ishini yo'lga qo'ying."},
+{t:"G'iybatdan tiyilish",d:"G'iybat — birodaringni u yoqtirmaydigan narsa bilan tilga olishing.",a:"Bugun bir suhbatni chiroyli tarzda burib yuboring."},
+{t:"Kunlik zikr",d:"«La ilaha illalloh vahdahu la sharika lah, lahul mulku va lahul hamd, va huva ala kulli shay'in qadiyr» — 100 marta.",a:"Bugun 100 martaga yeting."}
+];
+const AYAT=[
+"«Albatta, namoz mo'minlarga belgilangan vaqtlarda farz qilingandir.» — Niso, 103",
+"«Namozlarni va o'rta namozni muhofaza qilinglar.» — Baqara, 238",
+"«Kechaning bir qismida tahajjud namozini o'qi — bu senga qo'shimchadir.» — Isro, 79",
+"«Amallarning Allohga suyukligi — oz bo'lsa-da, doimiysidir.» — Hadis",
+"«Qiyomatda bandadan birinchi so'raladigan amal — namoz.» — Hadis"];
+
+/* ══════════════ SANA ══════════════ */
+const today=(d=new Date())=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const shift=(s,n)=>{const d=new Date(s+"T12:00:00");d.setDate(d.getDate()+n);return today(d)};
+const OY=["yanvar","fevral","mart","aprel","may","iyun","iyul","avgust","sentabr","oktabr","noyabr","dekabr"];
+const KUN=["yakshanba","dushanba","seshanba","chorshanba","payshanba","juma","shanba"];
+const pretty=s=>{const d=new Date(s+"T12:00:00");return d.getDate()+" "+OY[d.getMonth()]+", "+KUN[d.getDay()]};
+const fmt=n=>String(Math.round(n*100)/100).replace(".",",");
+const first=n=>n.split(" ")[0];
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const sunnatOf=ds=>{const d=new Date(ds+"T12:00:00");
+ const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/86400000);return SUNNATS[doy%SUNNATS.length]};
+
+/* ══════════════ SAQLASH VA SINXRON ══════════════ */
+const LS={
+ get(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}},
+ set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+let token=LS.get("nd_token","");
+let isAdmin=LS.get("nd_admin",false);
+let online=false,syncMsg="";
+const API="/api/v1";
+const loggedIn=()=>!!token;
+const hdrs=()=>{const h={"Content-Type":"application/json"};
+ if(token)h["Authorization"]="Bearer "+token;return h};
+async function api(path,opts){
+ const r=await fetch(API+path,Object.assign({cache:"no-store",headers:hdrs()},opts||{}));
+ if(r.status===401&&token){forgetSession();
+   const e=new Error("Sessiya tugadi");e.status=401;throw e}
+ if(!r.ok){let msg="";try{const j=await r.json();msg=(j.error&&j.error.message)||""}catch(e){}
+  const err=new Error(msg||("HTTP "+r.status));err.status=r.status;throw err}
+ return r.status===204?null:r.json()}
+function forgetSession(){
+ token="";isAdmin=false;LS.set("nd_token","");LS.set("nd_admin",false);
+ me=null;LS.set("nd_me",null);screen="login"}
+
+/* Marks made while offline wait here. pull() replaces local data with the
+   server's copy, so anything not yet sent must be flushed first or it is lost. */
+let outbox=LS.get("nd_outbox",[]);
+const setOutbox=v=>{outbox=v;LS.set("nd_outbox",outbox)};
+const rememberFailure=(id,d)=>{
+ if(!outbox.some(o=>o.id===id&&o.d===d))setOutbox(outbox.concat([{id:id,d:d}]))};
+const clearFailure=(id,d)=>setOutbox(outbox.filter(o=>!(o.id===id&&o.d===d)));
+const PERMANENT=[401,403,404,422];
+async function flushOutbox(){
+ for(const o of outbox.slice()){
+  try{await sendDay(o.id,o.d);clearFailure(o.id,o.d)}
+  catch(e){
+    if(PERMANENT.indexOf(e.status)>=0){clearFailure(o.id,o.d);continue}
+    return false}}
+ return true}
+
+async function pull(){
+ if(!loggedIn())return false;
+ if(!await flushOutbox()){
+   online=false;syncMsg="saqlanmagan belgilar bor - qayta urinilmoqda";return false}
+ try{
+   const j=await api("/state");
+   members=j.members;data={};
+   members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
+   LS.set("nd_members",members);LS.set("nd_data",data);
+   online=true;syncMsg="";return true;
+ }catch(e){online=false;syncMsg=e.status===401?"":"ulanmadi";return false}
+}
+async function pushMembers(){LS.set("nd_members",members)}
+async function pushData(id){
+ LS.set("nd_data",data);
+ if(!loggedIn())return;
+ try{
+   await api("/members/"+encodeURIComponent(id)+"/data",
+     {method:"PUT",body:JSON.stringify(data[id])});
+   online=true;syncMsg="";
+ }catch(e){online=false;
+   syncMsg=e.status===403?"Bu sizning yozuvingiz emas":e.status===429?"Juda ko'p urinish"
+     :"saqlanmadi - oflayn"}
+}
+async function sendDay(id,d){
+ const day=((data[id]||{}).days||{})[d]||{};
+ await api("/members/"+encodeURIComponent(id)+"/days/"+encodeURIComponent(d),
+   {method:"PUT",body:JSON.stringify(day)})}
+async function pushDay(id,d){
+ LS.set("nd_data",data);
+ if(!loggedIn())return;
+ try{
+   await sendDay(id,d);clearFailure(id,d);online=true;syncMsg="";
+ }catch(e){online=false;
+   if(PERMANENT.indexOf(e.status)<0)rememberFailure(id,d);
+   syncMsg=e.status===403?"Bu sizning yozuvingiz emas":e.status===429?"Juda ko'p urinish"
+     :"saqlanmadi - keyin yuboriladi"}
+}
+const blank=()=>({days:{},tasks:[],bonuses:[]});
+
+/* ══════════════ HOLAT ══════════════ */
+let members=LS.get("nd_members",DEFAULT_MEMBERS);
+let data=LS.get("nd_data",{});
+let me=LS.get("nd_me",null);
+let screen="login",tab="today",date=today(),pinFor=null,pinErr="",manualCity=false;
+let loginNames=[],loginPick=null,loginErr="",adminMode=false,roster=[],adminErr="";
+
+members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
+const M=id=>members.find(x=>x.id===id)||members[0];
+const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.length];
+
+/* ══════════════ HISOB ══════════════ */
+function score(u){
+ const days=(u&&u.days)||{},ds=Object.keys(days).sort();
+ const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,quran:0,per:{},bonusSum:0,debt:0,tasks:((u&&u.tasks)||[]).length};
+ PRAYERS.forEach(p=>o.per[p.k]={ontime:0,qazo:0,bad:0,delaySum:0,delayN:0});
+ ((u&&u.bonuses)||[]).forEach(b=>o.bonusSum+=b.amt);
+ if(ds.length){const td=today();let d=ds[0];
+  for(let i=0;i<800&&d<=td;i++,d=shift(d,1)){
+   const day=days[d]||{},closed=d<td;
+   PRAYERS.forEach(p=>{const r=day[p.k];
+    if(!p.fard){if(r&&r.s==="ontime"){o.tahajjud++;o.per[p.k].ontime++}return}
+    if(!r){if(closed){o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}return}
+    if(r.s==="ontime"){o.ontime++;o.per[p.k].ontime++}
+    else if(r.s==="qazo"){o.penalty+=P_QAZO;o.qazo++;o.per[p.k].qazo++}
+    else{o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}});
+   if(day.quran)o.quran++}}
+ o.debt=o.penalty-o.bonusSum-o.tasks*TASK_AT;
+ return o}
+function delays(u,c){
+ const days=(u&&u.days)||{},per={};PRAYERS.forEach(p=>per[p.k]={sum:0,n:0});
+ Object.keys(days).forEach(ds=>{const sc=daySchedule(new Date(ds+"T12:00:00"),c);
+  PRAYERS.forEach(p=>{const r=days[ds][p.k];
+   if(r&&(r.s==="ontime"||r.s==="qazo")&&r.t){const d=diffMin(hm(sc[p.k]),r.t);
+    if(d>=0&&d<900){per[p.k].sum+=d;per[p.k].n++}}})});
+ return per}
+function streakOf(days,pk){let cur=today(),n=0;
+ if(!(days[cur]&&days[cur][pk]&&days[cur][pk].s==="ontime"))cur=shift(cur,-1);
+ for(let i=0;i<400;i++){if(days[cur]&&days[cur][pk]&&days[cur][pk].s==="ontime"){n++;cur=shift(cur,-1)}else break}
+ return n}
+const claimed=(u,pk)=>((u&&u.bonuses)||[]).filter(b=>b.p===pk).reduce((m,b)=>Math.max(m,b.lvl),0);
+
+/* ══════════════ AMALLAR ══════════════ */
+const A={
+ async boot(){
+  await A.loadNames();
+  if(loggedIn()){
+   try{
+     const who=await api("/auth/me");
+     me=who.member_id;isAdmin=who.is_admin;
+     LS.set("nd_me",me);LS.set("nd_admin",isAdmin);
+     if(isAdmin){screen="admin";await A.loadRoster()}
+     else{screen="app";await pull()}
+   }catch(e){forgetSession()}
+  }
+  render();
+  const tick=async()=>{
+   if(loggedIn()&&!isAdmin&&document.visibilityState==="visible"){await pull();render()}};
+  setInterval(tick,60000);
+  document.addEventListener("visibilitychange",tick)},
+ async loadNames(){
+  try{const j=await api("/auth/members");loginNames=j.members}catch(e){loginNames=[]}},
+ go(s){screen=s;pinErr="";loginErr="";adminErr="";render()},
+ setTab(t){tab=t;window.scrollTo(0,0);render()},
+ setDate(n){date=shift(date,n);render()},
+ pickLogin(id){loginPick=loginPick===id?null:id;adminMode=false;loginErr="";render()},
+ toggleAdmin(){adminMode=!adminMode;loginPick=null;loginErr="";render()},
+ async doLogin(id){
+  const v=(document.getElementById("pinput")||{}).value||"";
+  try{
+   const j=await api("/auth/login",{method:"POST",
+     body:JSON.stringify({member_id:id,pin:v})});
+   token=j.token;isAdmin=false;LS.set("nd_token",token);LS.set("nd_admin",false);
+   me=id;LS.set("nd_me",id);data={};LS.set("nd_data",data);
+   screen="app";loginPick=null;loginErr="";
+   await pull();render();
+  }catch(e){
+   loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"PIN noto'g'ri";render()}},
+ async doAdminLogin(){
+  const v=(document.getElementById("apass")||{}).value||"";
+  try{
+   const j=await api("/auth/admin",{method:"POST",body:JSON.stringify({password:v})});
+   token=j.token;isAdmin=true;LS.set("nd_token",token);LS.set("nd_admin",true);
+   screen="admin";loginErr="";await A.loadRoster();render();
+  }catch(e){
+   loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Parol noto'g'ri";render()}},
+ async logout(){
+  try{await api("/auth/session",{method:"DELETE"})}catch(e){}
+  forgetSession();loginPick=null;adminMode=false;
+  await A.loadNames();render()},
+ async loadRoster(){
+  try{const j=await api("/admin/roster");roster=j.members;adminErr=""}
+  catch(e){roster=[];adminErr=e.message||"Ro'yxatni olib bo'lmadi"}},
+ async adminSetPin(id){
+  const v=prompt("Yangi PIN (4 raqam): "+id);
+  if(!v)return;
+  if(!/^[0-9]{4}$/.test(v)){alert("PIN 4 ta raqam bo'lsin");return}
+  try{await api("/members/"+encodeURIComponent(id)+"/pin",
+    {method:"POST",body:JSON.stringify({new_pin:v})});await A.loadRoster();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+ async changeMyPin(){
+  const cur=(document.getElementById("p_cur")||{}).value||"";
+  const nw=(document.getElementById("p_new")||{}).value||"";
+  const box=document.getElementById("p_msg");
+  if(!/^[0-9]{4}$/.test(nw)){box.textContent="Yangi PIN 4 ta raqam bo'lsin";
+   box.className="clay small";return}
+  try{
+   await api("/members/"+encodeURIComponent(me)+"/pin",
+     {method:"POST",body:JSON.stringify({new_pin:nw,current_pin:cur})});
+   box.textContent="PIN o'zgartirildi";box.className="jade small";
+   document.getElementById("p_cur").value="";document.getElementById("p_new").value="";
+  }catch(e){box.textContent=e.message||"O'zgartirib bo'lmadi";box.className="clay small"}},
+ pick(id){me=id;LS.set("nd_me",id);screen="app";pinFor=null;render()},
+ async refresh(){await pull();render()},
+ async mark(pk,how){
+  const cfg=M(me),sc=daySchedule(new Date(date+"T12:00:00"),cfg);
+  const isT=date===today(),now=new Date(),nowDec=now.getHours()+now.getMinutes()/60;
+  const nowHM=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  const day=Object.assign({},(data[me].days||{})[date]||{});
+  if(how==="clear")delete day[pk];
+  else if(how==="miss")day[pk]={s:"missed",t:null};
+  else{if(!isT)day[pk]={s:"late",t:null};
+       else day[pk]={s:inWin(nowDec,sc[pk],sc[EKY[pk]])?"ontime":"qazo",t:nowHM}}
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
+  render();await pushDay(me,date);render()},
+ async setTime(pk,v){
+  if(!v)return;const cfg=M(me),sc=daySchedule(new Date(date+"T12:00:00"),cfg);
+  const day=Object.assign({},(data[me].days||{})[date]||{});
+  const s=(date===today()&&inWin(toMin(v)/60,sc[pk],sc[EKY[pk]]))?"ontime":(day[pk].s==="late"?"late":"qazo");
+  day[pk]={s:s,t:v};
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
+  render();await pushDay(me,date)},
+ async field(f,v){
+  const day=Object.assign({},(data[me].days||{})[date]||{});day[f]=v;
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
+  render();await pushDay(me,date)},
+ async note(v){
+  const day=Object.assign({},(data[me].days||{})[date]||{});day.sunnat=v;
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
+  await pushDay(me,date)},
+ async claim(pk,lvl){
+  const s=score(data[me]);
+  const amt=Math.min(BONUS_MAX,Math.max(BONUS_MIN,Math.round(s.debt/2*100)/100));
+  data[me]=Object.assign({},data[me],{bonuses:((data[me].bonuses)||[]).concat([{p:pk,lvl:lvl,amt:amt,d:today()}])});
+  render();await pushData(me);render()},
+ rak:0,tas:0,
+ setRak(n){A.rak=(n===A.rak)?n-1:n;render()},
+ addTas(n){A.tas=Math.max(0,Math.min(500,A.tas+n));render()},
+ resetTas(){A.tas=0;render()},
+ async finishTask(){
+  data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([{d:today(),rak:25,tas:500}])});
+  A.rak=0;A.tas=0;render();await pushData(me);render()},
+ toggleManual(){manualCity=!manualCity;render()},
+ async addMember(){
+  const name=document.getElementById("f_name").value.trim();
+  const err=document.getElementById("f_err");
+  if(!name){err.textContent="Ism kiriting";return}
+  let city,lat,lng,fa=18,ia=18;
+  if(manualCity){
+   city=document.getElementById("f_city").value.trim();
+   lat=parseFloat(document.getElementById("f_lat").value);
+   lng=parseFloat(document.getElementById("f_lng").value);
+   if(!city||isNaN(lat)||isNaN(lng)){err.textContent="Shahar va koordinatalarni to'ldiring";return}
+   if(Math.abs(lat)>66){err.textContent="Kenglik ±66 dan oshmasin";return}
+  }else{const c=CITIES[+document.getElementById("f_sel").value];city=c.n;lat=c.lat;lng=c.lng;fa=c.fa;ia=c.ia}
+  const tz=parseFloat(document.getElementById("f_tz").value);
+  const asr=+document.querySelector("[name=f_asr]:checked").value;
+  const pin=document.getElementById("f_pin").value.trim();
+  if(!/^[0-9]{4}$/.test(pin)){err.textContent="PIN 4 ta raqam bo'lsin";return}
+  let b=name.toLowerCase().replace(/[^a-z0-9]+/g,"").slice(0,12)||"user",id=b,i=2;
+  const taken=(roster.length?roster:members).map(x=>x.id);
+  while(taken.indexOf(id)>=0)id=b+(i++);
+  try{await api("/members",{method:"POST",
+    body:JSON.stringify({id:id,name:name,city:city,lat:lat,lng:lng,tz:tz,asr:asr,fa:fa,ia:ia,pin:pin})})}
+  catch(e){err.textContent=e.message||"Qo'shib bo'lmadi";return}
+  await A.loadRoster();screen="admin";render()},
+ async delMember(id){
+  if(!confirm(id+" va uning barcha yozuvlari o'chirilsinmi?"))return;
+  try{await api("/members/"+encodeURIComponent(id),{method:"DELETE"})}
+  catch(e){alert(e.message||"O'chirib bo'lmadi");return}
+  if(isAdmin){await A.loadRoster()}else{forgetSession();await A.loadNames()}
+  render()},
+ exportJSON(){
+  const blob=new Blob([JSON.stringify({members:members,data:data},null,1)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="namoz-daftari-"+today()+".json";a.click()},
+ importJSON(inp){
+  const f=inp.files[0];if(!f)return;const fr=new FileReader();
+  fr.onload=async()=>{try{const j=JSON.parse(fr.result);
+   if(j.members)members=j.members;if(j.data)data=j.data;
+   members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
+   await pushMembers();if(me)await pushData(me);
+   alert("Yuklandi");render()}catch(e){alert("Fayl noto'g'ri")}};
+  fr.readAsText(f)}
+};
+
+/* ══════════════ KO'RINISH ══════════════ */
+function shell(inner){return inner}
+
+function loginScreen(){
+ let h=`<div style="max-width:420px;margin:0 auto">
+ <div class="eyebrow">Jamoa daftari</div>
+ <h1 style="font-size:33px;margin:10px 0 6px">Namoz <span class="brass">Daftari</span></h1>
+ <p class="muted" style="font-size:14px;margin:0 0 22px">Kim ekanligingizni tanlang va PIN kodingizni kiriting.
+  Har kim faqat o'z belgisini qo'yadi, statistika hammaga ochiq.</p>`;
+ if(!adminMode){
+  if(!loginNames.length)h+=`<p class="clay small">Serverga ulanib bo'lmadi. Internetni tekshiring.</p>`;
+  loginNames.forEach(m=>{
+   h+=`<div class="panel p14 mb10" style="border-color:${loginPick===m.id?"var(--brass)":"var(--line)"}">
+    <div class="flex center gap3" style="cursor:pointer" onclick="A.pickLogin('${m.id}')">
+     <div class="hd" style="height:34px;background:${PALETTE[Math.max(0,loginNames.findIndex(x=>x.id===m.id))%PALETTE.length]}"></div>
+     <div style="flex:1"><div style="font-family:var(--serif);font-size:19px">${esc(m.name)}</div>
+      <div class="muted small" style="margin-top:3px">\u{1F512} PIN bilan kiriladi</div></div>
+    </div>`;
+   if(loginPick===m.id)h+=`<div class="flex gap2" style="margin-top:12px">
+     <input id="pinput" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN kod"
+       onkeydown="if(event.key==='Enter')A.doLogin('${m.id}')">
+     <button class="btn btn-gold" style="padding:0 16px" onclick="A.doLogin('${m.id}')">Kirish</button></div>
+     ${loginErr?`<div class="clay small" style="margin-top:7px">${esc(loginErr)}</div>`:""}`;
+   h+=`</div>`});
+ }else{
+  h+=`<div class="panel p14 mb10" style="border-color:var(--brass)">
+   <div class="label" style="margin-top:0">Admin paroli</div>
+   <input id="apass" class="input" type="password" placeholder="parol"
+     onkeydown="if(event.key==='Enter')A.doAdminLogin()">
+   <button class="btn btn-gold btn-wide" style="margin-top:12px" onclick="A.doAdminLogin()">Kirish</button>
+   ${loginErr?`<div class="clay small" style="margin-top:9px">${esc(loginErr)}</div>`:""}</div>`;
+ }
+ h+=`<button class="btn" style="width:100%;margin-top:10px" onclick="A.toggleAdmin()">
+   ${adminMode?"← Oddiy kirish":"⚙ Admin sifatida kirish"}</button>
+  <p class="muted small" style="line-height:1.6;margin-top:14px">PIN kodni admindan oling.
+   Kirgandan keyin uni Sozlamalar bo'limida o'zingiz o'zgartirasiz.</p></div>`;
+ return h}
+
+function adminScreen(){
+ let h=`<div style="max-width:520px;margin:0 auto">
+ <div class="eyebrow">Boshqaruv</div>
+ <h1 style="font-size:28px;margin:8px 0 6px">Admin panel</h1>
+ <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 18px">Har bir a'zoning PIN kodi quyida.
+  Odamga o'z kodini ayting - keyin u Sozlamalardan o'zgartirib oladi.</p>`;
+ if(adminErr)h+=`<div class="clay small mb10">${esc(adminErr)}</div>`;
+ roster.forEach(m=>{
+  h+=`<div class="panel p14 mb10">
+   <div class="flex between center">
+    <div><div style="font-family:var(--serif);font-size:18px">${esc(m.name)}</div>
+     <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
+    <div style="text-align:right">
+     <div class="brass" style="font-family:var(--serif);font-size:26px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
+     <div class="muted tiny">PIN</div></div>
+   </div>
+   <div class="flex gap2" style="margin-top:12px">
+    <button class="btn" style="flex:1" onclick="A.adminSetPin('${m.id}')">PIN o'zgartirish</button>
+    <button class="btn" onclick="A.delMember('${m.id}')">\u{1F5D1}</button>
+   </div></div>`});
+ h+=`<button onclick="A.go('add')" style="width:100%;margin-top:6px;padding:15px;border-radius:14px;background:none;
+   border:1px dashed var(--line);color:var(--brass);font-size:13px;cursor:pointer">+ Yangi odam qo'shish</button>
+  <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
+  <div style="height:40px"></div></div>`;
+ return h}
+
+function addScreen(){
+ const autoTz=Math.round(-new Date().getTimezoneOffset()/60*2)/2;
+ return `<div style="max-width:460px;margin:0 auto">
+ <button class="btn" onclick="A.go(isAdmin?'admin':'app')">← Orqaga</button>
+ <div class="eyebrow" style="margin-top:16px">Yangi a'zo</div>
+ <h1 style="font-size:28px;margin:8px 0 4px">Odam qo'shish</h1>
+ <div class="label">Ism familiya</div>
+ <input id="f_name" class="input" placeholder="Masalan: Aziz Rahimov">
+ <div class="label">Shahar</div>
+ ${manualCity?`<input id="f_city" class="input" placeholder="Shahar nomi">
+   <div class="flex gap2" style="margin-top:8px">
+     <input id="f_lat" class="input" placeholder="Kenglik, masalan 41.3">
+     <input id="f_lng" class="input" placeholder="Uzunlik, masalan 69.24"></div>
+   <p class="muted small" style="margin:6px 0 0">Google Maps'da joyni bosib turing — chiqqan raqamlarni ko'chiring.</p>`
+  :`<select id="f_sel" class="input">${CITIES.map((c,i)=>`<option value="${i}">${c.n}</option>`).join("")}</select>`}
+ <button class="link" onclick="A.toggleManual()">${manualCity?"← Ro'yxatdan tanlash":"Ro'yxatda yo'q — qo'lda kiritaman →"}</button>
+ <div class="label">Vaqt mintaqasi (UTC)</div>
+ <input id="f_tz" class="input" type="number" step="0.5" value="${autoTz}">
+ <p class="muted small" style="margin:6px 0 0">Qurilmangizdan olindi. Yozgi vaqtga o'tadigan davlatlarda mavsum almashganda yangilang.</p>
+ <div class="label">Asr namozi hisobi</div>
+ <div class="flex gap2">
+  <label class="btn" style="flex:1;padding:11px 0"><input type="radio" name="f_asr" value="2" checked style="margin-right:7px">Hanafiy</label>
+  <label class="btn" style="flex:1;padding:11px 0"><input type="radio" name="f_asr" value="1" style="margin-right:7px">Shofe'iy</label>
+ </div>
+ <div class="label">PIN kod (ixtiyoriy)</div>
+ <input id="f_pin" class="input" inputmode="numeric" maxlength="6" placeholder="4-6 raqam">
+ <div id="f_err" class="clay small" style="margin-top:12px"></div>
+ <button class="btn btn-green btn-wide" style="margin-top:16px" onclick="A.addMember()">Qo'shish</button>
+ <div style="height:40px"></div></div>`}
+
+function syncScreen(){
+ const who=me?M(me):null;
+ return `<div style="max-width:460px;margin:0 auto">
+ <button class="btn" onclick="A.go('app')">← Orqaga</button>
+ <div class="eyebrow" style="margin-top:16px">Hisobim</div>
+ <h1 style="font-size:28px;margin:8px 0 10px">Sozlamalar</h1>
+ <p class="muted" style="font-size:13px;line-height:1.65;margin:0 0 4px">
+  Siz <b>${who?esc(who.name):""}</b> sifatida kirgansiz. Ma'lumot serverda saqlanadi,
+  telefon almashtirsangiz ham yo'qolmaydi. Faqat siz o'z belgilaringizni o'zgartira olasiz.</p>
+ <div class="label">PIN kodni o'zgartirish</div>
+ <input id="p_cur" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="joriy PIN">
+ <input id="p_new" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="yangi PIN (4 raqam)" style="margin-top:8px">
+ <button class="btn btn-gold btn-wide" style="margin-top:12px" onclick="A.changeMyPin()">Saqlash</button>
+ <div id="p_msg" class="small" style="margin-top:9px"></div>
+ <div class="label">Zaxira nusxa</div>
+ <div class="flex gap2">
+  <button class="btn" style="flex:1" onclick="A.exportJSON()">⭳ Faylga saqlash</button>
+  <label class="btn" style="flex:1;cursor:pointer">⭱ Fayldan tiklash
+    <input type="file" accept="application/json" style="display:none" onchange="A.importJSON(this)"></label>
+ </div>
+ <p class="muted small" style="margin-top:10px;line-height:1.6">Oyda bir marta faylga saqlab qo'ying.</p>
+ <button class="btn btn-wide" style="margin-top:18px" onclick="A.logout()">Chiqish</button>
+ <div style="height:40px"></div></div>`}
+
+/* ────────── BUGUN ────────── */
+function todayTab(){
+ const cfg=M(me),sc=daySchedule(new Date(date+"T12:00:00"),cfg);
+ const isT=date===today(),now=new Date(),nowDec=now.getHours()+now.getMinutes()/60;
+ const day=(data[me].days||{})[date]||{},s=score(data[me]);
+ let dayBall=0;PRAYERS.forEach(p=>{const r=day[p.k];if(r&&STATUS[r.s])dayBall+=STATUS[r.s].ball});
+ let nx=null;
+ if(isT){const list=PRAYERS.map(p=>({p:p,t:sc[p.k]})).sort((a,b)=>a.t-b.t);
+  nx=list.find(x=>x.t>nowDec)||null}
+ let h=`<div class="flex between center mb14">
+  <button class="btn" onclick="A.setDate(-1)">‹</button>
+  <div style="text-align:center">
+   <div style="font-family:var(--serif);font-size:19px">${pretty(date)}</div>
+   <div class="muted small" style="letter-spacing:.08em">${esc(cfg.city.toUpperCase())} · ${isT?"KUN OCHIQ":"KUN YOPILGAN"}</div>
+  </div>
+  <button class="btn" ${date>=today()?'style="opacity:.3"':""} onclick="${date>=today()?"":"A.setDate(1)"}">›</button>
+ </div>
+ <div class="grid2 mb14">
+  <div class="panel stat"><b class="${dayBall===0?"jade":"clay"}">${dayBall===0?"0":fmt(dayBall)}</b><i>Shu kun bali</i></div>
+  <div class="panel stat"><b class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Umumiy qarz":"Zaxira ball"}</i></div>
+ </div>`;
+ if(nx){const mm=Math.round((nx.t-nowDec)*60);
+  h+=`<div class="panel p14 mb14 flex between center">
+   <div><div class="eyebrow">Keyingi vaqt</div><div style="font-family:var(--serif);font-size:20px;margin-top:2px">${nx.p.n}</div></div>
+   <div style="text-align:right"><div class="brass" style="font-family:var(--serif);font-size:26px">${hm(nx.t)}</div>
+   <div class="muted small">${Math.floor(mm/60)} soat ${mm%60} daqiqa qoldi</div></div></div>`}
+ PRAYERS.forEach(p=>{
+  const st0=hm(sc[p.k]),en=hm(sc[EKY[p.k]]),r=day[p.k],S0=r?STATUS[r.s]:null;
+  const open=isT&&inWin(nowDec,sc[p.k],sc[EKY[p.k]]);
+  const notYet=isT&&!open&&nowDec<sc[p.k];
+  const dl=(r&&r.t&&(r.s==="ontime"||r.s==="qazo"))?diffMin(st0,r.t):null;
+  h+=`<div class="panel p14 mb10" style="border-color:${S0?S0.color:(open?"#C9A22755":"var(--line)")}">
+   <div class="flex center gap3">
+    <div style="width:34px;height:34px;border-radius:9px;background:var(--panel2);display:flex;align-items:center;
+      justify-content:center;color:${open?"var(--brass)":"var(--mut)"};flex-shrink:0">${p.ic}</div>
+    <div style="flex:1;min-width:0">
+     <div class="flex center gap2"><span class="pname">${p.n}</span>
+      ${!p.fard?'<span class="chip">NAFL</span>':""}
+      ${open?'<span class="jade" style="font-size:9px">● VAQTI KIRDI</span>':""}</div>
+     <div class="muted small">${st0} — ${en}</div>
+    </div>
+    <button class="mbtn" style="${["ontime","qazo","late"].includes(r&&r.s)?`background:${r.s==="ontime"?"var(--jade)":"var(--brass)"};border-color:transparent;color:#0D1220`:""}"
+      onclick="A.mark('${p.k}','pray')">✓</button>
+    <button class="mbtn" style="${(r&&r.s)==="missed"?"background:var(--clay);border-color:transparent;color:#0D1220":""}"
+      onclick="A.mark('${p.k}','miss')">−</button>
+   </div>`;
+  if(r){
+   if((r.s==="ontime"||r.s==="qazo")&&r.t){
+    const tot=winLen(st0,en),raw=diffMin(st0,r.t)/tot,pos=Math.max(0,Math.min(1,raw));
+    h+=`<div class="arc" style="margin-top:12px"><i style="left:calc(${pos*100}% - 3px);background:${raw>1?"var(--clay)":"var(--text)"}"></i></div>`}
+   h+=`<div class="flex between center" style="margin-top:8px">
+     <div style="font-size:12px;color:${S0.color}">${S0.label} ·
+       <span class="${S0.ball===0?"jade":"clay"}">${S0.ball===0?"0 ball":fmt(S0.ball)+" ball"}</span>
+       ${dl!=null&&dl>=0&&r.s==="ontime"?" · +"+dl+" daq":""}</div>
+     <div class="flex gap2 center">
+      ${(r.s==="ontime"||r.s==="qazo")?`<input type="time" value="${r.t||st0}" class="input"
+        style="width:auto;padding:4px 7px;font-size:12px" onchange="A.setTime('${p.k}',this.value)">`:""}
+      <button class="btn" style="padding:4px 8px;font-size:11px" onclick="A.mark('${p.k}','clear')">tozalash</button>
+     </div></div>`;
+  }else{
+   h+=`<div class="muted" style="margin-top:10px;font-size:11.5px">${
+    !p.fard?"Nafl — ball ketmaydi, faqat strike yig'iladi"
+    :notYet?"Vaqti kirmagan"
+    :open?"Vaqti ichida — hozir belgilasangiz 0 ball"
+    :isT?"Vaqti o'tdi — bugun qazo qilsangiz −0,25, ertaga qolsa −1"
+    :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)"}</div>`}
+  h+=`</div>`});
+ h+=`<div class="panel p14 mt14 flex between center">
+   <div><div style="font-family:var(--serif);font-size:16px">Bugun Qur'on o'qidim</div>
+   <div class="muted small">Oz bo'lsa ham — davomiysi afzal</div></div>
+   <button class="mbtn" style="${day.quran?"background:var(--jade);border-color:transparent;color:#0D1220":""}"
+     onclick="A.field('quran',${day.quran?"false":"true"})">✓</button></div>`;
+ return h}
+
+/* ────────── STATISTIKA ────────── */
+function statsTab(){
+ const ranked=members.slice().sort((a,b)=>{
+  const sa=score(data[a.id]),sb=score(data[b.id]);
+  const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
+  return (pb?sb.ontime/pb:0)-(pa?sa.ontime/pa:0)});
+ let h=`<div class="eyebrow">Jamoa</div><h2 style="font-size:24px;margin:6px 0 14px">Taqqoslash</h2><div class="grid2 mb14">`;
+ ranked.forEach((m,i)=>{
+  const s=score(data[m.id]),tot=s.ontime+s.qazo+s.bad,pct=tot?Math.round(s.ontime/tot*100):0;
+  h+=`<div class="panel p14" style="border-color:${m.id===me?"#C9A22766":"var(--line)"}">
+   <div class="flex center gap2" style="margin-bottom:8px">
+    <div class="hd" style="height:26px;background:${colorOf(m.id)}"></div>
+    <div><div style="font-family:var(--serif);font-size:16px">${esc(first(m.name))}</div>
+    <div class="muted tiny">${esc(m.city)} · ${i+1}-o'rin</div></div></div>
+   <div style="font-family:var(--serif);font-size:31px;line-height:1;color:${pct>=80?"var(--jade)":pct>=50?"var(--brass)":"var(--clay)"}">
+     ${pct}<span class="muted" style="font-size:14px">%</span></div>
+   <div class="muted tiny" style="margin-bottom:9px">vaqtida o'qilgan</div>
+   <div class="row"><span>Vaqtida</span><span class="jade">${s.ontime}</span></div>
+   <div class="row"><span>Qazo</span><span class="brass">${s.qazo}</span></div>
+   <div class="row"><span>O'tkazilgan</span><span class="clay">${s.bad}</span></div>
+   <div class="row"><span>Tahajjud</span><span class="brass">${s.tahajjud}</span></div>
+   <div class="row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px">
+     <span>${s.debt>0?"Qarz":"Zaxira"}</span>
+     <span class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</span></div>
+  </div>`});
+ h+=`</div>`;
+ /* strike */
+ h+=`<div class="panel p14 mb14" style="border-color:#C9A22744"><div class="eyebrow">Strike — har ${STREAK_STEP} kun mukofot</div>
+  <p class="muted small" style="margin:6px 0 12px">Bir namozni ${STREAK_STEP} kun ketma-ket vaqtida o'qisangiz,
+   qarzingizning yarmi o'chadi (${BONUS_MIN}–${BONUS_MAX} ball).</p>`;
+ PRAYERS.forEach(p=>{
+  const st=streakOf(data[me].days||{},p.k),lvl=Math.floor(st/STREAK_STEP),cl=claimed(data[me],p.k);
+  const ready=lvl>cl,prog=(st%STREAK_STEP)/STREAK_STEP;
+  h+=`<div style="margin-bottom:11px">
+   <div class="flex between center" style="font-size:12px;margin-bottom:5px">
+    <span>${p.n} <span class="muted">· ${st} kun</span></span>
+    ${ready?`<button class="btn btn-gold" style="padding:4px 10px;font-size:11px" onclick="A.claim('${p.k}',${lvl})">🎁 Mukofotni olish</button>`
+     :`<span class="muted small">${cl>0?cl+" mukofot · ":""}${STREAK_STEP-(st%STREAK_STEP)} kun qoldi</span>`}
+   </div>
+   <div class="bar"><div style="width:${(ready?1:prog)*100}%;background:${ready?"var(--brass)":"var(--jade)"}"></div></div>
+  </div>`});
+ h+=`</div>`;
+ /* 14 kunlik grafik */
+ h+=`<div class="panel p14 mb14"><div class="eyebrow">So'nggi 14 kun · vaqtida o'qilgan farzlar</div>${chartSVG()}</div>`;
+ /* namozlar tahlili */
+ h+=`<div class="panel p14"><div class="eyebrow">Qaysi namoz og'ir kelmoqda</div><div class="mt12">`;
+ PRAYERS.forEach(p=>{
+  h+=`<div style="margin-bottom:14px"><div style="font-size:12.5px;margin-bottom:6px">${p.n}</div>`;
+  members.forEach(m=>{
+   const s=score(data[m.id]).per[p.k],tot=s.ontime+s.qazo+s.bad;
+   const d=delays(data[m.id],m)[p.k],avg=d.n?Math.round(d.sum/d.n):null;
+   h+=`<div style="margin-bottom:5px">
+    <div class="flex between tiny muted" style="margin-bottom:3px">
+     <span style="color:${colorOf(m.id)}">${esc(first(m.name))}</span>
+     <span>${s.ontime}/${s.qazo}/${s.bad}${avg!=null?" · "+avg+" daq":""}</span></div>
+    <div class="bar">
+     <div style="width:${tot?s.ontime/tot*100:0}%;background:var(--jade)"></div>
+     <div style="width:${tot?s.qazo/tot*100:0}%;background:var(--brass)"></div>
+     <div style="width:${tot?s.bad/tot*100:0}%;background:var(--clay)"></div></div></div>`});
+  h+=`</div>`});
+ h+=`<div class="muted tiny" style="line-height:1.6">Raqamlar: vaqtida / qazo / o'tkazib yuborilgan.
+  «daq» — o'rtacha necha daqiqadan keyin o'qilgani.</div></div></div>`;
+ return h}
+
+function chartSVG(){
+ const W=520,H=150,pad=20,n=14,k=members.length;
+ const gw=(W-pad*2)/n,bw=Math.max(3,(gw-4)/Math.max(1,k));
+ let bars="",labels="";
+ for(let i=0;i<n;i++){
+  const ds=shift(today(),-(n-1-i)),x0=pad+i*gw;
+  members.forEach((m,j)=>{
+   const day=(data[m.id]&&data[m.id].days&&data[m.id].days[ds])||{};
+   const v=PRAYERS.filter(p=>p.fard&&day[p.k]&&day[p.k].s==="ontime").length;
+   const hh=(H-38)*(v/5),x=x0+2+j*bw;
+   bars+=`<rect x="${x.toFixed(1)}" y="${(H-24-hh).toFixed(1)}" width="${(bw-1).toFixed(1)}" height="${Math.max(hh,1).toFixed(1)}"
+     rx="2" fill="${colorOf(m.id)}" opacity="${v?1:.25}"></rect>`});
+  if(i%2===0)labels+=`<text x="${(x0+gw/2).toFixed(1)}" y="${H-8}" fill="#8895AE" font-size="9" text-anchor="middle">${ds.slice(8)}</text>`}
+ let grid="";[0,.5,1].forEach(f=>{const y=H-24-(H-38)*f;
+  grid+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="#26314A" stroke-dasharray="2 4"></line>`});
+ const leg=members.map(m=>`<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px">
+   <span class="dot" style="background:${colorOf(m.id)}"></span><span class="muted tiny">${esc(first(m.name))}</span></span>`).join("");
+ return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px">${grid}${bars}${labels}</svg>
+  <div style="margin-top:6px">${leg}</div>`}
+
+/* ────────── SUNNAT ────────── */
+function sunnatTab(){
+ const s=sunnatOf(date),day=(data[me].days||{})[date]||{};
+ let h=`<div class="eyebrow">Kunning sunnati · ${pretty(date)}</div>
+ <div class="panel p18 mb14" style="margin-top:10px;border-color:#C9A22744">
+  <div class="brass" style="font-family:var(--serif);font-size:23px;line-height:1.25">${esc(s.t)}</div>
+  <p style="font-size:14px;line-height:1.65;margin:10px 0 0">${esc(s.d)}</p>
+  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="eyebrow">Bugungi mashq</div>
+   <p class="muted" style="font-size:13px;margin:5px 0 0">${esc(s.a)}</p></div></div>
+ <div class="panel p14 mb14"><div class="eyebrow">Daftaringiz</div>
+  <p class="muted" style="font-size:12px;margin:6px 0 8px">Bugun bu sunnatdan nimani o'rgandingiz va qanday amal qildingiz?</p>
+  <textarea rows="5" placeholder="Masalan: bugun 5 kishiga birinchi salom berdim…"
+    onblur="A.note(this.value)">${esc(day.sunnat||"")}</textarea></div>`;
+ members.filter(m=>m.id!==me).forEach(m=>{
+  const note=((data[m.id]&&data[m.id].days&&data[m.id].days[date])||{}).sunnat;
+  h+=`<div class="panel p14 mb10">
+   <div style="font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:${colorOf(m.id)}">${esc(first(m.name))} yozgani</div>
+   <p style="font-size:13px;line-height:1.65;margin:8px 0 0;white-space:pre-wrap;color:${note?"var(--text)":"var(--mut)"}">${esc(note||"Hali yozilmagan.")}</p></div>`});
+ return h}
+
+/* ────────── VAZIFA ────────── */
+function taskTab(){
+ const s=score(data[me]),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
+ let h=`<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
+ <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
+  <div><span class="jade">Vaqtida o'qilsa</span> — 0 ball</div>
+  <div><span class="brass">Vaqti o'tib, o'sha kun ichida qazo qilinsa</span> — −0,25</div>
+  <div><span class="clay">Kun yopilib, keyingi kunga qolsa yoki o'qilmasa</span> — −1</div>
+  <div><span class="brass">Har ${STREAK_STEP} kunlik strike</span> — qarzning yarmi o'chadi</div>
+  <div><span style="color:var(--text)">Har ${TASK_AT} ball qarz</span> — 25 rakat nafl va 500 tasbeh</div>
+ </div></div>
+ <div class="grid3 mb14">
+  <div class="panel stat"><b class="clay">${fmt(s.penalty)}</b><i>Jamg'arilgan minus</i></div>
+  <div class="panel stat"><b class="jade">−${fmt(s.bonusSum+s.tasks*TASK_AT)}</b><i>Mukofot + vazifa</i></div>
+  <div class="panel stat"><b class="${s.debt>0?"brass":"jade"}">${s.debt>0?fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Qolgan qarz":"Zaxira"}</i></div>
+ </div>`;
+ if(pending>0){
+  let sw="";for(let i=0;i<25;i++)sw+=`<button class="sw ${i<A.rak?"on":""}" onclick="A.setRak(${i+1})"></button>`;
+  h+=`<div class="panel p18" style="border-color:#C9A22766">
+   <div class="brass" style="font-family:var(--serif);font-size:20px">Faol vazifa</div>
+   <p class="muted" style="font-size:12px;margin:4px 0 16px">Qarz ${fmt(s.debt)} ball. ${pending} ta vazifa ochiq — har biri 4 ballni yopadi.</p>
+   <div style="margin-bottom:18px">
+    <div class="flex between" style="font-size:12px;margin-bottom:8px"><span>Nafl namoz</span><span class="brass">${A.rak} / 25 rakat</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${sw}</div></div>
+   <div class="flex between" style="font-size:12px;margin-bottom:8px"><span>Tasbeh</span><span class="brass">${A.tas} / 500</span></div>
+   <div class="bar" style="height:6px;margin-bottom:12px"><div style="width:${Math.min(100,A.tas/5)}%;background:var(--brass)"></div></div>
+   <div class="flex gap2">
+    <button onclick="A.addTas(1)" style="flex:1;padding:16px 0;border-radius:12px;background:var(--panel2);
+      border:1px solid #C9A22755;color:var(--brass);font-family:var(--serif);font-size:18px;cursor:pointer">Subhanalloh +1</button>
+    <button class="btn" style="padding:16px 14px" onclick="A.addTas(33)">+33</button>
+    <button class="btn" style="padding:16px 14px" onclick="A.resetTas()">↺</button></div>
+   <button class="btn-wide ${A.rak>=25&&A.tas>=500?"btn-green":"btn"}" style="margin-top:18px;border:none;
+     ${A.rak>=25&&A.tas>=500?"":"background:var(--panel2);color:var(--mut)"}"
+     ${A.rak>=25&&A.tas>=500?'onclick="A.finishTask()"':""}>Vazifani yopish (−4 ball)</button>
+  </div>`;
+ }else{
+  h+=`<div class="panel" style="padding:26px;text-align:center">
+   <div style="font-size:26px">🏅</div>
+   <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Vazifa yo'q</div>
+   <p class="muted" style="font-size:13px;margin-top:6px">${s.debt>0?"Yana "+fmt(TASK_AT-s.debt)+" ball qarz yig'ilsa vazifa ochiladi.":"Qarzingiz yo'q. Strike'ni uzmang."}</p></div>`}
+ h+=`<div class="panel p14 mt14"><div class="eyebrow">Jamoa holati</div><div class="mt12">`;
+ members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id]);
+  h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
+   <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))}</div>
+   <div class="row"><span>Minus / mukofot / vazifa</span><span class="muted">${fmt(o.penalty)} · −${fmt(o.bonusSum)} · ${o.tasks}</span></div>
+   <div class="row"><span>${o.debt>0?"Qarz":"Zaxira"}</span><span class="${o.debt>0?"clay":"jade"}">${o.debt>0?"−"+fmt(o.debt):"+"+fmt(-o.debt)}</span></div></div>`});
+ h+=`</div></div>`;
+ const bs=(data[me].bonuses)||[];
+ if(bs.length){h+=`<div class="panel p14 mt14"><div class="eyebrow">Mukofot tarixi</div><div class="mt12">`;
+  bs.slice().reverse().forEach(b=>{const p=PRAYERS.find(x=>x.k===b.p);
+   h+=`<div class="row"><span>${p?p.n:b.p} · ${b.lvl*STREAK_STEP} kun · ${b.d}</span><span class="jade">−${fmt(b.amt)}</span></div>`});
+  h+=`</div></div>`}
+ return h}
+
+/* ────────── RENDER ────────── */
+function render(){
+ const app=document.getElementById("app");
+ const y=window.scrollY;
+ if(!loggedIn()||screen==="login"){app.innerHTML=loginScreen();return}
+ if(screen==="add"){app.innerHTML=addScreen();return}
+ if(screen==="admin"){app.innerHTML=adminScreen();return}
+ if(screen==="sync"){app.innerHTML=syncScreen();return}
+ if(!me||!M(me)){app.innerHTML=loginScreen();return}
+ const cfg=M(me);
+ let h=`<div class="flex between center mb18">
+  <div class="flex center gap3">
+   <div class="hd" style="height:36px;background:${colorOf(me)}"></div>
+   <div><div class="eyebrow">Ahd daftari</div>
+    <div style="font-family:var(--serif);font-size:21px;margin-top:2px">${esc(first(cfg.name))}
+     <span class="muted" style="font-size:13px">· ${esc(cfg.city)}</span></div></div>
+  </div>
+  <div class="flex gap2">
+   <button class="btn" title="${online?"Ulangan":"Oflayn"}" onclick="A.refresh()">
+     <span class="dot" style="background:${online?"var(--jade)":"var(--clay)"}"></span>↻</button>
+   <button class="btn" onclick="A.go('sync')">⚙</button>
+  </div></div>
+ <div class="ayat mb18"><span class="brass">❝</span><span>${AYAT[new Date(date+"T12:00:00").getDate()%AYAT.length]}</span></div>`;
+ h+= tab==="today"?todayTab():tab==="stats"?statsTab():tab==="sunnat"?sunnatTab():taskTab();
+ h+=`<div class="tabbar"><div>
+  <button class="${tab==="today"?"on":""}" onclick="A.setTab('today')"><span>📋</span>Bugun</button>
+  <button class="${tab==="stats"?"on":""}" onclick="A.setTab('stats')"><span>📊</span>Statistika</button>
+  <button class="${tab==="sunnat"?"on":""}" onclick="A.setTab('sunnat')"><span>📖</span>Sunnat</button>
+  <button class="${tab==="task"?"on":""}" onclick="A.setTab('task')"><span>🔥</span>Vazifa</button>
+ </div></div>`;
+ app.innerHTML=h;
+ window.scrollTo(0,y)}
+
+A.boot();
+</script>
+</body>
+</html>
