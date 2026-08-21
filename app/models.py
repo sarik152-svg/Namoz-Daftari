@@ -15,7 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.config import (
     MAX_BONUSES_PER_MEMBER,
+    MAX_BOOKS_PER_MEMBER,
     MAX_DAYS_PER_MEMBER,
+    MAX_LOG_ENTRIES_PER_BOOK,
+    MAX_NOTES_PER_BOOK,
     MAX_TASKS_PER_MEMBER,
     PIN_DIGITS,
 )
@@ -27,6 +30,9 @@ FARD_PRAYERS: tuple[PrayerKey, ...] = ("bomdod", "peshin", "asr", "shom", "xufto
 
 MEMBER_ID_PATTERN = re.compile(r"^[a-z0-9]{1,32}$")
 CLOCK_PATTERN = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+# Books and notes are created on the phone, so their ids arrive from the client
+# rather than the database. Constrained rather than trusted.
+CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 
 Latitude = Annotated[float, Field(ge=-90, le=90)]
 Longitude = Annotated[float, Field(ge=-180, le=180)]
@@ -43,6 +49,18 @@ def _validate_member_id(value: str) -> str:
 def _validate_pin(value: str) -> str:
     if not is_valid_pin(value):
         raise ValueError(f"PIN must be exactly {PIN_DIGITS} digits")
+    return value
+
+
+def _validate_client_id(value: str) -> str:
+    if not CLIENT_ID_PATTERN.match(value):
+        raise ValueError("id must be 1-40 letters, digits, '-' or '_'")
+    return value
+
+
+def _validate_clock(value: str | None) -> str | None:
+    if value is not None and not CLOCK_PATTERN.match(value):
+        raise ValueError("time must be HH:MM")
     return value
 
 
@@ -103,6 +121,64 @@ class Task(BaseModel):
     tas: int = Field(ge=0, le=100_000)
 
 
+# ---------------------------------------------------------------- kitob daftari
+class ReadingDay(BaseModel):
+    """Pages read on one day. The pace estimate is built entirely from these."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    d: Date
+    p: int = Field(ge=0, le=10_000)
+
+
+class BookNote(BaseModel):
+    """One thought taken from a book.
+
+    Short like a message, and readable by the whole group: the point of the page is
+    that everyone sees what the others are getting out of what they read.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    d: Date
+    t: str | None = None
+    page: int | None = Field(default=None, ge=0, le=100_000)
+    text: str = Field(min_length=1, max_length=4000)
+
+    _check_id = field_validator("id")(_validate_client_id)
+    _check_clock = field_validator("t")(_validate_clock)
+
+
+class Book(BaseModel):
+    """A book someone is reading, with its reading log and its notes inside it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    title: str = Field(min_length=1, max_length=200)
+    author: str = Field(default="", max_length=200)
+    pages: int = Field(ge=1, le=100_000)
+    started: Date
+    finished: Date | None = None
+    log: list[ReadingDay] = Field(
+        default_factory=list, max_length=MAX_LOG_ENTRIES_PER_BOOK
+    )
+    notes: list[BookNote] = Field(default_factory=list, max_length=MAX_NOTES_PER_BOOK)
+
+    _check_id = field_validator("id")(_validate_client_id)
+
+    @field_validator("log")
+    @classmethod
+    def _one_entry_per_day(cls, value: list[ReadingDay]) -> list[ReadingDay]:
+        """Two rows for the same day would double-count that day's pages, which is
+        what the pace estimate divides by. Reject rather than silently sum."""
+        days = [entry.d for entry in value]
+        if len(days) != len(set(days)):
+            raise ValueError("a book may log each day only once")
+        return value
+
+
 class MemberData(BaseModel):
     """Everything one member has logged."""
 
@@ -111,6 +187,7 @@ class MemberData(BaseModel):
     days: dict[str, DayRecord] = Field(default_factory=dict)
     bonuses: list[Bonus] = Field(default_factory=list, max_length=MAX_BONUSES_PER_MEMBER)
     tasks: list[Task] = Field(default_factory=list, max_length=MAX_TASKS_PER_MEMBER)
+    books: list[Book] = Field(default_factory=list, max_length=MAX_BOOKS_PER_MEMBER)
 
     @field_validator("days")
     @classmethod
@@ -129,6 +206,7 @@ class MemberData(BaseModel):
             "days": {day: record.to_wire() for day, record in self.days.items()},
             "bonuses": [b.model_dump(mode="json") for b in self.bonuses],
             "tasks": [t.model_dump(mode="json") for t in self.tasks],
+            "books": [b.model_dump(mode="json") for b in self.books],
         }
 
 

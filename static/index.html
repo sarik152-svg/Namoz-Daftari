@@ -75,6 +75,10 @@ textarea{line-height:1.6;resize:vertical}
 /* ══════════════ SOZLAMALAR ══════════════ */
 const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#C97BC0","#E0885A","#58BFC9","#9BC95E","#D96C8B"];
 const P_QAZO=0.25,P_MISS=1,TASK_AT=4,STREAK_STEP=10,BONUS_MIN=2,BONUS_MAX=5;
+/* Kitob qoidalari. Ball namoz balidan ALOHIDA yuritiladi — ikkalasi bir
+   hisobga qo'shilsa, o'qimagan kun namoz qarzini oshirib yuborardi. */
+const BET_NORMA=10;
+const K_KAM=0.5,K_NOL=1,K_NOTE=0.5,K_DONE=5,K_TASK_AT=4,K_TASK_BET=30;
 
 const CITIES=[
  {n:"Toshkent",lat:41.2995,lng:69.2401,tz:5,asr:2,fa:18,ia:18},
@@ -140,16 +144,47 @@ function calcTimes(date,c){
    maghrib:at(.833,t.maghrib,false)/24,isha:at(c.ia,t.isha,false)/24}}
  const off=c.tz-c.lng/15,o={};for(const k in t)o[k]=fixHr(t[k]*24+off);return o}
 function daySchedule(date,c){
- const T=calcTimes(date,c),pv=new Date(date);pv.setDate(pv.getDate()-1);
- const P=calcTimes(pv,c),nl=24-P.maghrib+T.fajr;
+ const T=calcTimes(date,c);
+ const pv=new Date(date);pv.setDate(pv.getDate()-1);
+ const nx=new Date(date);nx.setDate(nx.getDate()+1);
+ const P=calcTimes(pv,c),N=calcTimes(nx,c),nl=24-P.maghrib+T.fajr;
+ /* Xufton oynasi yarim tundan o'tib, ERTANGI bomdodda yopiladi. Ilgari bu yerda
+    shu kunning bomdodi turardi — u xufton boshlanishidan oldin bo'lgani uchun
+    oyna teskari hisoblanib, xufton keyingi kunga surilib ketardi. */
  return{tahajjud:fixHr(P.maghrib+2/3*nl),bomdod:T.fajr,peshin:T.dhuhr,asr:T.asr,shom:T.maghrib,xufton:T.isha,
-  endTahajjud:T.fajr,endBomdod:T.sunrise,endPeshin:T.asr,endAsr:T.maghrib,endShom:T.isha,endXufton:T.fajr}}
+  endTahajjud:T.fajr,endBomdod:T.sunrise,endPeshin:T.asr,endAsr:T.maghrib,endShom:T.isha,endXufton:N.fajr}}
 const hm=d=>{if(d==null||isNaN(d))return"--:--";const m=fixn(Math.round(d*60),1440);
  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
 const toMin=s=>{const p=String(s).split(":");return +p[0]*60+ +p[1]};
 const diffMin=(a,b)=>{let d=toMin(b)-toMin(a);if(d<-720)d+=1440;if(d>720)d-=1440;return d};
 const winLen=(s,e)=>{let d=toMin(e)-toMin(s);if(d<=0)d+=1440;return d};
 const inWin=(n,s,e)=>e>s?(n>=s&&n<e):(n>=s||n<e);
+
+/* ══════════════ QAYSI KUN, QAYSI VAQT ══════════════ */
+/* Baho har doim a'zoning SHAHRI vaqtida chiqariladi. Telefon boshqa mintaqada
+   bo'lsa (masalan Dubay profili bilan Toshkentda yurish) qurilma soati namoz
+   jadvaliga to'g'ri kelmaydi va vaqtida o'qilgan namoz qazo bo'lib ko'rinadi. */
+function nowFor(c){
+ const d=new Date();
+ return new Date(d.getTime()+d.getTimezoneOffset()*60000+((c&&c.tz!=null?c.tz:0)*3600000))}
+const todayFor=c=>today(nowFor(c));
+const decOf=d=>d.getHours()+d.getMinutes()/60;
+const PR=k=>{const p=PRAYERS.find(x=>x.k===k);return p?p.n:k};
+
+/* Namoz qaysi kunning daftariga tushishi kerak.
+   Xufton yagona yarim tunni kesib o'tadigan vaqt: soat 00:00 dan bomdodgacha
+   o'qilgan xufton — KECHAGI kunning xuftoni. Shu shart bo'lmasa u ertangi kunga
+   yozilib, kechagi kun esa o'qilmagan bo'lib qolar edi. */
+function liveDay(pk,c){
+ const n=nowFor(c),ds=today(n);
+ if(pk!=="xufton")return ds;
+ return decOf(n)<daySchedule(new Date(ds+"T12:00:00"),c).bomdod?shift(ds,-1):ds}
+
+/* Oyna holati: "open" — vaqti kirgan, "early" — hali kirmagan, "past" — o'tib ketgan. */
+function winState(pk,ds,c){
+ const sc=daySchedule(new Date(ds+"T12:00:00"),c),n=decOf(nowFor(c));
+ if(inWin(n,sc[pk],sc[EKY[pk]]))return "open";
+ return n<sc[pk]?"early":"past"}
 
 /* ══════════════ NAMOZLAR / MATNLAR ══════════════ */
 const PRAYERS=[
@@ -310,7 +345,10 @@ async function pushDay(id,d){
    syncMsg=e.status===403?"Bu sizning yozuvingiz emas":e.status===429?"Juda ko'p urinish"
      :"saqlanmadi - keyin yuboriladi"}
 }
-const blank=()=>({days:{},tasks:[],bonuses:[]});
+const blank=()=>({days:{},tasks:[],bonuses:[],books:[]});
+/* Kitob va zametka id'lari telefonda yasaladi; server ularni
+   ^[A-Za-z0-9_-]{1,40}$ shabloni bo'yicha tekshiradi. */
+const uid=()=>Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
 
 /* ══════════════ HOLAT ══════════════ */
 let members=LS.get("nd_members",DEFAULT_MEMBERS);
@@ -324,17 +362,20 @@ const M=id=>members.find(x=>x.id===id)||members[0];
 const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.length];
 
 /* ══════════════ HISOB ══════════════ */
-function score(u){
+function score(u,c){
  const days=(u&&u.days)||{},ds=Object.keys(days).sort();
  const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,quran:0,per:{},bonusSum:0,debt:0,tasks:((u&&u.tasks)||[]).length};
  PRAYERS.forEach(p=>o.per[p.k]={ontime:0,qazo:0,bad:0,delaySum:0,delayN:0});
  ((u&&u.bonuses)||[]).forEach(b=>o.bonusSum+=b.amt);
- if(ds.length){const td=today();let d=ds[0];
+ /* Kechagi xufton bomdodgacha hali ochiq turadi, shuning uchun kun yopilgan
+    bo'lsa ham uni «o'qilmagan» deb jarima yozib bo'lmaydi. */
+ const openX=c?liveDay("xufton",c):null;
+ if(ds.length){const td=c?todayFor(c):today();let d=ds[0];
   for(let i=0;i<800&&d<=td;i++,d=shift(d,1)){
    const day=days[d]||{},closed=d<td;
-   PRAYERS.forEach(p=>{const r=day[p.k];
+   PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
     if(!p.fard){if(r&&r.s==="ontime"){o.tahajjud++;o.per[p.k].ontime++}return}
-    if(!r){if(closed){o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}return}
+    if(!r){if(shut){o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}return}
     if(r.s==="ontime"){o.ontime++;o.per[p.k].ontime++}
     else if(r.s==="qazo"){o.penalty+=P_QAZO;o.qazo++;o.per[p.k].qazo++}
     else{o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}});
@@ -348,11 +389,65 @@ function delays(u,c){
    if(r&&(r.s==="ontime"||r.s==="qazo")&&r.t){const d=diffMin(hm(sc[p.k]),r.t);
     if(d>=0&&d<900){per[p.k].sum+=d;per[p.k].n++}}})});
  return per}
-function streakOf(days,pk){let cur=today(),n=0;
+function streakOf(days,pk,c){let cur=c?todayFor(c):today(),n=0;
  if(!(days[cur]&&days[cur][pk]&&days[cur][pk].s==="ontime"))cur=shift(cur,-1);
  for(let i=0;i<400;i++){if(days[cur]&&days[cur][pk]&&days[cur][pk].s==="ontime"){n++;cur=shift(cur,-1)}else break}
  return n}
 const claimed=(u,pk)=>((u&&u.bonuses)||[]).filter(b=>b.p===pk).reduce((m,b)=>Math.max(m,b.lvl),0);
+
+/* ══════════════ KITOB HISOBI ══════════════ */
+const bookRead=b=>(b.log||[]).reduce((s,e)=>s+e.p,0);
+const bookOpenOn=(b,ds)=>b.started<=ds&&(!b.finished||b.finished>=ds);
+const dayPages=(u,ds)=>((u&&u.books)||[]).reduce((s,b)=>{
+ const e=(b.log||[]).find(x=>x.d===ds);return s+(e?e.p:0)},0);
+const daysBetween=(a,z)=>Math.round((new Date(z+"T12:00:00")-new Date(a+"T12:00:00"))/86400000);
+
+/* O'qish tezligi kitob boshlangandan beri o'tgan HAR BIR kunga bo'linadi, faqat
+   o'qilgan kunlarga emas — «kuniga nechi bet» degani shu, va tashlab qo'yilgan
+   kunlar tugash muddatini uzaytirib ko'rsatadi. */
+function bookPace(b,td){
+ const read=bookRead(b),qoldi=Math.max(0,b.pages-read);
+ const kun=Math.max(1,daysBetween(b.started,b.finished||td)+1);
+ const tezlik=read/kun;
+ const kunQoldi=qoldi<=0?0:(tezlik>0?Math.ceil(qoldi/tezlik):null);
+ return{read,qoldi,kun,tezlik,kunQoldi,foiz:Math.min(100,Math.round(read/b.pages*100)),
+  tugash:kunQoldi?shift(td,kunQoldi):null}}
+
+/* Ochiq kitobi bor har bir YOPILGAN kun baholanadi: norma bajarilsa 0,
+   kam o'qilsa −0,5, umuman o'qilmasa −1. Zametka +0,5, tugatilgan kitob +5. */
+function bookScore(u,c){
+ const bs=(u&&u.books)||[];
+ const o={penalty:0,bonus:0,debt:0,kun:0,toliq:0,kam:0,nol:0,bet:0,notes:0,done:0,streak:0,ochiq:0};
+ bs.forEach(b=>{o.bet+=bookRead(b);o.notes+=(b.notes||[]).length;
+  if(b.finished)o.done++;else o.ochiq++});
+ o.bonus=o.notes*K_NOTE+o.done*K_DONE;
+ if(!bs.length)return o;
+ const td=c?todayFor(c):today();
+ let d=bs.map(b=>b.started).sort()[0];
+ for(let i=0;i<800&&d<td;i++,d=shift(d,1)){
+  if(!bs.some(b=>bookOpenOn(b,d)))continue;
+  o.kun++;const bet=dayPages(u,d);
+  if(bet>=BET_NORMA)o.toliq++;
+  else if(bet>0){o.kam++;o.penalty+=K_KAM}
+  else{o.nol++;o.penalty+=K_NOL}}
+ o.debt=o.penalty-o.bonus;
+ o.streak=bookStreak(u,c);
+ return o}
+
+function bookStreak(u,c){
+ let cur=c?todayFor(c):today(),n=0;
+ if(dayPages(u,cur)<BET_NORMA)cur=shift(cur,-1);
+ for(let i=0;i<400;i++){if(dayPages(u,cur)>=BET_NORMA){n++;cur=shift(cur,-1)}else break}
+ return n}
+
+/* Jamoaning barcha zametkalari, eng yangisi tepada. */
+function allNotes(){
+ const out=[];
+ members.forEach(m=>((data[m.id]&&data[m.id].books)||[]).forEach(b=>
+  (b.notes||[]).forEach(n=>out.push({m,b,n}))));
+ return out.sort((x,y)=>{
+  const a=x.n.d+" "+(x.n.t||"00:00"),z=y.n.d+" "+(y.n.t||"00:00");
+  return a<z?1:a>z?-1:0})}
 
 /* ══════════════ AMALLAR ══════════════ */
 const A={
@@ -364,7 +459,7 @@ const A={
      me=who.member_id;isAdmin=who.is_admin;
      LS.set("nd_me",me);LS.set("nd_admin",isAdmin);
      if(isAdmin){screen="admin";await A.loadRoster()}
-     else{screen="app";await pull()}
+     else{screen="app";await pull();if(M(me))date=todayFor(M(me))}
    }catch(e){forgetSession()}
   }
   render();
@@ -376,7 +471,7 @@ const A={
   try{const j=await api("/auth/members");loginNames=j.members}catch(e){loginNames=[]}},
  go(s){screen=s;pinErr="";loginErr="";adminErr="";render()},
  setTab(t){tab=t;window.scrollTo(0,0);render()},
- setDate(n){date=shift(date,n);render()},
+ setDate(n){const td=todayFor(M(me)),d=shift(date,n);date=d>td?td:d;render()},
  pickLogin(id){loginPick=loginPick===id?null:id;adminMode=false;loginErr="";render()},
  toggleAdmin(){adminMode=!adminMode;loginPick=null;loginErr="";render()},
  async doLogin(id){
@@ -387,7 +482,7 @@ const A={
    token=j.token;isAdmin=false;LS.set("nd_token",token);LS.set("nd_admin",false);
    me=id;LS.set("nd_me",id);data={};LS.set("nd_data",data);
    screen="app";loginPick=null;loginErr="";
-   await pull();render();
+   await pull();if(M(me))date=todayFor(M(me));render();
   }catch(e){
    loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"PIN noto'g'ri";render()}},
  async doAdminLogin(){
@@ -426,24 +521,36 @@ const A={
   }catch(e){box.textContent=e.message||"O'zgartirib bo'lmadi";box.className="clay small"}},
  pick(id){me=id;LS.set("nd_me",id);screen="app";pinFor=null;render()},
  async refresh(){await pull();render()},
- async mark(pk,how){
-  const cfg=M(me),sc=daySchedule(new Date(date+"T12:00:00"),cfg);
-  const isT=date===today(),now=new Date(),nowDec=now.getHours()+now.getMinutes()/60;
-  const nowHM=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
-  const day=Object.assign({},(data[me].days||{})[date]||{});
+ async mark(pk,how,ds){
+  const cfg=M(me),live=liveDay(pk,cfg);
+  /* Xufton bomdodgacha kechagi kunga yoziladi, shuning uchun yoziladigan kun
+     ekranda ochiq turgan kundan farq qilishi mumkin. */
+  const tgt=ds||(date===todayFor(cfg)?live:date);
+  const day=Object.assign({},(data[me].days||{})[tgt]||{});
   if(how==="clear")delete day[pk];
   else if(how==="miss")day[pk]={s:"missed",t:null};
-  else{if(!isT)day[pk]={s:"late",t:null};
-       else day[pk]={s:inWin(nowDec,sc[pk],sc[EKY[pk]])?"ontime":"qazo",t:nowHM}}
-  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
-  render();await pushDay(me,date);render()},
- async setTime(pk,v){
-  if(!v)return;const cfg=M(me),sc=daySchedule(new Date(date+"T12:00:00"),cfg);
-  const day=Object.assign({},(data[me].days||{})[date]||{});
-  const s=(date===today()&&inWin(toMin(v)/60,sc[pk],sc[EKY[pk]]))?"ontime":(day[pk].s==="late"?"late":"qazo");
-  day[pk]={s:s,t:v};
-  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
-  render();await pushDay(me,date)},
+  else if(tgt!==live)day[pk]={s:"late",t:null};
+  else{
+   const st=winState(pk,tgt,cfg);
+   /* Vaqti kirmagan namozni belgilab bo'lmaydi — baho faqat vaqt bo'yicha. */
+   if(st==="early")return;
+   const n=nowFor(cfg);
+   day[pk]={s:st==="open"?"ontime":"qazo",
+     t:String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")}}
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[tgt]:day})});
+  render();await pushDay(me,tgt);render()},
+ async setTime(pk,v,ds){
+  if(!v)return;const cfg=M(me);
+  const tgt=ds||(date===todayFor(cfg)?liveDay(pk,cfg):date);
+  const day=Object.assign({},(data[me].days||{})[tgt]||{});
+  if(!day[pk])return;
+  const sc=daySchedule(new Date(tgt+"T12:00:00"),cfg);
+  /* Kiritilgan vaqt oyna ichida bo'lsa — vaqtida o'qilgan. Kun yopilgandan keyin
+     belgilangan namoz esa vaqt yozilsa ham keyingi kun qazosi bo'lib qoladi. */
+  const inside=inWin(toMin(v)/60,sc[pk],sc[EKY[pk]]);
+  day[pk]={s:day[pk].s==="late"?"late":(inside?"ontime":"qazo"),t:v};
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[tgt]:day})});
+  render();await pushDay(me,tgt)},
  async field(f,v){
   const day=Object.assign({},(data[me].days||{})[date]||{});day[f]=v;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
@@ -453,17 +560,66 @@ const A={
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
   await pushDay(me,date)},
  async claim(pk,lvl){
-  const s=score(data[me]);
+  const s=score(data[me],M(me));
   const amt=Math.min(BONUS_MAX,Math.max(BONUS_MIN,Math.round(s.debt/2*100)/100));
-  data[me]=Object.assign({},data[me],{bonuses:((data[me].bonuses)||[]).concat([{p:pk,lvl:lvl,amt:amt,d:today()}])});
+  data[me]=Object.assign({},data[me],{bonuses:((data[me].bonuses)||[]).concat([{p:pk,lvl:lvl,amt:amt,d:todayFor(M(me))}])});
   render();await pushData(me);render()},
  rak:0,tas:0,
  setRak(n){A.rak=(n===A.rak)?n-1:n;render()},
  addTas(n){A.tas=Math.max(0,Math.min(500,A.tas+n));render()},
  resetTas(){A.tas=0;render()},
  async finishTask(){
-  data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([{d:today(),rak:25,tas:500}])});
+  data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([{d:todayFor(M(me)),rak:25,tas:500}])});
   A.rak=0;A.tas=0;render();await pushData(me);render()},
+ /* ────────── KITOB ────────── */
+ bookView:"mine",bookOpenId:null,bookErr:"",
+ setBookView(v){A.bookView=v;A.bookErr="";window.scrollTo(0,0);render()},
+ toggleBook(id){A.bookOpenId=A.bookOpenId===id?null:id;A.bookErr="";render()},
+ async bookAdd(){
+  const g=id=>((document.getElementById(id)||{}).value||"");
+  const t=g("b_title").trim(),a=g("b_author").trim(),n=parseInt(g("b_pages"),10);
+  if(!t){A.bookErr="Kitob nomini yozing";render();return}
+  if(!(n>0)){A.bookErr="Necha betligini yozing";render();return}
+  const b={id:uid(),title:t.slice(0,200),author:a.slice(0,200),
+   pages:Math.min(100000,n),started:todayFor(M(me)),finished:null,log:[],notes:[]};
+  data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).concat([b])});
+  A.bookErr="";A.bookOpenId=b.id;render();await pushData(me);render()},
+ async bookPages(id,v){
+  /* Bir kunga bitta yozuv: server ham takroriy kunni rad etadi, chunki
+     tezlik shu kunlar soniga bo'linadi. */
+  const n=Math.max(0,Math.min(10000,parseInt(v,10)||0)),ds=todayFor(M(me));
+  data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).map(b=>{
+   if(b.id!==id)return b;
+   const log=(b.log||[]).filter(e=>e.d!==ds);
+   if(n>0)log.push({d:ds,p:n});
+   log.sort((x,y)=>x.d<y.d?-1:1);
+   return Object.assign({},b,{log})})});
+  render();await pushData(me);render()},
+ async bookNote(id){
+  const el=document.getElementById("n_"+id),pe=document.getElementById("np_"+id);
+  const txt=((el||{}).value||"").trim();
+  if(!txt){A.bookErr="Avval fikringizni yozing";render();return}
+  const pg=parseInt(((pe||{}).value||""),10),n=nowFor(M(me));
+  const note={id:uid(),d:todayFor(M(me)),
+   t:String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"),
+   page:isNaN(pg)?null:Math.max(0,Math.min(100000,pg)),text:txt.slice(0,4000)};
+  data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).map(b=>
+   b.id===id?Object.assign({},b,{notes:(b.notes||[]).concat([note])}):b)});
+  A.bookErr="";if(el)el.value="";if(pe)pe.value="";
+  render();await pushData(me);render()},
+ async bookNoteDel(bid,nid){
+  data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).map(b=>
+   b.id===bid?Object.assign({},b,{notes:(b.notes||[]).filter(x=>x.id!==nid)}):b)});
+  render();await pushData(me);render()},
+ async bookFinish(id){
+  const ds=todayFor(M(me));
+  data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).map(b=>
+   b.id===id?Object.assign({},b,{finished:b.finished?null:ds}):b)});
+  render();await pushData(me);render()},
+ async bookDel(id){
+  if(!confirm("Kitob va undagi barcha zametkalar o'chiriladi. Davom etamizmi?"))return;
+  data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).filter(b=>b.id!==id)});
+  A.bookOpenId=null;render();await pushData(me);render()},
  toggleManual(){manualCity=!manualCity;render()},
  async addMember(){
   const name=document.getElementById("f_name").value.trim();
@@ -629,19 +785,21 @@ function syncScreen(){
 /* ────────── BUGUN ────────── */
 function todayTab(){
  const cfg=M(me),sc=daySchedule(new Date(date+"T12:00:00"),cfg);
- const isT=date===today(),now=new Date(),nowDec=now.getHours()+now.getMinutes()/60;
- const day=(data[me].days||{})[date]||{},s=score(data[me]);
+ const isT=date===todayFor(cfg),now=nowFor(cfg),nowDec=decOf(now);
+ const day=(data[me].days||{})[date]||{},s=score(data[me],cfg);
  let dayBall=0;PRAYERS.forEach(p=>{const r=day[p.k];if(r&&STATUS[r.s])dayBall+=STATUS[r.s].ball});
  let nx=null;
  if(isT){const list=PRAYERS.map(p=>({p:p,t:sc[p.k]})).sort((a,b)=>a.t-b.t);
-  nx=list.find(x=>x.t>nowDec)||null}
+  nx=list.find(x=>x.t>nowDec)||null;
+  /* Xufton kirgandan keyin kun ichida boshqa vaqt qolmaydi — keyingisi ertangi bomdod. */
+  if(!nx)nx={p:PRAYERS.find(p=>p.k==="bomdod"),t:sc.endXufton+24}}
  let h=`<div class="flex between center mb14">
   <button class="btn" onclick="A.setDate(-1)">‹</button>
   <div style="text-align:center">
    <div style="font-family:var(--serif);font-size:19px">${pretty(date)}</div>
    <div class="muted small" style="letter-spacing:.08em">${esc(cfg.city.toUpperCase())} · ${isT?"KUN OCHIQ":"KUN YOPILGAN"}</div>
   </div>
-  <button class="btn" ${date>=today()?'style="opacity:.3"':""} onclick="${date>=today()?"":"A.setDate(1)"}">›</button>
+  <button class="btn" ${date>=todayFor(cfg)?'style="opacity:.3"':""} onclick="${date>=todayFor(cfg)?"":"A.setDate(1)"}">›</button>
  </div>
  <div class="grid2 mb14">
   <div class="panel stat"><b class="${dayBall===0?"jade":"clay"}">${dayBall===0?"0":fmt(dayBall)}</b><i>Shu kun bali</i></div>
@@ -653,10 +811,19 @@ function todayTab(){
    <div style="text-align:right"><div class="brass" style="font-family:var(--serif);font-size:26px">${hm(nx.t)}</div>
    <div class="muted small">${Math.floor(mm/60)} soat ${mm%60} daqiqa qoldi</div></div></div>`}
  PRAYERS.forEach(p=>{
-  const st0=hm(sc[p.k]),en=hm(sc[EKY[p.k]]),r=day[p.k],S0=r?STATUS[r.s]:null;
-  const open=isT&&inWin(nowDec,sc[p.k],sc[EKY[p.k]]);
-  const notYet=isT&&!open&&nowDec<sc[p.k];
+  /* Ochiq kunda har bir namoz o'z kuniga bog'lanadi: xufton bomdodgacha
+     kechagi kunning xuftoni bo'lib qolaveradi. */
+  const tgt=isT?liveDay(p.k,cfg):date;
+  const tsc=tgt===date?sc:daySchedule(new Date(tgt+"T12:00:00"),cfg);
+  const st0=hm(tsc[p.k]),en=hm(tsc[EKY[p.k]]);
+  const r=((data[me].days||{})[tgt]||{})[p.k],S0=r?STATUS[r.s]:null;
+  const state=isT?winState(p.k,tgt,cfg):null;
+  const open=state==="open",notYet=state==="early",shifted=tgt!==date;
+  const crosses=p.k==="xufton";
   const dl=(r&&r.t&&(r.s==="ontime"||r.s==="qazo"))?diffMin(st0,r.t):null;
+  const doneCl=["ontime","qazo","late"].includes(r&&r.s)
+    ?`background:${r.s==="ontime"?"var(--jade)":"var(--brass)"};border-color:transparent;color:#0D1220`:"";
+  const missCl=(r&&r.s)==="missed"?"background:var(--clay);border-color:transparent;color:#0D1220":"";
   h+=`<div class="panel p14 mb10" style="border-color:${S0?S0.color:(open?"#C9A22755":"var(--line)")}">
    <div class="flex center gap3">
     <div style="width:34px;height:34px;border-radius:9px;background:var(--panel2);display:flex;align-items:center;
@@ -665,12 +832,12 @@ function todayTab(){
      <div class="flex center gap2"><span class="pname">${p.n}</span>
       ${!p.fard?'<span class="chip">NAFL</span>':""}
       ${open?'<span class="jade" style="font-size:9px">● VAQTI KIRDI</span>':""}</div>
-     <div class="muted small">${st0} — ${en}</div>
+     <div class="muted small">${st0} — ${en}${crosses?" <span class='tiny'>(ertangi bomdodgacha)</span>":""}</div>
+     ${shifted?`<div class="brass tiny" style="margin-top:2px">${pretty(tgt)} kunining xuftoni</div>`:""}
     </div>
-    <button class="mbtn" style="${["ontime","qazo","late"].includes(r&&r.s)?`background:${r.s==="ontime"?"var(--jade)":"var(--brass)"};border-color:transparent;color:#0D1220`:""}"
-      onclick="A.mark('${p.k}','pray')">✓</button>
-    <button class="mbtn" style="${(r&&r.s)==="missed"?"background:var(--clay);border-color:transparent;color:#0D1220":""}"
-      onclick="A.mark('${p.k}','miss')">−</button>
+    <button class="mbtn" style="${notYet?"opacity:.35":doneCl}"
+      ${notYet?"":`onclick="A.mark('${p.k}','pray','${tgt}')"`}>✓</button>
+    <button class="mbtn" style="${missCl}" onclick="A.mark('${p.k}','miss','${tgt}')">−</button>
    </div>`;
   if(r){
    if((r.s==="ontime"||r.s==="qazo")&&r.t){
@@ -682,13 +849,13 @@ function todayTab(){
        ${dl!=null&&dl>=0&&r.s==="ontime"?" · +"+dl+" daq":""}</div>
      <div class="flex gap2 center">
       ${(r.s==="ontime"||r.s==="qazo")?`<input type="time" value="${r.t||st0}" class="input"
-        style="width:auto;padding:4px 7px;font-size:12px" onchange="A.setTime('${p.k}',this.value)">`:""}
-      <button class="btn" style="padding:4px 8px;font-size:11px" onclick="A.mark('${p.k}','clear')">tozalash</button>
+        style="width:auto;padding:4px 7px;font-size:12px" onchange="A.setTime('${p.k}',this.value,'${tgt}')">`:""}
+      <button class="btn" style="padding:4px 8px;font-size:11px" onclick="A.mark('${p.k}','clear','${tgt}')">tozalash</button>
      </div></div>`;
   }else{
    h+=`<div class="muted" style="margin-top:10px;font-size:11.5px">${
     !p.fard?"Nafl — ball ketmaydi, faqat strike yig'iladi"
-    :notYet?"Vaqti kirmagan"
+    :notYet?"Vaqti kirmagan — vaqti kirgach belgilanadi"
     :open?"Vaqti ichida — hozir belgilasangiz 0 ball"
     :isT?"Vaqti o'tdi — bugun qazo qilsangiz −0,25, ertaga qolsa −1"
     :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)"}</div>`}
@@ -703,12 +870,12 @@ function todayTab(){
 /* ────────── STATISTIKA ────────── */
 function statsTab(){
  const ranked=members.slice().sort((a,b)=>{
-  const sa=score(data[a.id]),sb=score(data[b.id]);
+  const sa=score(data[a.id],a),sb=score(data[b.id],b);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
   return (pb?sb.ontime/pb:0)-(pa?sa.ontime/pa:0)});
  let h=`<div class="eyebrow">Jamoa</div><h2 style="font-size:24px;margin:6px 0 14px">Taqqoslash</h2><div class="grid2 mb14">`;
  ranked.forEach((m,i)=>{
-  const s=score(data[m.id]),tot=s.ontime+s.qazo+s.bad,pct=tot?Math.round(s.ontime/tot*100):0;
+  const s=score(data[m.id],m),tot=s.ontime+s.qazo+s.bad,pct=tot?Math.round(s.ontime/tot*100):0;
   h+=`<div class="panel p14" style="border-color:${m.id===me?"#C9A22766":"var(--line)"}">
    <div class="flex center gap2" style="margin-bottom:8px">
     <div class="hd" style="height:26px;background:${colorOf(m.id)}"></div>
@@ -731,7 +898,7 @@ function statsTab(){
   <p class="muted small" style="margin:6px 0 12px">Bir namozni ${STREAK_STEP} kun ketma-ket vaqtida o'qisangiz,
    qarzingizning yarmi o'chadi (${BONUS_MIN}–${BONUS_MAX} ball).</p>`;
  PRAYERS.forEach(p=>{
-  const st=streakOf(data[me].days||{},p.k),lvl=Math.floor(st/STREAK_STEP),cl=claimed(data[me],p.k);
+  const st=streakOf(data[me].days||{},p.k,M(me)),lvl=Math.floor(st/STREAK_STEP),cl=claimed(data[me],p.k);
   const ready=lvl>cl,prog=(st%STREAK_STEP)/STREAK_STEP;
   h+=`<div style="margin-bottom:11px">
    <div class="flex between center" style="font-size:12px;margin-bottom:5px">
@@ -749,7 +916,7 @@ function statsTab(){
  PRAYERS.forEach(p=>{
   h+=`<div style="margin-bottom:14px"><div style="font-size:12.5px;margin-bottom:6px">${p.n}</div>`;
   members.forEach(m=>{
-   const s=score(data[m.id]).per[p.k],tot=s.ontime+s.qazo+s.bad;
+   const s=score(data[m.id],m).per[p.k],tot=s.ontime+s.qazo+s.bad;
    const d=delays(data[m.id],m)[p.k],avg=d.n?Math.round(d.sum/d.n):null;
    h+=`<div style="margin-bottom:5px">
     <div class="flex between tiny muted" style="margin-bottom:3px">
@@ -769,7 +936,7 @@ function chartSVG(){
  const gw=(W-pad*2)/n,bw=Math.max(3,(gw-4)/Math.max(1,k));
  let bars="",labels="";
  for(let i=0;i<n;i++){
-  const ds=shift(today(),-(n-1-i)),x0=pad+i*gw;
+  const ds=shift(todayFor(M(me)),-(n-1-i)),x0=pad+i*gw;
   members.forEach((m,j)=>{
    const day=(data[m.id]&&data[m.id].days&&data[m.id].days[ds])||{};
    const v=PRAYERS.filter(p=>p.fard&&day[p.k]&&day[p.k].s==="ontime").length;
@@ -807,7 +974,7 @@ function sunnatTab(){
 
 /* ────────── VAZIFA ────────── */
 function taskTab(){
- const s=score(data[me]),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
+ const s=score(data[me],M(me)),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
  let h=`<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
  <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
   <div><span class="jade">Vaqtida o'qilsa</span> — 0 ball</div>
@@ -846,7 +1013,7 @@ function taskTab(){
    <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Vazifa yo'q</div>
    <p class="muted" style="font-size:13px;margin-top:6px">${s.debt>0?"Yana "+fmt(TASK_AT-s.debt)+" ball qarz yig'ilsa vazifa ochiladi.":"Qarzingiz yo'q. Strike'ni uzmang."}</p></div>`}
  h+=`<div class="panel p14 mt14"><div class="eyebrow">Jamoa holati</div><div class="mt12">`;
- members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id]);
+ members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],m);
   h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
    <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))}</div>
    <div class="row"><span>Minus / mukofot / vazifa</span><span class="muted">${fmt(o.penalty)} · −${fmt(o.bonusSum)} · ${o.tasks}</span></div>
@@ -858,6 +1025,149 @@ function taskTab(){
    h+=`<div class="row"><span>${p?p.n:b.p} · ${b.lvl*STREAK_STEP} kun · ${b.d}</span><span class="jade">−${fmt(b.amt)}</span></div>`});
   h+=`</div></div>`}
  return h}
+
+/* ────────── KITOB ────────── */
+function bookTab(){return A.bookView==="all"?booksAllView():booksMineView()}
+
+function bookSwitch(){
+ const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
+ return `<div class="flex gap2 mb14">
+  <button class="btn" style="flex:1;${A.bookView!=="all"?on:""}" onclick="A.setBookView('mine')">Mening kitoblarim</button>
+  <button class="btn" style="flex:1;${A.bookView==="all"?on:""}" onclick="A.setBookView('all')">Umumiy daftar</button>
+ </div>`}
+
+function noteBubble(m,b,n,own){
+ return `<div class="panel p14 mb10" style="border-left:2px solid ${colorOf(m.id)}">
+  <div class="flex between center" style="margin-bottom:6px">
+   <div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:${colorOf(m.id)}">${esc(first(m.name))}</div>
+   <div class="muted tiny">${esc(n.d)}${n.t?" · "+esc(n.t):""}</div></div>
+  <div class="muted tiny" style="margin-bottom:7px">\u{1F4D6} ${esc(b.title)}${n.page!=null?" · "+n.page+"-bet":""}</div>
+  <div style="font-size:13.5px;line-height:1.7;white-space:pre-wrap">${esc(n.text)}</div>
+  ${own?`<div style="text-align:right;margin-top:8px">
+    <button class="btn" style="padding:3px 8px;font-size:11px" onclick="A.bookNoteDel('${b.id}','${n.id}')">o'chirish</button></div>`:""}
+ </div>`}
+
+function bookCard(b,td){
+ const pc=bookPace(b,td),ds=todayFor(M(me));
+ const bugun=(b.log||[]).find(e=>e.d===ds),open=A.bookOpenId===b.id;
+ const notes=(b.notes||[]).slice().reverse();
+ let h=`<div class="panel p14 mb10" style="border-color:${b.finished?"#4CAF8B55":"var(--line)"}">
+  <div class="flex between center" style="cursor:pointer" onclick="A.toggleBook('${b.id}')">
+   <div style="flex:1;min-width:0">
+    <div style="font-family:var(--serif);font-size:18px;line-height:1.25">${esc(b.title)}</div>
+    <div class="muted small" style="margin-top:3px">${esc(b.author||"muallif ko'rsatilmagan")}</div>
+   </div>
+   <div style="text-align:right;flex-shrink:0;margin-left:10px">
+    <div class="${b.finished?"jade":"brass"}" style="font-family:var(--serif);font-size:22px">${pc.foiz}%</div>
+    <div class="muted tiny">${pc.read} / ${b.pages} bet</div></div>
+  </div>
+  <div class="bar" style="margin-top:10px"><div style="width:${pc.foiz}%;background:${b.finished?"var(--jade)":"var(--brass)"}"></div></div>`;
+ if(b.finished){
+  h+=`<div class="jade small" style="margin-top:9px">\u2713 ${esc(b.finished)} kuni tugatilgan · ${pc.kun} kunda · kuniga ${fmt(pc.tezlik)} bet</div>`;
+ }else{
+  h+=`<div class="muted small" style="margin-top:9px;line-height:1.6">
+    Kuniga <span class="brass">${fmt(pc.tezlik)} bet</span> · ${pc.qoldi} bet qoldi${
+    pc.qoldi<=0?" · <span class='jade'>o'qib bo'lindi</span>"
+    :pc.kunQoldi==null?" · <span class='clay'>hali boshlanmagan</span>"
+    :` · shu tezlikda yana <span class="brass">${pc.kunQoldi} kun</span>${pc.tugash?" ("+pretty(pc.tugash)+")":""}`}</div>
+   <div class="flex gap2 center" style="margin-top:11px">
+    <span class="muted small" style="flex:1">Bugun o'qidim</span>
+    <input class="input" type="number" min="0" inputmode="numeric" style="width:84px;padding:6px 8px;font-size:13px"
+      value="${bugun?bugun.p:""}" placeholder="bet" onchange="A.bookPages('${b.id}',this.value)">
+    <span class="${bugun&&bugun.p>=BET_NORMA?"jade":"muted"} tiny">norma ${BET_NORMA}</span>
+   </div>`}
+ if(open){
+  h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="eyebrow">Zametka — kitobdan olganingiz</div>
+   <p class="muted small" style="margin:6px 0 8px">Bitta fikr, bitta xabar. Hammaga ko'rinadi.</p>
+   <textarea id="n_${b.id}" rows="3" placeholder="Masalan: sabr — bu kutish emas, kutayotganda qanday bo'lishing…"></textarea>
+   <div class="flex gap2" style="margin-top:8px">
+    <input id="np_${b.id}" class="input" type="number" min="0" inputmode="numeric" placeholder="bet" style="width:84px">
+    <button class="btn btn-gold" style="flex:1" onclick="A.bookNote('${b.id}')">Zametka qo'shish</button></div>
+   ${A.bookErr?`<div class="clay small" style="margin-top:7px">${esc(A.bookErr)}</div>`:""}
+   <div style="margin-top:14px">${notes.length?notes.map(n=>noteBubble(M(me),b,n,true)).join("")
+     :`<div class="muted small">Hali zametka yo'q.</div>`}</div>
+   <div class="flex gap2" style="margin-top:12px">
+    <button class="btn" style="flex:1" onclick="A.bookFinish('${b.id}')">${b.finished?"↺ Qayta ochish":"\u2713 Tugatdim"}</button>
+    <button class="btn" onclick="A.bookDel('${b.id}')">\u{1F5D1}</button></div>
+  </div>`}
+ else h+=`<div class="muted tiny" style="margin-top:9px">${(b.notes||[]).length} ta zametka · ochish uchun bosing</div>`;
+ return h+`</div>`}
+
+function booksMineView(){
+ const cfg=M(me),td=todayFor(cfg),u=data[me],bs=(u.books||[]).slice();
+ const k=bookScore(u,cfg),jazo=Math.max(0,Math.floor(k.debt/K_TASK_AT));
+ bs.sort((a,b)=>(a.finished?1:0)-(b.finished?1:0)||(a.started<b.started?1:-1));
+ let h=`<div class="eyebrow">Kitob daftari</div>
+ <h2 style="font-size:24px;margin:6px 0 12px">O'qiyotganlarim</h2>`+bookSwitch();
+ h+=`<div class="grid3 mb14">
+  <div class="panel stat"><b class="brass">${k.bet}</b><i>Jami bet</i></div>
+  <div class="panel stat"><b class="brass">${k.notes}</b><i>Zametka</i></div>
+  <div class="panel stat"><b class="${k.debt>0?"clay":"jade"}">${k.debt>0?"−"+fmt(k.debt):"+"+fmt(-k.debt)}</b><i>${k.debt>0?"Kitob qarzi":"Zaxira"}</i></div>
+ </div>
+ <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
+  <div><span class="jade">Kuniga ${BET_NORMA} bet va undan ko'p</span> — 0 ball</div>
+  <div><span class="brass">Kam o'qilgan kun</span> — −${fmt(K_KAM)}</div>
+  <div><span class="clay">Umuman o'qilmagan kun</span> — −${fmt(K_NOL)}</div>
+  <div><span class="jade">Har bir zametka</span> — +${fmt(K_NOTE)} · <span class="jade">tugatilgan kitob</span> — +${K_DONE}</div>
+  <div class="tiny" style="margin-top:6px">Kitob bali namoz balidan alohida yuritiladi.</div>
+ </div></div>`;
+ if(k.streak>0)h+=`<div class="panel p14 mb14 flex between center" style="border-color:#C9A22744">
+   <div><div class="eyebrow">Ketma-ket normani bajardingiz</div>
+    <div class="muted small" style="margin-top:3px">Uzmang — tezlik shundan chiqadi</div></div>
+   <div class="brass" style="font-family:var(--serif);font-size:26px">${k.streak} kun</div></div>`;
+ if(jazo>0)h+=`<div class="panel p18 mb14" style="border-color:#C9584B66">
+   <div class="clay" style="font-family:var(--serif);font-size:20px">Jazo vazifasi</div>
+   <p class="muted" style="font-size:12.5px;margin:6px 0 0;line-height:1.7">Kitob qarzi ${fmt(k.debt)} ball.
+    <b>${jazo} ta</b> qo'shimcha vazifa ochiq — har biri <b>${K_TASK_BET} bet</b> o'qish va
+    <b>1 ta zametka</b> yozish. Zametka yozganingizda qarz ${fmt(K_NOTE)} ballga kamayadi,
+    kitobni tugatsangiz ${K_DONE} ballga.</p>
+   <div class="muted tiny" style="margin-top:8px">O'qilmagan kunlar: ${k.nol} · kam o'qilgan: ${k.kam} · norma bajarilgan: ${k.toliq}</div></div>`;
+ h+=`<div class="panel p14 mb14"><div class="eyebrow">Yangi kitob</div>
+  <input id="b_title" class="input" placeholder="Kitob nomi" style="margin-top:9px">
+  <input id="b_author" class="input" placeholder="Muallif" style="margin-top:8px">
+  <input id="b_pages" class="input" type="number" min="1" inputmode="numeric" placeholder="Necha bet" style="margin-top:8px">
+  ${A.bookErr&&!A.bookOpenId?`<div class="clay small" style="margin-top:8px">${esc(A.bookErr)}</div>`:""}
+  <button class="btn btn-green btn-wide" style="margin-top:10px" onclick="A.bookAdd()">Qo'shish</button></div>`;
+ h+=bs.length?bs.map(b=>bookCard(b,td)).join("")
+  :`<div class="panel" style="padding:26px;text-align:center">
+    <div style="font-size:26px">\u{1F4DA}</div>
+    <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Kitob qo'shilmagan</div>
+    <p class="muted" style="font-size:13px;margin-top:6px">Birinchi kitobingizni qo'shing — hisob shundan boshlanadi.</p></div>`;
+ return h}
+
+function booksAllView(){
+ const td=todayFor(M(me));
+ let h=`<div class="eyebrow">Jamoa</div>
+ <h2 style="font-size:24px;margin:6px 0 12px">Umumiy kitob daftari</h2>`+bookSwitch();
+ h+=`<div class="panel p14 mb14"><div class="eyebrow">Kim nima o'qiyapti</div><div class="mt12">`;
+ let bor=false;
+ members.forEach(m=>{
+  const bs=((data[m.id]&&data[m.id].books)||[]).filter(b=>!b.finished);
+  const k=bookScore(data[m.id],m);
+  h+=`<div style="padding:9px 0;border-bottom:1px solid var(--line)">
+   <div class="flex between center" style="margin-bottom:5px">
+    <span style="font-size:12.5px;color:${colorOf(m.id)}">${esc(first(m.name))}</span>
+    <span class="muted tiny">${k.bet} bet · ${k.notes} zametka · ${k.done} tugatgan ·
+     <span class="${k.debt>0?"clay":"jade"}">${k.debt>0?"−"+fmt(k.debt):"+"+fmt(-k.debt)}</span></span></div>`;
+  if(bs.length){bor=true;bs.forEach(b=>{const pc=bookPace(b,td);
+   h+=`<div style="margin-bottom:6px">
+    <div class="flex between tiny" style="margin-bottom:3px">
+     <span>${esc(b.title)}${b.author?" <span class='muted'>· "+esc(b.author)+"</span>":""}</span>
+     <span class="muted">${pc.read}/${b.pages}${pc.kunQoldi?" · "+pc.kunQoldi+" kun":""}</span></div>
+    <div class="bar"><div style="width:${pc.foiz}%;background:${colorOf(m.id)}"></div></div></div>`})}
+  else h+=`<div class="muted tiny">Hozir ochiq kitobi yo'q.</div>`;
+  h+=`</div>`});
+ h+=`</div></div>`;
+ const feed=allNotes();
+ h+=`<div class="eyebrow" style="margin-bottom:4px">Zametkalar · eng yangisi tepada</div>
+  <p class="muted small" style="margin:0 0 12px">Bir-biringiz o'qiyotgan kitoblardan olgan fikrlar.</p>`;
+ h+=feed.length?feed.map(x=>noteBubble(x.m,x.b,x.n,x.m.id===me)).join("")
+  :`<div class="panel" style="padding:26px;text-align:center">
+    <div style="font-size:26px">\u{1F4AC}</div>
+    <div style="font-family:var(--serif);font-size:18px;margin-top:6px">Hali zametka yo'q</div>
+    <p class="muted" style="font-size:13px;margin-top:6px">Birinchi bo'lib fikringizni yozing.</p></div>`;
+ return h+`<div style="height:20px"></div>`}
 
 /* ────────── RENDER ────────── */
 function render(){
@@ -882,11 +1192,12 @@ function render(){
    <button class="btn" onclick="A.go('sync')">⚙</button>
   </div></div>
  <div class="ayat mb18"><span class="brass">❝</span><span>${AYAT[new Date(date+"T12:00:00").getDate()%AYAT.length]}</span></div>`;
- h+= tab==="today"?todayTab():tab==="stats"?statsTab():tab==="sunnat"?sunnatTab():taskTab();
+ h+= tab==="today"?todayTab():tab==="stats"?statsTab():tab==="sunnat"?sunnatTab():tab==="book"?bookTab():taskTab();
  h+=`<div class="tabbar"><div>
   <button class="${tab==="today"?"on":""}" onclick="A.setTab('today')"><span>📋</span>Bugun</button>
   <button class="${tab==="stats"?"on":""}" onclick="A.setTab('stats')"><span>📊</span>Statistika</button>
   <button class="${tab==="sunnat"?"on":""}" onclick="A.setTab('sunnat')"><span>📖</span>Sunnat</button>
+  <button class="${tab==="book"?"on":""}" onclick="A.setTab('book')"><span>📚</span>Kitob</button>
   <button class="${tab==="task"?"on":""}" onclick="A.setTab('task')"><span>🔥</span>Vazifa</button>
  </div></div>`;
  app.innerHTML=h;

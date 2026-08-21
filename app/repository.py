@@ -19,6 +19,7 @@ from app.config import (
 )
 from app.models import (
     Bonus,
+    Book,
     DayRecord,
     GroupState,
     MemberCreate,
@@ -67,6 +68,9 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
         task_rows = await connection.fetch(
             "SELECT member_id, day, rakats, tasbih FROM tasks ORDER BY id"
         )
+        book_rows = await connection.fetch(
+            "SELECT member_id, book FROM books ORDER BY id"
+        )
 
     days: dict[str, dict[str, DayRecord]] = defaultdict(dict)
     for row in day_rows:
@@ -82,12 +86,17 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
     for row in task_rows:
         tasks[row["member_id"]].append(Task(d=row["day"], rak=row["rakats"], tas=row["tasbih"]))
 
+    books: dict[str, list[Book]] = defaultdict(list)
+    for row in book_rows:
+        books[row["member_id"]].append(Book(**json.loads(row["book"])))
+
     members = [MemberProfile(**dict(row)) for row in member_rows]
     data = {
         member.id: MemberData(
             days=days.get(member.id, {}),
             bonuses=bonuses.get(member.id, []),
             tasks=tasks.get(member.id, []),
+            books=books.get(member.id, []),
         )
         for member in members
     }
@@ -276,8 +285,8 @@ async def replace_member_data(
     """Replace a member's whole document in one transaction.
 
     Days are upserted rather than deleted-and-reinserted, so a client that pushes
-    only a partial history never erases days it did not send. Bonuses and tasks are
-    ledgers the client owns outright, so those are replaced wholesale.
+    only a partial history never erases days it did not send. Bonuses, tasks and
+    books are ledgers the client owns outright, so those are replaced wholesale.
     """
     async with pool.acquire() as connection, connection.transaction():
         for day, record in data.days.items():
@@ -296,6 +305,15 @@ async def replace_member_data(
             await connection.executemany(
                 "INSERT INTO tasks (member_id, day, rakats, tasbih) VALUES ($1,$2,$3,$4)",
                 [(member_id, t.d, t.rak, t.tas) for t in data.tasks],
+            )
+        await connection.execute("DELETE FROM books WHERE member_id = $1", member_id)
+        if data.books:
+            await connection.executemany(
+                "INSERT INTO books (member_id, book) VALUES ($1,$2::jsonb)",
+                [
+                    (member_id, json.dumps(book.model_dump(mode="json")))
+                    for book in data.books
+                ],
             )
 
 

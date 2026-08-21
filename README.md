@@ -69,6 +69,10 @@ picker instead of typing.
 
 Errors always come back as `{"error": {"code": "...", "message": "..."}}`.
 
+Books add no endpoints. A member's books ride inside `MemberData`, so they are read
+by `GET /api/v1/state` and written by `PUT /api/v1/members/{id}/data` alongside the
+bonus and task ledgers.
+
 ## Layout
 
 ```
@@ -82,7 +86,12 @@ migrations/        applied automatically on boot, tracked in schema_migrations
 static/index.html  the browser app. Source of truth, edited directly.
 patch_login.py     the one-time group-code -> login migration of the client. Historical.
 tests/             151 unit/API tests, 24 integration tests
+legacy/            the pre-server localStorage client, kept for reference only
 ```
+
+`tests/` and `patch_login.py` are listed in `.railwayignore`, so they were absent from
+the deployed image the source was recovered from and are not in this repository. They
+need rewriting before `pytest` means anything again.
 
 `patch_client.py` is gone. The fork has diverged too far from Sardor's original for
 regex patching to stay safe, so `static/index.html` is now edited directly and
@@ -144,3 +153,53 @@ would destroy a mark made while offline, so failed day writes are queued in
 skipped and your marks stay on screen. Failures that retrying cannot fix — expired
 session, someone else's record, rejected payload — are dropped rather than retried
 forever.
+
+## Xufton — the day-boundary fix
+
+Xufton is the one prayer whose window crosses midnight: it opens at Isha and closes at
+the **next morning's** Fajr. Three things were wrong, and they compounded:
+
+1. `daySchedule` closed the window at *that same day's* Fajr, which falls hours
+   *before* the window opens.
+2. A mark was always filed under the phone's current calendar date, so a Xufton prayed
+   at 00:30 was recorded against **tomorrow** — and the day it belonged to stayed empty
+   and was later scored as missed (−1).
+3. Every comparison used the phone's clock, while the schedule is computed for the
+   member's configured city. A Dubai profile on a phone in Tashkent was judged an hour
+   out.
+
+Now:
+
+- `endXufton` is tomorrow's Fajr.
+- `liveDay(prayer, member)` decides which day a mark belongs to. Between midnight and
+  Fajr, Xufton is filed against **yesterday**; every other prayer keeps the civil date.
+- `nowFor(member)` / `todayFor(member)` evaluate everything in the member's own city
+  time, not the device's.
+- `winState` grades strictly by the window — `open` → on time, `past` → qazo,
+  `early` → the prayer cannot be marked at all, because its time has not come.
+- Scoring gives yesterday's Xufton a grace period: it is not counted as missed while
+  its window is still open.
+
+## Kitob daftari
+
+A fifth tab. Each member records the books they are reading, logs pages per day, and
+writes short notes; **Umumiy daftar** shows the whole group's open books and merges
+everyone's notes into one feed, newest first.
+
+Pace is `pages read ÷ days since the book was started` — every day counts, not only the
+days someone opened the book, because that is what "pages per day" honestly means and it
+is what the remaining-days estimate divides by.
+
+Book points are kept **separate from prayer points**, so a week of not reading never
+inflates a prayer debt:
+
+| | |
+|---|---|
+| At least `BET_NORMA` (10) pages in a day | 0 |
+| Some pages, under the norm | −0.5 |
+| An open book and nothing read | −1 |
+| Each note written | +0.5 |
+| Each book finished | +5 |
+
+Only closed days are scored; the current day is shown but never penalised. Every 4
+points of book debt opens one make-up task: 30 pages plus a note.

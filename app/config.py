@@ -33,6 +33,14 @@ MAX_BONUSES_PER_MEMBER = 2000
 MAX_TASKS_PER_MEMBER = 5000
 MAX_MEMBERS = 50
 
+# --- Kitob daftari ---
+# A book's notes and reading log travel inside the book document, so the caps are
+# per book as well as per member. The whole list is replaced on every write, which
+# is what keeps these numbers small.
+MAX_BOOKS_PER_MEMBER = 200
+MAX_NOTES_PER_BOOK = 500
+MAX_LOG_ENTRIES_PER_BOOK = 2000
+
 # --- Connection pool ---
 DB_POOL_MIN = 1
 DB_POOL_MAX = 5
