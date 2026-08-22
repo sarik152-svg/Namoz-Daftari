@@ -286,5 +286,24 @@ async def add_member(member: MemberCreate, request: Request) -> dict:
     return profile.model_dump()
 
 
+class RevalidatingStatic(StaticFiles):
+    """Serve the client with revalidation forced on every load.
+
+    Without a Cache-Control header the browser falls back to heuristic caching, and
+    a phone — iOS especially, once the page is on the home screen — can keep serving
+    a stored copy for days. A deploy then silently never reaches the person holding
+    the phone, which is exactly how a fixed bug looks unfixed.
+
+    `no-cache` does not mean "do not store": the conditional request still answers
+    304 from the ETag already being sent, so the cost is a round trip rather than
+    the 90 KB body.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
+
 # Mounted last so it never shadows the API routes above.
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+app.mount("/", RevalidatingStatic(directory=STATIC_DIR, html=True), name="static")
