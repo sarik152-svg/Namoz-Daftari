@@ -70,12 +70,18 @@ def _validate_clock(value: str | None) -> str | None:
 
 # ---------------------------------------------------------------- records
 class PrayerMark(BaseModel):
-    """One prayer on one day. `t` is the clock time the user logged, if any."""
+    """One prayer on one day.
+
+    `t` is the clock time the user logged, if any. `j` marks it as prayed in
+    congregation, which is worth more than praying alone and is chosen at the moment
+    of marking — like the rest of the mark, it is write-once.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     s: PrayerStatus
     t: str | None = None
+    j: bool | None = None
 
     @field_validator("t")
     @classmethod

@@ -226,10 +226,41 @@ coordinates. The entry is stamped with today's date *in the new city*, since cro
 time zones can change what "today" is. `members.city` stays as the fallback for anyone
 who has never moved, and as what the admin roster shows.
 
+## Jamoat
+
+A fard prayer marked as prayed in congregation carries `j: true` on the mark and is
+worth **1.5 instead of 1** in the ranking, plus 0.5 off the prayer debt. The choice is
+made at the moment of marking — a third button on the row, mosque / alone / missed —
+and is write-once like the rest of the mark. Nafl has no congregation button, since
+tahajjud is prayed alone. Marking congregation on a prayer already outside its window
+still records the fact but earns nothing: the bonus is for praying with the jamaat *on
+time*.
+
+## Nishonlar
+
+A tab of 23 badges, derived rather than stored: each is a `{kerak, v(stat)}` pair read
+straight off existing records, so a badge appears the moment its condition is met and
+recalculates by itself if a rule changes later. Earned ones show as a grid; unearned
+ones show underneath with a progress bar and their current count, so it is always clear
+what is close. A member switcher lets anyone look at anyone else's.
+
+### Haftalik jamoa nishoni
+
+One badge is not personal. Every member must reach `HAFTA_MAQSAD` (25) on-time prayers
+in the week; if all of them do, everyone gets it, and if a single person falls short,
+nobody does — *hamma bir kishi uchun, bir kishi hamma uchun*. The panel shows each
+member's progress toward the target, so it is visible who still needs carrying, and
+keeps a count of how many weeks the group has earned.
+
 ## Hafta va oy qahramoni
 
-The **Statistika** tab opens with rankings, scored separately for prayer and for
-reading, since they are separate ledgers:
+The **Reyting** tab opens with an Olympic-style podium — second on the left, first
+raised in the middle, third on the right — for **prayer only**, with a week/month
+switch. The book ranking lives in Kitob → Umumiy daftar instead, next to the books it
+is about. The per-prayer "which prayer is hardest" breakdown was removed: it was four
+bars per person per prayer and nobody read it.
+
+Scores, kept separate because they are separate ledgers:
 
 | | Prayer | Book |
 |---|---|---|
