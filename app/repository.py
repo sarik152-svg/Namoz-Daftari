@@ -21,6 +21,7 @@ from app.models import (
     Bonus,
     Book,
     DayRecord,
+    Place,
     GroupState,
     MemberCreate,
     MemberData,
@@ -71,6 +72,9 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
         book_rows = await connection.fetch(
             "SELECT member_id, book FROM books ORDER BY id"
         )
+        place_rows = await connection.fetch(
+            "SELECT member_id, place FROM places ORDER BY id"
+        )
 
     days: dict[str, dict[str, DayRecord]] = defaultdict(dict)
     for row in day_rows:
@@ -90,6 +94,10 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
     for row in book_rows:
         books[row["member_id"]].append(Book(**json.loads(row["book"])))
 
+    places: dict[str, list[Place]] = defaultdict(list)
+    for row in place_rows:
+        places[row["member_id"]].append(Place(**json.loads(row["place"])))
+
     members = [MemberProfile(**dict(row)) for row in member_rows]
     data = {
         member.id: MemberData(
@@ -97,6 +105,7 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
             bonuses=bonuses.get(member.id, []),
             tasks=tasks.get(member.id, []),
             books=books.get(member.id, []),
+            places=places.get(member.id, []),
         )
         for member in members
     }
@@ -285,8 +294,8 @@ async def replace_member_data(
     """Replace a member's whole document in one transaction.
 
     Days are upserted rather than deleted-and-reinserted, so a client that pushes
-    only a partial history never erases days it did not send. Bonuses, tasks and
-    books are ledgers the client owns outright, so those are replaced wholesale.
+    only a partial history never erases days it did not send. Bonuses, tasks, books
+    and places are ledgers the client owns outright, so those are replaced wholesale.
     """
     async with pool.acquire() as connection, connection.transaction():
         for day, record in data.days.items():
@@ -313,6 +322,15 @@ async def replace_member_data(
                 [
                     (member_id, json.dumps(book.model_dump(mode="json")))
                     for book in data.books
+                ],
+            )
+        await connection.execute("DELETE FROM places WHERE member_id = $1", member_id)
+        if data.places:
+            await connection.executemany(
+                "INSERT INTO places (member_id, place) VALUES ($1,$2::jsonb)",
+                [
+                    (member_id, json.dumps(place.model_dump(mode="json")))
+                    for place in sorted(data.places, key=lambda p: p.d)
                 ],
             )
 

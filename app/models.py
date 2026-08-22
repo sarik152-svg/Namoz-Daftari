@@ -19,6 +19,7 @@ from app.config import (
     MAX_DAYS_PER_MEMBER,
     MAX_LOG_ENTRIES_PER_BOOK,
     MAX_NOTES_PER_BOOK,
+    MAX_PLACES_PER_MEMBER,
     MAX_TASKS_PER_MEMBER,
     PIN_DIGITS,
 )
@@ -179,6 +180,27 @@ class Book(BaseModel):
         return value
 
 
+# ---------------------------------------------------------------- travel
+class Place(BaseModel):
+    """Where a member is, from day `d` onward.
+
+    Members travel, and prayer times have to follow the city they are actually in.
+    This is a dated list rather than an overwrite of the profile, so a day already
+    logged keeps being judged against the city they were in on that day.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    d: Date
+    city: str = Field(min_length=1, max_length=64)
+    lat: Latitude
+    lng: Longitude
+    tz: UtcOffset
+    asr: Literal[1, 2]
+    fa: TwilightAngle
+    ia: TwilightAngle
+
+
 class MemberData(BaseModel):
     """Everything one member has logged."""
 
@@ -188,6 +210,17 @@ class MemberData(BaseModel):
     bonuses: list[Bonus] = Field(default_factory=list, max_length=MAX_BONUSES_PER_MEMBER)
     tasks: list[Task] = Field(default_factory=list, max_length=MAX_TASKS_PER_MEMBER)
     books: list[Book] = Field(default_factory=list, max_length=MAX_BOOKS_PER_MEMBER)
+    places: list[Place] = Field(default_factory=list, max_length=MAX_PLACES_PER_MEMBER)
+
+    @field_validator("places")
+    @classmethod
+    def _one_place_per_day(cls, value: list[Place]) -> list[Place]:
+        """Two cities claiming the same day makes "where were you then" ambiguous.
+        The client replaces the day's entry instead of appending a second one."""
+        days = [entry.d for entry in value]
+        if len(days) != len(set(days)):
+            raise ValueError("a member may record only one place per day")
+        return value
 
     @field_validator("days")
     @classmethod
@@ -207,6 +240,7 @@ class MemberData(BaseModel):
             "bonuses": [b.model_dump(mode="json") for b in self.bonuses],
             "tasks": [t.model_dump(mode="json") for t in self.tasks],
             "books": [b.model_dump(mode="json") for b in self.books],
+            "places": [p.model_dump(mode="json") for p in self.places],
         }
 
 

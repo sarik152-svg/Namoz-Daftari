@@ -84,6 +84,7 @@ app/repository.py  all SQL
 app/main.py        routes and the session dependencies
 migrations/        applied automatically on boot, tracked in schema_migrations
 static/index.html  the browser app. Source of truth, edited directly.
+                   SUNNATS carries 45 daily sunnahs, each with its hadith source.
 patch_login.py     the one-time group-code -> login migration of the client. Historical.
 tests/             151 unit/API tests, 24 integration tests
 legacy/            the pre-server localStorage client, kept for reference only
@@ -179,6 +180,50 @@ Now:
   `early` → the prayer cannot be marked at all, because its time has not come.
 - Scoring gives yesterday's Xufton a grace period: it is not counted as missed while
   its window is still open.
+
+## Tahajjud
+
+Tahajjud is nafl, so it never costs anything: it cannot be marked missed, its window is
+advisory rather than enforced, and it can be logged at any hour — including a past day,
+where it still counts as prayed rather than late. Each one instead takes `NAFL_BALL`
+(0.25) off the prayer debt. The one thing the old code did wrong was letting the strict
+window grading apply to it, which turned a night prayer logged in the morning into a
+qazo with a minus beside it.
+
+## Travel: which city a day is judged in
+
+Members move between cities, and prayer times have to follow the city they are actually
+in. Overwriting `members.city` would have silently rewritten the schedule of every past
+day, so the city is a **dated list** instead — `places`, one entry per move, meaning
+"from this day onward, here".
+
+- `cfgNow(member)` — the city they are in now. Drives "today", the live windows and
+  everything being graded right now.
+- `cfgAt(member, day)` — the city they were in on that day. Drives the schedule shown
+  for a past date and the delay statistics, so flying to Dubai does not re-judge the
+  week spent in Tashkent.
+
+Members set this themselves in **Sozlamalar**, from the city list or by entering
+coordinates. The entry is stamped with today's date *in the new city*, since crossing
+time zones can change what "today" is. `members.city` stays as the fallback for anyone
+who has never moved, and as what the admin roster shows.
+
+## Hafta va oy qahramoni
+
+The **Statistika** tab opens with rankings, scored separately for prayer and for
+reading, since they are separate ledgers:
+
+| | Prayer | Book |
+|---|---|---|
+| | on time +1, qazo −0.25, missed −1, tahajjud +0.25 | every `BET_NORMA` pages +1, note +0.5, book finished +5 |
+
+The week runs Monday to Sunday and is **final once Sunday's Xufton has come in** — the
+week's last prayer time, which is what the owner asked for. Until then the block is
+marked `HOZIRCHA` and last week's finished result is shown alongside it. The month works
+the same way, ending with the last day's Xufton.
+
+Ranking a member starts from their first recorded day, never from the start of the
+period, so somebody who joins mid-week is not charged for days they were not there.
 
 ## Kitob daftari
 

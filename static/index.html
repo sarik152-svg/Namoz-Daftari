@@ -77,6 +77,8 @@ const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#C97BC0","#E0885A","#58BFC9","#9BC
 const P_QAZO=0.25,P_MISS=1,TASK_AT=4,STREAK_STEP=10,BONUS_MIN=2,BONUS_MAX=5;
 /* Kitob qoidalari. Ball namoz balidan ALOHIDA yuritiladi — ikkalasi bir
    hisobga qo'shilsa, o'qimagan kun namoz qarzini oshirib yuborardi. */
+/* Tahajjud nafl: hech qachon minus bermaydi, aksincha qarzni kamaytiradi. */
+const NAFL_BALL=0.25;
 const BET_NORMA=10;
 const K_KAM=0.5,K_NOL=1,K_NOTE=0.5,K_DONE=5,K_TASK_AT=4,K_TASK_BET=30;
 
@@ -203,51 +205,51 @@ const STATUS={
  missed:{label:"O'qilmagan",ball:-P_MISS,color:"var(--clay)"}
 };
 const SUNNATS=[
-{t:"Salomni birinchi berish",d:"Kichik kattaga, yurgan o'tirganga, ozchilik ko'pchilikka salom beradi. Salom — muhabbatning kaliti.",a:"Bugun kamida 5 kishiga birinchi bo'lib salom bering."},
-{t:"Har ishni o'ngdan boshlash",d:"Payg'ambarimiz (s.a.v.) poyabzal kiyish, taharat olish, taomlanish va tarashda o'ng tomonni ma'qul ko'rardilar.",a:"Bugun har bir ishni ongli ravishda o'ngdan boshlang."},
-{t:"Bismillah bilan boshlash",d:"Taomdan avval «Bismillah», unutilsa «Bismillahi avvalahu va oxirahu» aytiladi. So'ngida «Alhamdulillah».",a:"Har ovqatda ovoz chiqarib ayting — bola-chaqa ham eshitsin."},
-{t:"Qorinning uchdan biri",d:"Odam farzandi qorindan yomonroq idishni to'ldirmagan: uchdan biri taom, uchdan biri suv, uchdan biri nafas uchun.",a:"Bugun to'yishga bir qoshiq qolganda dasturxondan turing."},
-{t:"Suvni uch nafasda ichish",d:"Suv o'tirib, uch marta nafas olib, shukr bilan ichiladi.",a:"Bugun har ichganda uch nafasga bo'ling."},
-{t:"Misvok (tish tozaligi)",d:"«Ummatimga og'ir bo'lmaganda edi, har namoz oldidan misvokni buyurar edim.»",a:"Kamida ikki vaqt namozdan oldin tish tozalang."},
-{t:"Uyqu odobi",d:"O'ng yonboshga yotib, qo'lni yuz ostiga qo'yib, taharat bilan uxlash sunnat.",a:"Bugun taharat bilan, o'ng yonboshda yoting."},
-{t:"Yotishdan oldin himoya",d:"Oyatul Kursi, Ixlos, Falaq, Nos — o'qib, kaftga puflab, badanga surtiladi.",a:"Bugun kechqurun uch marta takrorlang."},
-{t:"Juma odobi",d:"G'usl, toza kiyim, xushbo'ylik, erta borish va Kahf surasini o'qish.",a:"Yaqin jumaga rejani bugundan yozib qo'ying."},
-{t:"Dushanba-payshanba ro'zasi",d:"Amallar shu ikki kunda ko'tariladi, Payg'ambarimiz ro'za tutishni yaxshi ko'rar edilar.",a:"Kelasi payshanbani belgilab qo'ying."},
-{t:"Ayyomul biyz ro'zasi",d:"Har oyning 13, 14, 15-kunlari ro'za tutish — butun umr ro'za tutgandek.",a:"Kalendarga uch kunni belgilang."},
-{t:"Ishroq namozi",d:"Bomdodni jamoat bilan o'qib, quyosh chiqquncha zikrda o'tirib, so'ng ikki rakat o'qigan kishiga to'liq haj va umra savobi bor.",a:"Bugun bomdoddan keyin 20 daqiqa o'tiring."},
-{t:"Duho namozi",d:"Har bir bo'g'in uchun sadaqa lozim — ikki rakat duho shuning o'rnini bosadi.",a:"Peshingacha 2-4 rakat duho o'qing."},
-{t:"Namozdan keyingi tasbeh",d:"33 Subhanalloh, 33 Alhamdulillah, 34 Allohu akbar.",a:"Bugun besh vaqtda ham to'liq bajaring."},
-{t:"Oyatul Kursi",d:"Har farz namozdan keyin o'qigan kishini jannatdan faqat o'lim to'sadi.",a:"Har namozdan keyin qoldirmang."},
-{t:"Tahajjud",d:"Farzdan keyingi eng afzal namoz — tun namozi. Kechaning oxirgi uchdan biri duo qabul bo'ladigan payt.",a:"Bugun kechada budilnik qo'ying."},
-{t:"Vitrni oxirga qoldirish",d:"Tunda uyg'onishga ishonchi bor kishi vitrni oxiriga qoldirsin.",a:"Bugun vitrni tahajjuddan keyin o'qing."},
-{t:"Aksirish odobi",d:"Aksirgan «Alhamdulillah», eshitgan «Yarhamukalloh», u esa «Yahdikumulloh va yuslih balakum» deydi.",a:"Bugun bu duolarni yodlab oling."},
-{t:"Bemorni yo'qlash",d:"Bemorni yo'qlagan kishi qaytguncha jannat mevalari ichida bo'ladi.",a:"Bir kasal tanishingizga qo'ng'iroq qiling yoki boring."},
-{t:"Qo'l berib ko'rishish",d:"Ikki musulmon ko'rishsa, ajralmasdan avval gunohlari kechiriladi.",a:"Bugun samimiy, ikki qo'llab ko'rishing."},
-{t:"Tabassum — sadaqa",d:"«Birodaringga tabassum qilishing ham sadaqadir.»",a:"Bugun uydagilarga birinchi bo'lib tabassum qiling."},
-{t:"Qo'shni haqqi",d:"Sho'rva pishirsang suvini ko'paytir va qo'shningga ulash.",a:"Bugun qo'shningizga hol so'rab kiring."},
-{t:"Ota-ona haqqi",d:"Alloh roziligi ota-ona roziligida. Duolari qaytarilmaydi.",a:"Bugun ota-onangizga qo'ng'iroq qiling va duo so'rang."},
-{t:"G'azabni bosish",d:"G'azablansang: a'uzu ayt, tik tursang o'tir, o'tirgan bo'lsang yonboshla, taharat ol.",a:"Bugun bir marta jim qolib, g'azabni yutib yuboring."},
-{t:"Istixora",d:"Har muhim ishda ikki rakat o'qib, Allohdan yaxshisini so'rash.",a:"Hozirgi bir qaroringiz uchun istixora qiling."},
-{t:"Uydan chiqish duosi",d:"«Bismillahi tavakkaltu alalloh, va la havla va la quvvata illa billah.»",a:"Bugun har chiqishda ayting."},
-{t:"Masjid odobi",d:"O'ng oyoq bilan kirib duo aytiladi, chap oyoq bilan chiqiladi.",a:"Bugun masjidga kirish-chiqish duosini yodlang."},
-{t:"Tahiyyatul masjid",d:"Masjidga kirgan kishi o'tirmasdan avval ikki rakat o'qisin.",a:"Bugun har masjidga kirganda bajaring."},
-{t:"Istig'for",d:"«Men bir kunda yuz martadan ko'p istig'for aytaman» — Payg'ambarimiz (s.a.v.).",a:"Bugun 100 marta «Astag'firullah» ayting."},
-{t:"Salavot",d:"Kim menga bir marta salavot aytsa, Alloh unga o'n marta rahmat qiladi. Juma kuni ko'paytiring.",a:"Bugun 100 marta salavot ayting."},
-{t:"Fitrat amallari",d:"Tozalik, tirnoq olish, soch-soqolni tartibga solish — fitratdan.",a:"Bugun tozalik ishlarini yakunlang."},
-{t:"Xushbo'ylik",d:"Payg'ambarimiz xushbo'y hidni sevar va hech qachon rad etmas edilar.",a:"Bugun atir sepib chiqing, ayniqsa namozga."},
-{t:"Mehmon izzati",d:"Allohga va oxirat kuniga imon keltirgan kishi mehmonini izzat qilsin.",a:"Bu hafta bir oilani mehmonga chaqiring."},
-{t:"Sadaqa",d:"Yarim xurmo bo'lsa ham do'zaxdan to'siq bo'ling. Yashirin sadaqa g'azabni o'chiradi.",a:"Bugun hech kim bilmaydigan bir sadaqa bering."},
-{t:"Kunlik Qur'on",d:"Amallarning Allohga suyukligi — oz bo'lsa ham davomiysi.",a:"Bugun kamida bir sahifa o'qing va ma'nosiga qarang."},
-{t:"Yaxshi so'z yoki sukut",d:"Kim Allohga va oxirat kuniga imon keltirsa, yaxshi gapirsin yoki jim tursin.",a:"Bugun keraksiz bir gapni aytmay qoldiring."},
-{t:"Va'daga vafo",d:"Munofiqning belgisi: gapirsa yolg'on, va'da bersa buzadi, omonatga xiyonat qiladi.",a:"Bugun bergan har va'dani yozib qo'ying va bajaring."},
-{t:"Kechki vaqt odobi",d:"Kun botganda bolalarni uyga kiriting, idish-eshiklarni yopib, Bismillah ayting.",a:"Bugun shom paytida oilani uyga yig'ing."},
-{t:"Xurmo bilan iftor",d:"Payg'ambarimiz ro'zani xurmo, bo'lmasa suv bilan ochardilar.",a:"Kelasi nafl ro'zangizni shunday oching."},
-{t:"Shubhalidan qochish",d:"Halol ham, harom ham ayon. Ikkisi orasidagi shubhalidan saqlangan dinini asragan bo'ladi.",a:"Bugun daromadingizdagi bir shubhali nuqtani tekshiring."},
-{t:"Erta turish barakasi",d:"«Allohim, ummatimning erta turishiga baraka ber.»",a:"Bugun bomdoddan keyin uxlamang, ishni boshlang."},
-{t:"Kamtarlik",d:"Kim Alloh uchun tavozu qilsa, Alloh uni ko'taradi.",a:"Bugun eng oddiy ishni o'zingiz qiling."},
-{t:"Hojat chiqarish",d:"Alloh bandaga, banda birodariga yordam berib turgan ekan, yordam beradi.",a:"Bugun bir kishining ishini yo'lga qo'ying."},
-{t:"G'iybatdan tiyilish",d:"G'iybat — birodaringni u yoqtirmaydigan narsa bilan tilga olishing.",a:"Bugun bir suhbatni chiroyli tarzda burib yuboring."},
-{t:"Kunlik zikr",d:"«La ilaha illalloh vahdahu la sharika lah, lahul mulku va lahul hamd, va huva ala kulli shay'in qadiyr» — 100 marta.",a:"Bugun 100 martaga yeting."}
+{t:"Salomni birinchi berish",d:"Kichik kattaga, yurgan o'tirganga, ozchilik ko'pchilikka salom beradi. Salom — muhabbatning kaliti.",a:"Bugun kamida 5 kishiga birinchi bo'lib salom bering.",s:"Buxoriy, 6231; Muslim, 2160"},
+{t:"Har ishni o'ngdan boshlash",d:"Payg'ambarimiz (s.a.v.) poyabzal kiyish, taharat olish, taomlanish va tarashda o'ng tomonni ma'qul ko'rardilar.",a:"Bugun har bir ishni ongli ravishda o'ngdan boshlang.",s:"Buxoriy, 168; Muslim, 268"},
+{t:"Bismillah bilan boshlash",d:"Taomdan avval «Bismillah», unutilsa «Bismillahi avvalahu va oxirahu» aytiladi. So'ngida «Alhamdulillah».",a:"Har ovqatda ovoz chiqarib ayting — bola-chaqa ham eshitsin.",s:"Abu Dovud, 3767; Termiziy, 1858 — hasan sahih"},
+{t:"Qorinning uchdan biri",d:"Odam farzandi qorindan yomonroq idishni to'ldirmagan: uchdan biri taom, uchdan biri suv, uchdan biri nafas uchun.",a:"Bugun to'yishga bir qoshiq qolganda dasturxondan turing.",s:"Termiziy, 2380; Ibn Moja, 3349 — hasan"},
+{t:"Suvni uch nafasda ichish",d:"Suv o'tirib, uch marta nafas olib, shukr bilan ichiladi.",a:"Bugun har ichganda uch nafasga bo'ling.",s:"Buxoriy, 5631; Muslim, 2028"},
+{t:"Misvok (tish tozaligi)",d:"«Ummatimga og'ir bo'lmaganda edi, har namoz oldidan misvokni buyurar edim.»",a:"Kamida ikki vaqt namozdan oldin tish tozalang.",s:"Buxoriy, 887; Muslim, 252"},
+{t:"Uyqu odobi",d:"O'ng yonboshga yotib, qo'lni yuz ostiga qo'yib, taharat bilan uxlash sunnat.",a:"Bugun taharat bilan, o'ng yonboshda yoting.",s:"Buxoriy, 247; Muslim, 2710"},
+{t:"Yotishdan oldin himoya",d:"Oyatul Kursi, Ixlos, Falaq, Nos — o'qib, kaftga puflab, badanga surtiladi.",a:"Bugun kechqurun uch marta takrorlang.",s:"Buxoriy, 5017; Muslim, 2192"},
+{t:"Juma odobi",d:"G'usl, toza kiyim, xushbo'ylik, erta borish va Kahf surasini o'qish.",a:"Yaqin jumaga rejani bugundan yozib qo'ying.",s:"Buxoriy, 877; Muslim, 846 · Kahf: Hokim va Bayhaqiy"},
+{t:"Dushanba-payshanba ro'zasi",d:"Amallar shu ikki kunda ko'tariladi, Payg'ambarimiz ro'za tutishni yaxshi ko'rar edilar.",a:"Kelasi payshanbani belgilab qo'ying.",s:"Termiziy, 747; Nasoiy, 2358 — hasan"},
+{t:"Ayyomul biyz ro'zasi",d:"Har oyning 13, 14, 15-kunlari ro'za tutish — butun umr ro'za tutgandek.",a:"Kalendarga uch kunni belgilang.",s:"Nasoiy, 2420; Termiziy, 761 — hasan"},
+{t:"Ishroq namozi",d:"Bomdodni jamoat bilan o'qib, quyosh chiqquncha zikrda o'tirib, so'ng ikki rakat o'qigan kishiga to'liq haj va umra savobi bor.",a:"Bugun bomdoddan keyin 20 daqiqa o'tiring.",s:"Termiziy, 586 — hasan"},
+{t:"Duho namozi",d:"Har bir bo'g'in uchun sadaqa lozim — ikki rakat duho shuning o'rnini bosadi.",a:"Peshingacha 2-4 rakat duho o'qing.",s:"Muslim, 720"},
+{t:"Namozdan keyingi tasbeh",d:"33 Subhanalloh, 33 Alhamdulillah, 34 Allohu akbar.",a:"Bugun besh vaqtda ham to'liq bajaring.",s:"Muslim, 597"},
+{t:"Oyatul Kursi",d:"Har farz namozdan keyin o'qigan kishini jannatdan faqat o'lim to'sadi.",a:"Har namozdan keyin qoldirmang.",s:"Nasoiy, «as-Sunanul-kubro», 9928"},
+{t:"Tahajjud",d:"Farzdan keyingi eng afzal namoz — tun namozi. Kechaning oxirgi uchdan biri duo qabul bo'ladigan payt.",a:"Bugun kechada budilnik qo'ying.",s:"Muslim, 1163"},
+{t:"Vitrni oxirga qoldirish",d:"Tunda uyg'onishga ishonchi bor kishi vitrni oxiriga qoldirsin.",a:"Bugun vitrni tahajjuddan keyin o'qing.",s:"Muslim, 755"},
+{t:"Aksirish odobi",d:"Aksirgan «Alhamdulillah», eshitgan «Yarhamukalloh», u esa «Yahdikumulloh va yuslih balakum» deydi.",a:"Bugun bu duolarni yodlab oling.",s:"Buxoriy, 6224"},
+{t:"Bemorni yo'qlash",d:"Bemorni yo'qlagan kishi qaytguncha jannat mevalari ichida bo'ladi.",a:"Bir kasal tanishingizga qo'ng'iroq qiling yoki boring.",s:"Muslim, 2568"},
+{t:"Qo'l berib ko'rishish",d:"Ikki musulmon ko'rishsa, ajralmasdan avval gunohlari kechiriladi.",a:"Bugun samimiy, ikki qo'llab ko'rishing.",s:"Abu Dovud, 5212; Termiziy, 2727 — hasan"},
+{t:"Tabassum — sadaqa",d:"«Birodaringga tabassum qilishing ham sadaqadir.»",a:"Bugun uydagilarga birinchi bo'lib tabassum qiling.",s:"Termiziy, 1956 — hasan"},
+{t:"Qo'shni haqqi",d:"Sho'rva pishirsang suvini ko'paytir va qo'shningga ulash.",a:"Bugun qo'shningizga hol so'rab kiring.",s:"Muslim, 2625"},
+{t:"Ota-ona haqqi",d:"Alloh roziligi ota-ona roziligida. Duolari qaytarilmaydi.",a:"Bugun ota-onangizga qo'ng'iroq qiling va duo so'rang.",s:"Termiziy, 1899 — hasan"},
+{t:"G'azabni bosish",d:"G'azablansang: a'uzu ayt, tik tursang o'tir, o'tirgan bo'lsang yonboshla, taharat ol.",a:"Bugun bir marta jim qolib, g'azabni yutib yuboring.",s:"Abu Dovud, 4782; a'uzu: Buxoriy, 3282"},
+{t:"Istixora",d:"Har muhim ishda ikki rakat o'qib, Allohdan yaxshisini so'rash.",a:"Hozirgi bir qaroringiz uchun istixora qiling.",s:"Buxoriy, 1162"},
+{t:"Uydan chiqish duosi",d:"«Bismillahi tavakkaltu alalloh, va la havla va la quvvata illa billah.»",a:"Bugun har chiqishda ayting.",s:"Abu Dovud, 5095; Termiziy, 3426 — hasan sahih"},
+{t:"Masjid odobi",d:"O'ng oyoq bilan kirib duo aytiladi, chap oyoq bilan chiqiladi.",a:"Bugun masjidga kirish-chiqish duosini yodlang.",s:"Muslim, 713; Abu Dovud, 465"},
+{t:"Tahiyyatul masjid",d:"Masjidga kirgan kishi o'tirmasdan avval ikki rakat o'qisin.",a:"Bugun har masjidga kirganda bajaring.",s:"Buxoriy, 1163; Muslim, 714"},
+{t:"Istig'for",d:"«Men bir kunda yuz martadan ko'p istig'for aytaman» — Payg'ambarimiz (s.a.v.).",a:"Bugun 100 marta «Astag'firullah» ayting.",s:"Buxoriy, 6307"},
+{t:"Salavot",d:"Kim menga bir marta salavot aytsa, Alloh unga o'n marta rahmat qiladi. Juma kuni ko'paytiring.",a:"Bugun 100 marta salavot ayting.",s:"Muslim, 408"},
+{t:"Fitrat amallari",d:"Tozalik, tirnoq olish, soch-soqolni tartibga solish — fitratdan.",a:"Bugun tozalik ishlarini yakunlang.",s:"Buxoriy, 5889; Muslim, 257"},
+{t:"Xushbo'ylik",d:"Payg'ambarimiz xushbo'y hidni sevar va hech qachon rad etmas edilar.",a:"Bugun atir sepib chiqing, ayniqsa namozga.",s:"Buxoriy, 2582"},
+{t:"Mehmon izzati",d:"Allohga va oxirat kuniga imon keltirgan kishi mehmonini izzat qilsin.",a:"Bu hafta bir oilani mehmonga chaqiring.",s:"Buxoriy, 6018; Muslim, 47"},
+{t:"Sadaqa",d:"Yarim xurmo bo'lsa ham do'zaxdan to'siq bo'ling. Yashirin sadaqa g'azabni o'chiradi.",a:"Bugun hech kim bilmaydigan bir sadaqa bering.",s:"Buxoriy, 1417; Muslim, 1016"},
+{t:"Kunlik Qur'on",d:"Amallarning Allohga suyukligi — oz bo'lsa ham davomiysi.",a:"Bugun kamida bir sahifa o'qing va ma'nosiga qarang.",s:"Buxoriy, 6464; Muslim, 783"},
+{t:"Yaxshi so'z yoki sukut",d:"Kim Allohga va oxirat kuniga imon keltirsa, yaxshi gapirsin yoki jim tursin.",a:"Bugun keraksiz bir gapni aytmay qoldiring.",s:"Buxoriy, 6018; Muslim, 47"},
+{t:"Va'daga vafo",d:"Munofiqning belgisi: gapirsa yolg'on, va'da bersa buzadi, omonatga xiyonat qiladi.",a:"Bugun bergan har va'dani yozib qo'ying va bajaring.",s:"Buxoriy, 33; Muslim, 59"},
+{t:"Kechki vaqt odobi",d:"Kun botganda bolalarni uyga kiriting, idish-eshiklarni yopib, Bismillah ayting.",a:"Bugun shom paytida oilani uyga yig'ing.",s:"Buxoriy, 3280; Muslim, 2012"},
+{t:"Xurmo bilan iftor",d:"Payg'ambarimiz ro'zani xurmo, bo'lmasa suv bilan ochardilar.",a:"Kelasi nafl ro'zangizni shunday oching.",s:"Abu Dovud, 2356; Termiziy, 695 — hasan sahih"},
+{t:"Shubhalidan qochish",d:"Halol ham, harom ham ayon. Ikkisi orasidagi shubhalidan saqlangan dinini asragan bo'ladi.",a:"Bugun daromadingizdagi bir shubhali nuqtani tekshiring.",s:"Buxoriy, 52; Muslim, 1599"},
+{t:"Erta turish barakasi",d:"«Allohim, ummatimning erta turishiga baraka ber.»",a:"Bugun bomdoddan keyin uxlamang, ishni boshlang.",s:"Abu Dovud, 2606; Termiziy, 1212 — hasan"},
+{t:"Kamtarlik",d:"Kim Alloh uchun tavozu qilsa, Alloh uni ko'taradi.",a:"Bugun eng oddiy ishni o'zingiz qiling.",s:"Muslim, 2588"},
+{t:"Hojat chiqarish",d:"Alloh bandaga, banda birodariga yordam berib turgan ekan, yordam beradi.",a:"Bugun bir kishining ishini yo'lga qo'ying.",s:"Muslim, 2699"},
+{t:"G'iybatdan tiyilish",d:"G'iybat — birodaringni u yoqtirmaydigan narsa bilan tilga olishing.",a:"Bugun bir suhbatni chiroyli tarzda burib yuboring.",s:"Muslim, 2589"},
+{t:"Kunlik zikr",d:"«La ilaha illalloh vahdahu la sharika lah, lahul mulku va lahul hamd, va huva ala kulli shay'in qadiyr» — 100 marta.",a:"Bugun 100 martaga yeting.",s:"Buxoriy, 6403; Muslim, 2691"}
 ];
 const AYAT=[
 "«Albatta, namoz mo'minlarga belgilangan vaqtlarda farz qilingandir.» — Niso, 103",
@@ -345,7 +347,7 @@ async function pushDay(id,d){
    syncMsg=e.status===403?"Bu sizning yozuvingiz emas":e.status===429?"Juda ko'p urinish"
      :"saqlanmadi - keyin yuboriladi"}
 }
-const blank=()=>({days:{},tasks:[],bonuses:[],books:[]});
+const blank=()=>({days:{},tasks:[],bonuses:[],books:[],places:[]});
 /* Kitob va zametka id'lari telefonda yasaladi; server ularni
    ^[A-Za-z0-9_-]{1,40}$ shabloni bo'yicha tekshiradi. */
 const uid=()=>Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -355,10 +357,27 @@ let members=LS.get("nd_members",DEFAULT_MEMBERS);
 let data=LS.get("nd_data",{});
 let me=LS.get("nd_me",null);
 let screen="login",tab="today",date=today(),pinFor=null,pinErr="",manualCity=false;
+let manualPlace=false,placeMsg="";
 let loginNames=[],loginPick=null,loginErr="",adminMode=false,roster=[],adminErr="";
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
+
+/* ══════════════ QAYSI SHAHAR ══════════════ */
+/* A'zolar safarga chiqadi, namoz vaqti esa ular TURGAN shahar bo'yicha bo'lishi
+   kerak. Shuning uchun shahar profilda almashtirilmaydi, sanali ro'yxatga
+   yoziladi: «shu kundan boshlab — mana bu shaharda». Shunda boshqa shaharga
+   ko'chish o'tgan kunlarning vaqtlarini qayta yozib yubormaydi. */
+const placesOf=m=>((data[m.id]&&data[m.id].places)||[]);
+function cfgAt(m,ds){
+ let best=null;
+ placesOf(m).forEach(p=>{if(p.d<=ds&&(!best||p.d>=best.d))best=p});
+ return best?Object.assign({},m,best):m}
+function cfgNow(m){
+ let best=null;
+ placesOf(m).forEach(p=>{if(!best||p.d>=best.d)best=p});
+ return best?Object.assign({},m,best):m}
+const myCfg=()=>cfgNow(M(me));
 const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.length];
 
 /* ══════════════ HISOB ══════════════ */
@@ -380,11 +399,14 @@ function score(u,c){
     else if(r.s==="qazo"){o.penalty+=P_QAZO;o.qazo++;o.per[p.k].qazo++}
     else{o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}});
    if(day.quran)o.quran++}}
- o.debt=o.penalty-o.bonusSum-o.tasks*TASK_AT;
+ /* Tahajjud nafl — jarima yozmaydi, aksincha har biri qarzni kamaytiradi. */
+ o.debt=o.penalty-o.bonusSum-o.tasks*TASK_AT-o.tahajjud*NAFL_BALL;
  return o}
-function delays(u,c){
+function delays(u,m){
  const days=(u&&u.days)||{},per={};PRAYERS.forEach(p=>per[p.k]={sum:0,n:0});
- Object.keys(days).forEach(ds=>{const sc=daySchedule(new Date(ds+"T12:00:00"),c);
+ /* Kechikish o'sha kungi namoz vaqtidan o'lchanadi, shuning uchun har bir kun
+    o'sha kuni a'zo turgan shahar jadvali bilan solishtiriladi. */
+ Object.keys(days).forEach(ds=>{const sc=daySchedule(new Date(ds+"T12:00:00"),cfgAt(m,ds));
   PRAYERS.forEach(p=>{const r=days[ds][p.k];
    if(r&&(r.s==="ontime"||r.s==="qazo")&&r.t){const d=diffMin(hm(sc[p.k]),r.t);
     if(d>=0&&d<900){per[p.k].sum+=d;per[p.k].n++}}})});
@@ -440,6 +462,85 @@ function bookStreak(u,c){
  for(let i=0;i<400;i++){if(dayPages(u,cur)>=BET_NORMA){n++;cur=shift(cur,-1)}else break}
  return n}
 
+/* ══════════════ HAFTA VA OY QAHRAMONI ══════════════ */
+/* Hafta dushanbadan yakshanbagacha. Natija yakshanba kuni xufton vaqti
+   kirgandan keyin — ya'ni haftaning oxirgi namoz vaqtidan keyin — yakuniy
+   bo'ladi; undan oldin «hozircha» deb ko'rsatiladi. */
+function weekRange(ds){
+ const dow=(new Date(ds+"T12:00:00").getDay()+6)%7;
+ return[shift(ds,-dow),shift(ds,6-dow)]}
+function monthRange(ds){
+ const d=new Date(ds+"T12:00:00"),y=d.getFullYear(),m=d.getMonth();
+ const pad=n=>String(n).padStart(2,"0");
+ return[y+"-"+pad(m+1)+"-01",y+"-"+pad(m+1)+"-"+pad(new Date(y,m+1,0).getDate())];}
+function periodDone(z,c){
+ const td=todayFor(c);
+ if(td>z)return true;
+ if(td<z)return false;
+ return winState("xufton",z,c)!=="early"}
+
+/* Oraliqdagi namoz bali: vaqtida +1, qazo −0,25, o'qilmagan −1.
+   Tahajjud nafl — faqat qo'shadi, hech qachon kamaytirmaydi. */
+function prayerRange(u,m,a,z){
+ const c=cfgNow(m),days=(u&&u.days)||{},td=todayFor(c),openX=liveDay("xufton",c);
+ /* Hisob a'zo daftar tuta boshlagan kundan boshlanadi — score() dagidek. Aks holda
+    guruhga keyin qo'shilgan odam o'zi yo'q kunlar uchun jarima olib qolardi. */
+ const boshi=Object.keys(days).sort()[0];
+ const o={ontime:0,qazo:0,bad:0,tahajjud:0,ball:0};
+ if(!boshi)return o;
+ for(let d=a<boshi?boshi:a,i=0;i<40&&d<=z;i++,d=shift(d,1)){
+  if(d>td)break;
+  const day=days[d]||{},closed=d<td;
+  PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
+   if(!p.fard){if(r&&r.s==="ontime"){o.tahajjud++;o.ball+=NAFL_BALL}return}
+   if(!r){if(shut){o.bad++;o.ball-=P_MISS}return}
+   if(r.s==="ontime"){o.ontime++;o.ball+=1}
+   else if(r.s==="qazo"){o.qazo++;o.ball-=P_QAZO}
+   else{o.bad++;o.ball-=P_MISS}})}
+ return o}
+
+/* Kitob bali: har normalik bet 1 ball, zametka +0,5, tugatilgan kitob +5. */
+function bookRange(u,a,z){
+ const o={bet:0,notes:0,done:0,ball:0};
+ ((u&&u.books)||[]).forEach(b=>{
+  (b.log||[]).forEach(e=>{if(e.d>=a&&e.d<=z)o.bet+=e.p});
+  (b.notes||[]).forEach(n=>{if(n.d>=a&&n.d<=z)o.notes++});
+  if(b.finished&&b.finished>=a&&b.finished<=z)o.done++});
+ o.ball=o.bet/BET_NORMA+o.notes*K_NOTE+o.done*K_DONE;
+ return o}
+
+function rankBy(a,z,kind){
+ return members.map(m=>{
+  const u=data[m.id]||blank();
+  const o=kind==="namoz"?prayerRange(u,m,a,z):bookRange(u,a,z);
+  return{m:m,o:o,ball:o.ball}}).sort((x,y)=>y.ball-x.ball)}
+
+const MEDAL=["\u{1F947}","\u{1F948}","\u{1F949}"];
+function champBlock(nom,a,z,done){
+ let h=`<div class="panel p14 mb14" style="border-color:${done?"#4CAF8B55":"#C9A22744"}">
+  <div class="flex between center">
+   <div><div class="eyebrow">${nom}</div>
+    <div class="muted small" style="margin-top:3px">${pretty(a)} — ${pretty(z)}</div></div>
+   <span class="chip" style="color:${done?"var(--jade)":"var(--brass)"}">${done?"YAKUNIY":"HOZIRCHA"}</span></div>`;
+ [["Namoz",rankBy(a,z,"namoz"),x=>x.o.ontime+" vaqtida · "+x.o.qazo+" qazo · "+x.o.bad+" o'tkazilgan"
+    +(x.o.tahajjud?" · "+x.o.tahajjud+" tahajjud":"")],
+  ["Kitob",rankBy(a,z,"kitob"),x=>x.o.bet+" bet · "+x.o.notes+" zametka"
+    +(x.o.done?" · "+x.o.done+" kitob tugatildi":"")]
+ ].forEach(function(g){
+  const nomi=g[0],rows=g[1],det=g[2];
+  h+=`<div style="margin-top:12px"><div class="eyebrow" style="color:var(--mut)">${nomi}</div>`;
+  rows.forEach((x,i)=>{
+   h+=`<div class="flex between center" style="padding:7px 0;border-bottom:1px solid var(--line)">
+    <div class="flex center gap2" style="min-width:0">
+     <span style="font-size:15px;width:22px;flex-shrink:0">${MEDAL[i]||(i+1)+"."}</span>
+     <div style="min-width:0">
+      <div style="font-size:13px;color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</div>
+      <div class="muted tiny">${det(x)}</div></div></div>
+    <span class="${x.ball>0?"jade":"muted"}" style="font-family:var(--serif);font-size:18px;flex-shrink:0">${fmt(x.ball)}</span>
+   </div>`});
+  h+=`</div>`});
+ return h+`</div>`}
+
 /* Jamoaning barcha zametkalari, eng yangisi tepada. */
 function allNotes(){
  const out=[];
@@ -459,7 +560,7 @@ const A={
      me=who.member_id;isAdmin=who.is_admin;
      LS.set("nd_me",me);LS.set("nd_admin",isAdmin);
      if(isAdmin){screen="admin";await A.loadRoster()}
-     else{screen="app";await pull();if(M(me))date=todayFor(M(me))}
+     else{screen="app";await pull();if(M(me))date=todayFor(myCfg())}
    }catch(e){forgetSession()}
   }
   render();
@@ -471,7 +572,7 @@ const A={
   try{const j=await api("/auth/members");loginNames=j.members}catch(e){loginNames=[]}},
  go(s){screen=s;pinErr="";loginErr="";adminErr="";render()},
  setTab(t){tab=t;window.scrollTo(0,0);render()},
- setDate(n){const td=todayFor(M(me)),d=shift(date,n);date=d>td?td:d;render()},
+ setDate(n){const td=todayFor(myCfg()),d=shift(date,n);date=d>td?td:d;render()},
  pickLogin(id){loginPick=loginPick===id?null:id;adminMode=false;loginErr="";render()},
  toggleAdmin(){adminMode=!adminMode;loginPick=null;loginErr="";render()},
  async doLogin(id){
@@ -482,7 +583,7 @@ const A={
    token=j.token;isAdmin=false;LS.set("nd_token",token);LS.set("nd_admin",false);
    me=id;LS.set("nd_me",id);data={};LS.set("nd_data",data);
    screen="app";loginPick=null;loginErr="";
-   await pull();if(M(me))date=todayFor(M(me));render();
+   await pull();if(M(me))date=todayFor(myCfg());render();
   }catch(e){
    loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"PIN noto'g'ri";render()}},
  async doAdminLogin(){
@@ -522,54 +623,55 @@ const A={
  pick(id){me=id;LS.set("nd_me",id);screen="app";pinFor=null;render()},
  async refresh(){await pull();render()},
  async mark(pk,how,ds){
-  const cfg=M(me),live=liveDay(pk,cfg);
+  const cfg=myCfg(),P=PRAYERS.find(x=>x.k===pk)||{},live=liveDay(pk,cfg);
   /* Xufton bomdodgacha kechagi kunga yoziladi, shuning uchun yoziladigan kun
      ekranda ochiq turgan kundan farq qilishi mumkin. */
   const tgt=ds||(date===todayFor(cfg)?live:date);
   const day=Object.assign({},(data[me].days||{})[tgt]||{});
+  const n=nowFor(cfg);
+  const nowHM=String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
   if(how==="clear")delete day[pk];
   else if(how==="miss")day[pk]={s:"missed",t:null};
+  /* Nafl namoz istalgan vaqtda o'qiladi va hech qachon minus bermaydi —
+     u faqat qo'shadi, shuning uchun oyna ham, kun yopilgani ham to'smaydi. */
+  else if(!P.fard)day[pk]={s:"ontime",t:tgt===live?nowHM:null};
   else if(tgt!==live)day[pk]={s:"late",t:null};
   else{
    const st=winState(pk,tgt,cfg);
-   /* Vaqti kirmagan namozni belgilab bo'lmaydi — baho faqat vaqt bo'yicha. */
+   /* Farz namozning vaqti kirmagan bo'lsa belgilab bo'lmaydi. */
    if(st==="early")return;
-   const n=nowFor(cfg);
-   day[pk]={s:st==="open"?"ontime":"qazo",
-     t:String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")}}
+   day[pk]={s:st==="open"?"ontime":"qazo",t:nowHM}}
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[tgt]:day})});
   render();await pushDay(me,tgt);render()},
  async setTime(pk,v,ds){
-  if(!v)return;const cfg=M(me);
+  if(!v)return;const cfg=myCfg();
   const tgt=ds||(date===todayFor(cfg)?liveDay(pk,cfg):date);
   const day=Object.assign({},(data[me].days||{})[tgt]||{});
   if(!day[pk])return;
-  const sc=daySchedule(new Date(tgt+"T12:00:00"),cfg);
+  const P=PRAYERS.find(x=>x.k===pk)||{};
+  const sc=daySchedule(new Date(tgt+"T12:00:00"),cfgAt(M(me),tgt));
   /* Kiritilgan vaqt oyna ichida bo'lsa — vaqtida o'qilgan. Kun yopilgandan keyin
-     belgilangan namoz esa vaqt yozilsa ham keyingi kun qazosi bo'lib qoladi. */
+     belgilangan namoz esa vaqt yozilsa ham keyingi kun qazosi bo'lib qoladi.
+     Nafl esa qaysi vaqt yozilsa ham musbat bo'lib qolaveradi. */
   const inside=inWin(toMin(v)/60,sc[pk],sc[EKY[pk]]);
-  day[pk]={s:day[pk].s==="late"?"late":(inside?"ontime":"qazo"),t:v};
+  day[pk]={s:!P.fard?"ontime":(day[pk].s==="late"?"late":(inside?"ontime":"qazo")),t:v};
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[tgt]:day})});
   render();await pushDay(me,tgt)},
  async field(f,v){
   const day=Object.assign({},(data[me].days||{})[date]||{});day[f]=v;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
   render();await pushDay(me,date)},
- async note(v){
-  const day=Object.assign({},(data[me].days||{})[date]||{});day.sunnat=v;
-  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
-  await pushDay(me,date)},
  async claim(pk,lvl){
-  const s=score(data[me],M(me));
+  const s=score(data[me],myCfg());
   const amt=Math.min(BONUS_MAX,Math.max(BONUS_MIN,Math.round(s.debt/2*100)/100));
-  data[me]=Object.assign({},data[me],{bonuses:((data[me].bonuses)||[]).concat([{p:pk,lvl:lvl,amt:amt,d:todayFor(M(me))}])});
+  data[me]=Object.assign({},data[me],{bonuses:((data[me].bonuses)||[]).concat([{p:pk,lvl:lvl,amt:amt,d:todayFor(myCfg())}])});
   render();await pushData(me);render()},
  rak:0,tas:0,
  setRak(n){A.rak=(n===A.rak)?n-1:n;render()},
  addTas(n){A.tas=Math.max(0,Math.min(500,A.tas+n));render()},
  resetTas(){A.tas=0;render()},
  async finishTask(){
-  data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([{d:todayFor(M(me)),rak:25,tas:500}])});
+  data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([{d:todayFor(myCfg()),rak:25,tas:500}])});
   A.rak=0;A.tas=0;render();await pushData(me);render()},
  /* ────────── KITOB ────────── */
  bookView:"mine",bookOpenId:null,bookErr:"",
@@ -581,13 +683,13 @@ const A={
   if(!t){A.bookErr="Kitob nomini yozing";render();return}
   if(!(n>0)){A.bookErr="Necha betligini yozing";render();return}
   const b={id:uid(),title:t.slice(0,200),author:a.slice(0,200),
-   pages:Math.min(100000,n),started:todayFor(M(me)),finished:null,log:[],notes:[]};
+   pages:Math.min(100000,n),started:todayFor(myCfg()),finished:null,log:[],notes:[]};
   data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).concat([b])});
   A.bookErr="";A.bookOpenId=b.id;render();await pushData(me);render()},
  async bookPages(id,v){
   /* Bir kunga bitta yozuv: server ham takroriy kunni rad etadi, chunki
      tezlik shu kunlar soniga bo'linadi. */
-  const n=Math.max(0,Math.min(10000,parseInt(v,10)||0)),ds=todayFor(M(me));
+  const n=Math.max(0,Math.min(10000,parseInt(v,10)||0)),ds=todayFor(myCfg());
   data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).map(b=>{
    if(b.id!==id)return b;
    const log=(b.log||[]).filter(e=>e.d!==ds);
@@ -599,8 +701,8 @@ const A={
   const el=document.getElementById("n_"+id),pe=document.getElementById("np_"+id);
   const txt=((el||{}).value||"").trim();
   if(!txt){A.bookErr="Avval fikringizni yozing";render();return}
-  const pg=parseInt(((pe||{}).value||""),10),n=nowFor(M(me));
-  const note={id:uid(),d:todayFor(M(me)),
+  const pg=parseInt(((pe||{}).value||""),10),n=nowFor(myCfg());
+  const note={id:uid(),d:todayFor(myCfg()),
    t:String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0"),
    page:isNaN(pg)?null:Math.max(0,Math.min(100000,pg)),text:txt.slice(0,4000)};
   data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).map(b=>
@@ -612,7 +714,7 @@ const A={
    b.id===bid?Object.assign({},b,{notes:(b.notes||[]).filter(x=>x.id!==nid)}):b)});
   render();await pushData(me);render()},
  async bookFinish(id){
-  const ds=todayFor(M(me));
+  const ds=todayFor(myCfg());
   data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).map(b=>
    b.id===id?Object.assign({},b,{finished:b.finished?null:ds}):b)});
   render();await pushData(me);render()},
@@ -621,6 +723,43 @@ const A={
   data[me]=Object.assign({},data[me],{books:((data[me].books)||[]).filter(b=>b.id!==id)});
   A.bookOpenId=null;render();await pushData(me);render()},
  toggleManual(){manualCity=!manualCity;render()},
+ /* ────────── SAFAR: HOZIR QAYSI SHAHARDA ────────── */
+ togglePlaceManual(){manualPlace=!manualPlace;placeMsg="";render()},
+ async setPlace(){
+  const cur=myCfg(),g=id=>((document.getElementById(id)||{}).value||"");
+  const asr=parseInt(g("pl_asr"),10)||cur.asr;
+  const tzv=parseFloat(g("pl_tz"));
+  /* Server tz uchun −12..14 oralig'ini talab qiladi; noto'g'ri qiymat bilan
+     yozuv mahalliy saqlanib, keyin 422 bilan qaytib kelmasligi uchun shu yerda
+     to'xtatamiz. */
+  if(!isNaN(tzv)&&(tzv<-12||tzv>14)){
+   placeMsg="Vaqt mintaqasi −12 va 14 orasida bo'lishi kerak";render();return}
+  let pl;
+  if(manualPlace){
+   const city=g("pl_city").trim(),lat=parseFloat(g("pl_lat")),lng=parseFloat(g("pl_lng"));
+   if(!city||isNaN(lat)||isNaN(lng)||isNaN(tzv)){
+    placeMsg="Shahar nomi, koordinatalar va vaqt mintaqasini to'ldiring";render();return}
+   if(lat<-90||lat>90||lng<-180||lng>180){
+    placeMsg="Kenglik −90..90, uzunlik −180..180 orasida bo'lsin";render();return}
+   pl={city:city.slice(0,64),lat:lat,lng:lng,tz:tzv,asr:asr,fa:18,ia:18};
+  }else{
+   const c=CITIES[parseInt(g("pl_sel"),10)]||CITIES[0];
+   pl={city:c.n,lat:c.lat,lng:c.lng,tz:isNaN(tzv)?c.tz:tzv,asr:asr,fa:c.fa,ia:c.ia};
+  }
+  /* Sana YANGI shahar vaqtida olinadi: mintaqa o'zgarishi bilan «bugun» ham
+     o'zgarishi mumkin, yozuv esa a'zo yetib borgan kunga tegishli. */
+  pl.d=todayFor(Object.assign({},cur,pl));
+  /* Bir kunga bitta shahar — o'sha kunga avval yozilgani almashtiriladi. */
+  const rest=((data[me].places)||[]).filter(x=>x.d!==pl.d);
+  data[me]=Object.assign({},data[me],
+    {places:rest.concat([pl]).sort((a,b)=>a.d<b.d?-1:1)});
+  placeMsg=pl.city+" belgilandi — namoz vaqtlari shu shahar bo'yicha hisoblanadi";
+  date=todayFor(myCfg());
+  render();await pushData(me);render()},
+ async delPlace(d){
+  data[me]=Object.assign({},data[me],
+    {places:((data[me].places)||[]).filter(x=>x.d!==d)});
+  placeMsg="";date=todayFor(myCfg());render();await pushData(me);render()},
  async addMember(){
   const name=document.getElementById("f_name").value.trim();
   const err=document.getElementById("f_err");
@@ -759,7 +898,10 @@ function addScreen(){
  <div style="height:40px"></div></div>`}
 
 function syncScreen(){
- const who=me?M(me):null;
+ const who=me?myCfg():null;
+ const cur=myCfg(),inList=CITIES.some(c=>c.n===cur.city);
+ const sc=daySchedule(new Date(todayFor(cur)+"T12:00:00"),cur);
+ const hist=((data[me]&&data[me].places)||[]).slice().sort((a,b)=>a.d<b.d?1:-1);
  return `<div style="max-width:460px;margin:0 auto">
  <button class="btn" onclick="A.go('app')">← Orqaga</button>
  <div class="eyebrow" style="margin-top:16px">Hisobim</div>
@@ -767,6 +909,42 @@ function syncScreen(){
  <p class="muted" style="font-size:13px;line-height:1.65;margin:0 0 4px">
   Siz <b>${who?esc(who.name):""}</b> sifatida kirgansiz. Ma'lumot serverda saqlanadi,
   telefon almashtirsangiz ham yo'qolmaydi. Faqat siz o'z belgilaringizni o'zgartira olasiz.</p>
+ <div class="label">Hozir qaysi shahardasiz?</div>
+ <p class="muted small" style="margin:0 0 9px;line-height:1.6">Namoz vaqtlari shu shahar bo'yicha
+  chiqadi va baho ham shu vaqtlar bilan o'lchanadi. Boshqa shaharga borsangiz shu yerdan
+  almashtiring — o'tgan kunlar o'sha kuni qayerda bo'lganingiz bo'yicha qolaveradi.</p>
+ ${manualPlace
+  ?`<input id="pl_city" class="input" placeholder="Shahar nomi" value="${esc(inList?"":cur.city)}">
+    <div class="flex gap2" style="margin-top:8px">
+     <input id="pl_lat" class="input" type="number" step="0.0001" placeholder="Kenglik" value="${cur.lat}">
+     <input id="pl_lng" class="input" type="number" step="0.0001" placeholder="Uzunlik" value="${cur.lng}"></div>
+    <p class="muted small" style="margin:6px 0 0">Google Maps'da joyni bosib turing — chiqqan raqamlarni ko'chiring.</p>`
+  :`<select id="pl_sel" class="input">${CITIES.map((c,i)=>
+      `<option value="${i}" ${c.n===cur.city?"selected":""}>${esc(c.n)}</option>`).join("")}</select>`}
+ <button class="link" onclick="A.togglePlaceManual()">${manualPlace?"← Ro'yxatdan tanlash":"Ro'yxatda yo'q — qo'lda kiritaman →"}</button>
+ <div class="flex gap2" style="margin-top:10px">
+  <div style="flex:1"><div class="muted tiny" style="margin-bottom:4px">Vaqt mintaqasi (UTC)</div>
+   <input id="pl_tz" class="input" type="number" step="0.5" value="${cur.tz}"></div>
+  <div style="flex:1"><div class="muted tiny" style="margin-bottom:4px">Asr hisobi</div>
+   <select id="pl_asr" class="input">
+    <option value="2" ${cur.asr===2?"selected":""}>Hanafiy</option>
+    <option value="1" ${cur.asr===1?"selected":""}>Shofe'iy</option></select></div>
+ </div>
+ <button class="btn btn-gold btn-wide" style="margin-top:11px" onclick="A.setPlace()">Shu shaharga o'tkazish</button>
+ ${placeMsg?`<div class="jade small" style="margin-top:8px">${esc(placeMsg)}</div>`:""}
+ <div class="panel p14" style="margin-top:12px">
+  <div class="flex between center">
+   <div><div class="eyebrow">Hozir</div>
+    <div style="font-family:var(--serif);font-size:18px;margin-top:3px">${esc(cur.city)}</div></div>
+   <div style="text-align:right"><div class="brass" style="font-family:var(--serif);font-size:19px">${hm(sc.bomdod)} · ${hm(sc.xufton)}</div>
+    <div class="muted tiny">bomdod · xufton</div></div></div>
+  ${hist.length?`<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--line)">
+    <div class="eyebrow">Safar tarixi</div>
+    ${hist.map(x=>`<div class="row center"><span>${pretty(x.d)}</span>
+      <span class="flex center gap2"><span style="color:var(--text)">${esc(x.city)}</span>
+      <button class="btn" style="padding:2px 7px;font-size:10px" onclick="A.delPlace('${x.d}')">×</button></span></div>`).join("")}
+   </div>`:""}
+ </div>
  <div class="label">PIN kodni o'zgartirish</div>
  <input id="p_cur" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="joriy PIN">
  <input id="p_new" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="yangi PIN (4 raqam)" style="margin-top:8px">
@@ -784,7 +962,7 @@ function syncScreen(){
 
 /* ────────── BUGUN ────────── */
 function todayTab(){
- const cfg=M(me),sc=daySchedule(new Date(date+"T12:00:00"),cfg);
+ const cfg=myCfg(),sc=daySchedule(new Date(date+"T12:00:00"),cfgAt(M(me),date));
  const isT=date===todayFor(cfg),now=nowFor(cfg),nowDec=decOf(now);
  const day=(data[me].days||{})[date]||{},s=score(data[me],cfg);
  let dayBall=0;PRAYERS.forEach(p=>{const r=day[p.k];if(r&&STATUS[r.s])dayBall+=STATUS[r.s].ball});
@@ -814,11 +992,12 @@ function todayTab(){
   /* Ochiq kunda har bir namoz o'z kuniga bog'lanadi: xufton bomdodgacha
      kechagi kunning xuftoni bo'lib qolaveradi. */
   const tgt=isT?liveDay(p.k,cfg):date;
-  const tsc=tgt===date?sc:daySchedule(new Date(tgt+"T12:00:00"),cfg);
+  const tsc=tgt===date?sc:daySchedule(new Date(tgt+"T12:00:00"),cfgAt(M(me),tgt));
   const st0=hm(tsc[p.k]),en=hm(tsc[EKY[p.k]]);
   const r=((data[me].days||{})[tgt]||{})[p.k],S0=r?STATUS[r.s]:null;
   const state=isT?winState(p.k,tgt,cfg):null;
-  const open=state==="open",notYet=state==="early",shifted=tgt!==date;
+  /* Nafl uchun oyna faqat tavsiya — belgilash hech qachon to'silmaydi. */
+  const open=state==="open",notYet=p.fard&&state==="early",shifted=tgt!==date;
   const crosses=p.k==="xufton";
   const dl=(r&&r.t&&(r.s==="ontime"||r.s==="qazo"))?diffMin(st0,r.t):null;
   const doneCl=["ontime","qazo","late"].includes(r&&r.s)
@@ -832,20 +1011,22 @@ function todayTab(){
      <div class="flex center gap2"><span class="pname">${p.n}</span>
       ${!p.fard?'<span class="chip">NAFL</span>':""}
       ${open?'<span class="jade" style="font-size:9px">● VAQTI KIRDI</span>':""}</div>
-     <div class="muted small">${st0} — ${en}${crosses?" <span class='tiny'>(ertangi bomdodgacha)</span>":""}</div>
+     <div class="muted small">${st0} — ${en}${crosses?" <span class='tiny'>(ertangi bomdodgacha)</span>":""}${
+       !p.fard?" <span class='jade tiny'>· istalgan vaqtda</span>":""}</div>
      ${shifted?`<div class="brass tiny" style="margin-top:2px">${pretty(tgt)} kunining xuftoni</div>`:""}
     </div>
     <button class="mbtn" style="${notYet?"opacity:.35":doneCl}"
       ${notYet?"":`onclick="A.mark('${p.k}','pray','${tgt}')"`}>✓</button>
-    <button class="mbtn" style="${missCl}" onclick="A.mark('${p.k}','miss','${tgt}')">−</button>
+    ${p.fard?`<button class="mbtn" style="${missCl}" onclick="A.mark('${p.k}','miss','${tgt}')">−</button>`:""}
    </div>`;
   if(r){
    if((r.s==="ontime"||r.s==="qazo")&&r.t){
     const tot=winLen(st0,en),raw=diffMin(st0,r.t)/tot,pos=Math.max(0,Math.min(1,raw));
     h+=`<div class="arc" style="margin-top:12px"><i style="left:calc(${pos*100}% - 3px);background:${raw>1?"var(--clay)":"var(--text)"}"></i></div>`}
    h+=`<div class="flex between center" style="margin-top:8px">
-     <div style="font-size:12px;color:${S0.color}">${S0.label} ·
-       <span class="${S0.ball===0?"jade":"clay"}">${S0.ball===0?"0 ball":fmt(S0.ball)+" ball"}</span>
+     <div style="font-size:12px;color:${!p.fard?"var(--jade)":S0.color}">${!p.fard?"O'qildi":S0.label} ·
+       <span class="${!p.fard||S0.ball===0?"jade":"clay"}">${
+         !p.fard?"+"+fmt(NAFL_BALL)+" ball":S0.ball===0?"0 ball":fmt(S0.ball)+" ball"}</span>
        ${dl!=null&&dl>=0&&r.s==="ontime"?" · +"+dl+" daq":""}</div>
      <div class="flex gap2 center">
       ${(r.s==="ontime"||r.s==="qazo")?`<input type="time" value="${r.t||st0}" class="input"
@@ -854,7 +1035,7 @@ function todayTab(){
      </div></div>`;
   }else{
    h+=`<div class="muted" style="margin-top:10px;font-size:11.5px">${
-    !p.fard?"Nafl — ball ketmaydi, faqat strike yig'iladi"
+    !p.fard?"Nafl — minus yo'q. Istalgan vaqtda o'qiysiz, har biri qarzni "+fmt(NAFL_BALL)+" ballga kamaytiradi"
     :notYet?"Vaqti kirmagan — vaqti kirgach belgilanadi"
     :open?"Vaqti ichida — hozir belgilasangiz 0 ball"
     :isT?"Vaqti o'tdi — bugun qazo qilsangiz −0,25, ertaga qolsa −1"
@@ -869,13 +1050,23 @@ function todayTab(){
 
 /* ────────── STATISTIKA ────────── */
 function statsTab(){
+ const cfg=myCfg(),td=todayFor(cfg);
+ const wk=weekRange(td),mo=monthRange(td);
+ const wDone=periodDone(wk[1],cfg),mDone=periodDone(mo[1],cfg);
+ let ch=`<div class="eyebrow">Qahramonlar</div>
+  <h2 style="font-size:24px;margin:6px 0 12px">Hafta va oy</h2>`;
+ ch+=champBlock("Hafta qahramoni",wk[0],wk[1],wDone);
+ /* Hafta hali tugamagan bo'lsa, o'tgan haftaning yakuniy natijasi ham turadi. */
+ if(!wDone){const pw=weekRange(shift(wk[0],-1));
+  ch+=champBlock("O'tgan hafta",pw[0],pw[1],true)}
+ ch+=champBlock("Oy qahramoni",mo[0],mo[1],mDone);
  const ranked=members.slice().sort((a,b)=>{
-  const sa=score(data[a.id],a),sb=score(data[b.id],b);
+  const sa=score(data[a.id],cfgNow(a)),sb=score(data[b.id],cfgNow(b));
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
   return (pb?sb.ontime/pb:0)-(pa?sa.ontime/pa:0)});
- let h=`<div class="eyebrow">Jamoa</div><h2 style="font-size:24px;margin:6px 0 14px">Taqqoslash</h2><div class="grid2 mb14">`;
+ let h=ch+`<div class="eyebrow">Jamoa</div><h2 style="font-size:24px;margin:6px 0 14px">Taqqoslash</h2><div class="grid2 mb14">`;
  ranked.forEach((m,i)=>{
-  const s=score(data[m.id],m),tot=s.ontime+s.qazo+s.bad,pct=tot?Math.round(s.ontime/tot*100):0;
+  const s=score(data[m.id],cfgNow(m)),tot=s.ontime+s.qazo+s.bad,pct=tot?Math.round(s.ontime/tot*100):0;
   h+=`<div class="panel p14" style="border-color:${m.id===me?"#C9A22766":"var(--line)"}">
    <div class="flex center gap2" style="margin-bottom:8px">
     <div class="hd" style="height:26px;background:${colorOf(m.id)}"></div>
@@ -898,7 +1089,7 @@ function statsTab(){
   <p class="muted small" style="margin:6px 0 12px">Bir namozni ${STREAK_STEP} kun ketma-ket vaqtida o'qisangiz,
    qarzingizning yarmi o'chadi (${BONUS_MIN}–${BONUS_MAX} ball).</p>`;
  PRAYERS.forEach(p=>{
-  const st=streakOf(data[me].days||{},p.k,M(me)),lvl=Math.floor(st/STREAK_STEP),cl=claimed(data[me],p.k);
+  const st=streakOf(data[me].days||{},p.k,myCfg()),lvl=Math.floor(st/STREAK_STEP),cl=claimed(data[me],p.k);
   const ready=lvl>cl,prog=(st%STREAK_STEP)/STREAK_STEP;
   h+=`<div style="margin-bottom:11px">
    <div class="flex between center" style="font-size:12px;margin-bottom:5px">
@@ -916,7 +1107,7 @@ function statsTab(){
  PRAYERS.forEach(p=>{
   h+=`<div style="margin-bottom:14px"><div style="font-size:12.5px;margin-bottom:6px">${p.n}</div>`;
   members.forEach(m=>{
-   const s=score(data[m.id],m).per[p.k],tot=s.ontime+s.qazo+s.bad;
+   const s=score(data[m.id],cfgNow(m)).per[p.k],tot=s.ontime+s.qazo+s.bad;
    const d=delays(data[m.id],m)[p.k],avg=d.n?Math.round(d.sum/d.n):null;
    h+=`<div style="margin-bottom:5px">
     <div class="flex between tiny muted" style="margin-bottom:3px">
@@ -936,7 +1127,7 @@ function chartSVG(){
  const gw=(W-pad*2)/n,bw=Math.max(3,(gw-4)/Math.max(1,k));
  let bars="",labels="";
  for(let i=0;i<n;i++){
-  const ds=shift(todayFor(M(me)),-(n-1-i)),x0=pad+i*gw;
+  const ds=shift(todayFor(myCfg()),-(n-1-i)),x0=pad+i*gw;
   members.forEach((m,j)=>{
    const day=(data[m.id]&&data[m.id].days&&data[m.id].days[ds])||{};
    const v=PRAYERS.filter(p=>p.fard&&day[p.k]&&day[p.k].s==="ontime").length;
@@ -953,39 +1144,38 @@ function chartSVG(){
 
 /* ────────── SUNNAT ────────── */
 function sunnatTab(){
- const s=sunnatOf(date),day=(data[me].days||{})[date]||{};
- let h=`<div class="eyebrow">Kunning sunnati · ${pretty(date)}</div>
+ const s=sunnatOf(date);
+ /* Faqat o'qish uchun: har kuni bitta sunnat, matni ostida manbasi bilan. */
+ return `<div class="eyebrow">Kunning sunnati · ${pretty(date)}</div>
  <div class="panel p18 mb14" style="margin-top:10px;border-color:#C9A22744">
   <div class="brass" style="font-family:var(--serif);font-size:23px;line-height:1.25">${esc(s.t)}</div>
   <p style="font-size:14px;line-height:1.65;margin:10px 0 0">${esc(s.d)}</p>
+  <div class="muted tiny" style="margin-top:10px">Manba: ${esc(s.s)}</div>
   <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
    <div class="eyebrow">Bugungi mashq</div>
    <p class="muted" style="font-size:13px;margin:5px 0 0">${esc(s.a)}</p></div></div>
- <div class="panel p14 mb14"><div class="eyebrow">Daftaringiz</div>
-  <p class="muted" style="font-size:12px;margin:6px 0 8px">Bugun bu sunnatdan nimani o'rgandingiz va qanday amal qildingiz?</p>
-  <textarea rows="5" placeholder="Masalan: bugun 5 kishiga birinchi salom berdim…"
-    onblur="A.note(this.value)">${esc(day.sunnat||"")}</textarea></div>`;
- members.filter(m=>m.id!==me).forEach(m=>{
-  const note=((data[m.id]&&data[m.id].days&&data[m.id].days[date])||{}).sunnat;
-  h+=`<div class="panel p14 mb10">
-   <div style="font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:${colorOf(m.id)}">${esc(first(m.name))} yozgani</div>
-   <p style="font-size:13px;line-height:1.65;margin:8px 0 0;white-space:pre-wrap;color:${note?"var(--text)":"var(--mut)"}">${esc(note||"Hali yozilmagan.")}</p></div>`});
- return h}
+ <div class="panel p14">
+  <p class="muted small" style="margin:0;line-height:1.7">Har kuni bitta sunnat chiqadi va
+   yil davomida ${SUNNATS.length} tasi aylanadi. Hammasi Buxoriy, Muslim va boshqa
+   ishonchli to'plamlardagi sahih yoki hasan hadislardan olingan — har birining tagida
+   manbasi ko'rsatilgan.</p></div>
+ <div style="height:16px"></div>`}
 
 /* ────────── VAZIFA ────────── */
 function taskTab(){
- const s=score(data[me],M(me)),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
+ const s=score(data[me],myCfg()),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
  let h=`<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
  <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
   <div><span class="jade">Vaqtida o'qilsa</span> — 0 ball</div>
   <div><span class="brass">Vaqti o'tib, o'sha kun ichida qazo qilinsa</span> — −0,25</div>
   <div><span class="clay">Kun yopilib, keyingi kunga qolsa yoki o'qilmasa</span> — −1</div>
+  <div><span class="jade">Tahajjud (nafl)</span> — minus yo'q, har biri +${fmt(NAFL_BALL)} ball</div>
   <div><span class="brass">Har ${STREAK_STEP} kunlik strike</span> — qarzning yarmi o'chadi</div>
   <div><span style="color:var(--text)">Har ${TASK_AT} ball qarz</span> — 25 rakat nafl va 500 tasbeh</div>
  </div></div>
  <div class="grid3 mb14">
   <div class="panel stat"><b class="clay">${fmt(s.penalty)}</b><i>Jamg'arilgan minus</i></div>
-  <div class="panel stat"><b class="jade">−${fmt(s.bonusSum+s.tasks*TASK_AT)}</b><i>Mukofot + vazifa</i></div>
+  <div class="panel stat"><b class="jade">−${fmt(s.bonusSum+s.tasks*TASK_AT+s.tahajjud*NAFL_BALL)}</b><i>Mukofot + vazifa + nafl</i></div>
   <div class="panel stat"><b class="${s.debt>0?"brass":"jade"}">${s.debt>0?fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Qolgan qarz":"Zaxira"}</i></div>
  </div>`;
  if(pending>0){
@@ -1013,10 +1203,10 @@ function taskTab(){
    <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Vazifa yo'q</div>
    <p class="muted" style="font-size:13px;margin-top:6px">${s.debt>0?"Yana "+fmt(TASK_AT-s.debt)+" ball qarz yig'ilsa vazifa ochiladi.":"Qarzingiz yo'q. Strike'ni uzmang."}</p></div>`}
  h+=`<div class="panel p14 mt14"><div class="eyebrow">Jamoa holati</div><div class="mt12">`;
- members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],m);
+ members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],cfgNow(m));
   h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
    <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))}</div>
-   <div class="row"><span>Minus / mukofot / vazifa</span><span class="muted">${fmt(o.penalty)} · −${fmt(o.bonusSum)} · ${o.tasks}</span></div>
+   <div class="row"><span>Minus / mukofot / nafl</span><span class="muted">${fmt(o.penalty)} · −${fmt(o.bonusSum)} · ${o.tahajjud}</span></div>
    <div class="row"><span>${o.debt>0?"Qarz":"Zaxira"}</span><span class="${o.debt>0?"clay":"jade"}">${o.debt>0?"−"+fmt(o.debt):"+"+fmt(-o.debt)}</span></div></div>`});
  h+=`</div></div>`;
  const bs=(data[me].bonuses)||[];
@@ -1048,7 +1238,7 @@ function noteBubble(m,b,n,own){
  </div>`}
 
 function bookCard(b,td){
- const pc=bookPace(b,td),ds=todayFor(M(me));
+ const pc=bookPace(b,td),ds=todayFor(myCfg());
  const bugun=(b.log||[]).find(e=>e.d===ds),open=A.bookOpenId===b.id;
  const notes=(b.notes||[]).slice().reverse();
  let h=`<div class="panel p14 mb10" style="border-color:${b.finished?"#4CAF8B55":"var(--line)"}">
@@ -1085,7 +1275,7 @@ function bookCard(b,td){
     <input id="np_${b.id}" class="input" type="number" min="0" inputmode="numeric" placeholder="bet" style="width:84px">
     <button class="btn btn-gold" style="flex:1" onclick="A.bookNote('${b.id}')">Zametka qo'shish</button></div>
    ${A.bookErr?`<div class="clay small" style="margin-top:7px">${esc(A.bookErr)}</div>`:""}
-   <div style="margin-top:14px">${notes.length?notes.map(n=>noteBubble(M(me),b,n,true)).join("")
+   <div style="margin-top:14px">${notes.length?notes.map(n=>noteBubble(myCfg(),b,n,true)).join("")
      :`<div class="muted small">Hali zametka yo'q.</div>`}</div>
    <div class="flex gap2" style="margin-top:12px">
     <button class="btn" style="flex:1" onclick="A.bookFinish('${b.id}')">${b.finished?"↺ Qayta ochish":"\u2713 Tugatdim"}</button>
@@ -1095,7 +1285,7 @@ function bookCard(b,td){
  return h+`</div>`}
 
 function booksMineView(){
- const cfg=M(me),td=todayFor(cfg),u=data[me],bs=(u.books||[]).slice();
+ const cfg=myCfg(),td=todayFor(cfg),u=data[me],bs=(u.books||[]).slice();
  const k=bookScore(u,cfg),jazo=Math.max(0,Math.floor(k.debt/K_TASK_AT));
  bs.sort((a,b)=>(a.finished?1:0)-(b.finished?1:0)||(a.started<b.started?1:-1));
  let h=`<div class="eyebrow">Kitob daftari</div>
@@ -1137,14 +1327,14 @@ function booksMineView(){
  return h}
 
 function booksAllView(){
- const td=todayFor(M(me));
+ const td=todayFor(myCfg());
  let h=`<div class="eyebrow">Jamoa</div>
  <h2 style="font-size:24px;margin:6px 0 12px">Umumiy kitob daftari</h2>`+bookSwitch();
  h+=`<div class="panel p14 mb14"><div class="eyebrow">Kim nima o'qiyapti</div><div class="mt12">`;
  let bor=false;
  members.forEach(m=>{
   const bs=((data[m.id]&&data[m.id].books)||[]).filter(b=>!b.finished);
-  const k=bookScore(data[m.id],m);
+  const k=bookScore(data[m.id],cfgNow(m));
   h+=`<div style="padding:9px 0;border-bottom:1px solid var(--line)">
    <div class="flex between center" style="margin-bottom:5px">
     <span style="font-size:12.5px;color:${colorOf(m.id)}">${esc(first(m.name))}</span>
@@ -1177,8 +1367,8 @@ function render(){
  if(screen==="add"){app.innerHTML=addScreen();return}
  if(screen==="admin"){app.innerHTML=adminScreen();return}
  if(screen==="sync"){app.innerHTML=syncScreen();return}
- if(!me||!M(me)){app.innerHTML=loginScreen();return}
- const cfg=M(me);
+ if(!me||!myCfg()){app.innerHTML=loginScreen();return}
+ const cfg=myCfg();
  let h=`<div class="flex between center mb18">
   <div class="flex center gap3">
    <div class="hd" style="height:36px;background:${colorOf(me)}"></div>
