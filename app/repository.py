@@ -18,6 +18,7 @@ from app.config import (
     SESSION_TTL_DAYS,
 )
 from app.models import (
+    ALL_PRAYERS,
     Bonus,
     Book,
     DayRecord,
@@ -278,18 +279,49 @@ async def clear_failures(pool: asyncpg.Pool, subject: str) -> None:
 
 
 # ---------------------------------------------------------------- records
+def _keep_existing_marks(incoming: dict, stored: str | None) -> dict:
+    """Prayer marks are write-once; everything else on the day stays editable.
+
+    Locking this in the browser alone would be decoration, since the API is the
+    thing that actually holds the record. A mark already stored therefore wins over
+    whatever the phone sends — including a phone that sends the key back missing,
+    which is what 'clear' looks like on the wire. `quran` stays a toggle.
+    """
+    if not stored:
+        return incoming
+    prior = json.loads(stored)
+    merged = dict(incoming)
+    for key in ALL_PRAYERS:
+        if prior.get(key) is not None:
+            merged[key] = prior[key]
+    return merged
+
+
 async def upsert_day(
-    pool: asyncpg.Pool, member_id: str, day: Date, record: DayRecord
+    pool: asyncpg.Pool,
+    member_id: str,
+    day: Date,
+    record: DayRecord,
+    allow_overwrite: bool = False,
 ) -> None:
-    """Write one day. This is the hot path: one tap in the app is one row."""
-    async with pool.acquire() as connection:
-        await connection.execute(
-            _UPSERT_DAY_SQL, member_id, day, json.dumps(record.to_wire())
-        )
+    """Write one day. This is the hot path: one tap in the app is one row.
+
+    `allow_overwrite` is the admin's key: a genuine mis-tap has to be fixable by
+    somebody, and the admin is already the role that can do anything here.
+    """
+    async with pool.acquire() as connection, connection.transaction():
+        entries = record.to_wire()
+        if not allow_overwrite:
+            stored = await connection.fetchval(
+                "SELECT entries FROM day_records WHERE member_id = $1 AND day = $2 FOR UPDATE",
+                member_id, day,
+            )
+            entries = _keep_existing_marks(entries, stored)
+        await connection.execute(_UPSERT_DAY_SQL, member_id, day, json.dumps(entries))
 
 
 async def replace_member_data(
-    pool: asyncpg.Pool, member_id: str, data: MemberData
+    pool: asyncpg.Pool, member_id: str, data: MemberData, allow_overwrite: bool = False
 ) -> None:
     """Replace a member's whole document in one transaction.
 
@@ -299,9 +331,16 @@ async def replace_member_data(
     """
     async with pool.acquire() as connection, connection.transaction():
         for day, record in data.days.items():
+            when = Date.fromisoformat(day)
+            entries = record.to_wire()
+            if not allow_overwrite:
+                stored = await connection.fetchval(
+                    "SELECT entries FROM day_records WHERE member_id = $1 AND day = $2 FOR UPDATE",
+                    member_id, when,
+                )
+                entries = _keep_existing_marks(entries, stored)
             await connection.execute(
-                _UPSERT_DAY_SQL,
-                member_id, Date.fromisoformat(day), json.dumps(record.to_wire()),
+                _UPSERT_DAY_SQL, member_id, when, json.dumps(entries)
             )
         await connection.execute("DELETE FROM bonuses WHERE member_id = $1", member_id)
         if data.bonuses:

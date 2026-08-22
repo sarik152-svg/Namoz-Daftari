@@ -628,35 +628,31 @@ const A={
      ekranda ochiq turgan kundan farq qilishi mumkin. */
   const tgt=ds||(date===todayFor(cfg)?live:date);
   const day=Object.assign({},(data[me].days||{})[tgt]||{});
+  /* Belgi bir marta qo'yiladi va keyin o'zgarmaydi. Serverda ham shu qoida bor;
+     bu yerdagi tekshiruv shunchaki bekorga so'rov yubormaslik uchun. */
+  if(day[pk])return;
   const n=nowFor(cfg);
   const nowHM=String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
-  if(how==="clear")delete day[pk];
-  else if(how==="miss")day[pk]={s:"missed",t:null};
+  let yangi;
+  if(how==="miss")yangi={s:"missed",t:null};
   /* Nafl namoz istalgan vaqtda o'qiladi va hech qachon minus bermaydi —
      u faqat qo'shadi, shuning uchun oyna ham, kun yopilgani ham to'smaydi. */
-  else if(!P.fard)day[pk]={s:"ontime",t:tgt===live?nowHM:null};
-  else if(tgt!==live)day[pk]={s:"late",t:null};
+  else if(!P.fard)yangi={s:"ontime",t:tgt===live?nowHM:null};
+  else if(tgt!==live)yangi={s:"late",t:null};
   else{
    const st=winState(pk,tgt,cfg);
    /* Farz namozning vaqti kirmagan bo'lsa belgilab bo'lmaydi. */
    if(st==="early")return;
-   day[pk]={s:st==="open"?"ontime":"qazo",t:nowHM}}
+   yangi={s:st==="open"?"ontime":"qazo",t:nowHM}}
+  /* Yozuv ortga qaytmagani uchun avval bir marta so'raymiz — noto'g'ri bosilgan
+     tugma butun kunni buzib qo'ymasin. */
+  const S=STATUS[yangi.s],nomi=!P.fard?"o'qildi":(S?S.label.toLowerCase():yangi.s);
+  if(!confirm(P.n+" — «"+nomi+"» deb yoziladi"+(yangi.t?", soat "+yangi.t:"")
+    +(tgt!==date?" ("+pretty(tgt)+")":"")
+    +".\n\nBir marta belgilangandan keyin o'zgartirib bo'lmaydi."))return;
+  day[pk]=yangi;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[tgt]:day})});
   render();await pushDay(me,tgt);render()},
- async setTime(pk,v,ds){
-  if(!v)return;const cfg=myCfg();
-  const tgt=ds||(date===todayFor(cfg)?liveDay(pk,cfg):date);
-  const day=Object.assign({},(data[me].days||{})[tgt]||{});
-  if(!day[pk])return;
-  const P=PRAYERS.find(x=>x.k===pk)||{};
-  const sc=daySchedule(new Date(tgt+"T12:00:00"),cfgAt(M(me),tgt));
-  /* Kiritilgan vaqt oyna ichida bo'lsa — vaqtida o'qilgan. Kun yopilgandan keyin
-     belgilangan namoz esa vaqt yozilsa ham keyingi kun qazosi bo'lib qoladi.
-     Nafl esa qaysi vaqt yozilsa ham musbat bo'lib qolaveradi. */
-  const inside=inWin(toMin(v)/60,sc[pk],sc[EKY[pk]]);
-  day[pk]={s:!P.fard?"ontime":(day[pk].s==="late"?"late":(inside?"ontime":"qazo")),t:v};
-  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[tgt]:day})});
-  render();await pushDay(me,tgt)},
  async field(f,v){
   const day=Object.assign({},(data[me].days||{})[date]||{});day[f]=v;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
@@ -998,11 +994,18 @@ function todayTab(){
   const state=isT?winState(p.k,tgt,cfg):null;
   /* Nafl uchun oyna faqat tavsiya — belgilash hech qachon to'silmaydi. */
   const open=state==="open",notYet=p.fard&&state==="early",shifted=tgt!==date;
+  /* Belgilangan namoz qulflanadi: tahrirlash ham, tozalash ham yo'q. */
+  const locked=!!r;
   const crosses=p.k==="xufton";
   const dl=(r&&r.t&&(r.s==="ontime"||r.s==="qazo"))?diffMin(st0,r.t):null;
   const doneCl=["ontime","qazo","late"].includes(r&&r.s)
     ?`background:${r.s==="ontime"?"var(--jade)":"var(--brass)"};border-color:transparent;color:#0D1220`:"";
   const missCl=(r&&r.s)==="missed"?"background:var(--clay);border-color:transparent;color:#0D1220":"";
+  /* Qulflangan qatorda tugmalar ko'rinadi-yu, bosilmaydi: tanlangani yorqin,
+     tanlanmagani xira turadi. */
+  const okStyle=locked?doneCl+";cursor:default"+(doneCl?"":";opacity:.3")
+    :(notYet?"opacity:.35":doneCl);
+  const missStyle=locked?missCl+";cursor:default"+(missCl?"":";opacity:.3"):missCl;
   h+=`<div class="panel p14 mb10" style="border-color:${S0?S0.color:(open?"#C9A22755":"var(--line)")}">
    <div class="flex center gap3">
     <div style="width:34px;height:34px;border-radius:9px;background:var(--panel2);display:flex;align-items:center;
@@ -1015,9 +1018,10 @@ function todayTab(){
        !p.fard?" <span class='jade tiny'>· istalgan vaqtda</span>":""}</div>
      ${shifted?`<div class="brass tiny" style="margin-top:2px">${pretty(tgt)} kunining xuftoni</div>`:""}
     </div>
-    <button class="mbtn" style="${notYet?"opacity:.35":doneCl}"
-      ${notYet?"":`onclick="A.mark('${p.k}','pray','${tgt}')"`}>✓</button>
-    ${p.fard?`<button class="mbtn" style="${missCl}" onclick="A.mark('${p.k}','miss','${tgt}')">−</button>`:""}
+    <button class="mbtn" style="${okStyle}"
+      ${locked||notYet?"":`onclick="A.mark('${p.k}','pray','${tgt}')"`}>✓</button>
+    ${p.fard?`<button class="mbtn" style="${missStyle}"
+      ${locked?"":`onclick="A.mark('${p.k}','miss','${tgt}')"`}>−</button>`:""}
    </div>`;
   if(r){
    if((r.s==="ontime"||r.s==="qazo")&&r.t){
@@ -1028,11 +1032,7 @@ function todayTab(){
        <span class="${!p.fard||S0.ball===0?"jade":"clay"}">${
          !p.fard?"+"+fmt(NAFL_BALL)+" ball":S0.ball===0?"0 ball":fmt(S0.ball)+" ball"}</span>
        ${dl!=null&&dl>=0&&r.s==="ontime"?" · +"+dl+" daq":""}</div>
-     <div class="flex gap2 center">
-      ${(r.s==="ontime"||r.s==="qazo")?`<input type="time" value="${r.t||st0}" class="input"
-        style="width:auto;padding:4px 7px;font-size:12px" onchange="A.setTime('${p.k}',this.value,'${tgt}')">`:""}
-      <button class="btn" style="padding:4px 8px;font-size:11px" onclick="A.mark('${p.k}','clear','${tgt}')">tozalash</button>
-     </div></div>`;
+     <div class="muted tiny">${r.t?esc(r.t)+" · ":""}\u{1F512} qulflangan</div></div>`;
   }else{
    h+=`<div class="muted" style="margin-top:10px;font-size:11.5px">${
     !p.fard?"Nafl — minus yo'q. Istalgan vaqtda o'qiysiz, har biri qarzni "+fmt(NAFL_BALL)+" ballga kamaytiradi"

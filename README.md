@@ -190,6 +190,24 @@ where it still counts as prayed rather than late. Each one instead takes `NAFL_B
 window grading apply to it, which turned a night prayer logged in the morning into a
 qazo with a minus beside it.
 
+## Marks are write-once
+
+A mark is a claim about something that already happened, and the whole group can see
+it, so it cannot be edited afterwards. Once a prayer is marked the row locks: the
+buttons go inert, the time field is gone, and there is no clear button. Because the
+action no longer has an undo, marking now asks for confirmation first, naming the
+prayer and the status it is about to record.
+
+This is enforced on the **server**, not just in the browser — locking it only in the
+client would be decoration, since the API is what actually holds the record.
+`upsert_day` reads the stored day first and lets any prayer already recorded win over
+whatever the phone sends, including a phone that sends the key back missing, which is
+what a clear looks like on the wire. `replace_member_data` does the same, so saving a
+book cannot become a way to rewrite a prayer. `quran` stays a toggle.
+
+The admin can still overwrite, via the same `allow_overwrite` path: a genuine mis-tap
+has to be fixable by somebody, and admin is already the role that can do anything here.
+
 ## Travel: which city a day is judged in
 
 Members move between cities, and prayer times have to follow the city they are actually

@@ -28,6 +28,9 @@ from app.security import is_valid_pin
 PrayerKey = Literal["tahajjud", "bomdod", "peshin", "asr", "shom", "xufton"]
 PrayerStatus = Literal["ontime", "qazo", "late", "missed"]
 FARD_PRAYERS: tuple[PrayerKey, ...] = ("bomdod", "peshin", "asr", "shom", "xufton")
+# Write-once keys. A mark is a claim about something that already happened and the
+# whole group can see it, so it must not be quietly improved afterwards.
+ALL_PRAYERS: tuple[PrayerKey, ...] = ("tahajjud",) + FARD_PRAYERS
 
 MEMBER_ID_PATTERN = re.compile(r"^[a-z0-9]{1,32}$")
 CLOCK_PATTERN = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]$")

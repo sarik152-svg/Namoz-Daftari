@@ -205,24 +205,38 @@ async def get_state(request: Request, _: Session = Depends(require_session)) -> 
 @app.put(f"{API_PREFIX}/members/{{member_id}}/days/{{day}}")
 async def put_day(
     member_id: str, day: Date, record: DayRecord, request: Request,
-    _: Session = Depends(require_owner_or_admin),
+    session: Session = Depends(require_owner_or_admin),
 ) -> dict:
     """The hot path: one tap in the app writes exactly one row.
 
     `day` is typed as a date so FastAPI parses it at the boundary: a malformed
     path returns 422 instead of reaching asyncpg and raising a 500.
+
+    A prayer already marked is not overwritten: the record is what the group holds
+    each other to, so it is write-once for the member who owns it. The admin can
+    still overwrite, because a genuine mis-tap has to be fixable by somebody.
     """
-    await repository.upsert_day(request.app.state.pool, member_id, day, record)
+    await repository.upsert_day(
+        request.app.state.pool, member_id, day, record,
+        allow_overwrite=session.is_admin,
+    )
     return {"ok": True}
 
 
 @app.put(f"{API_PREFIX}/members/{{member_id}}/data")
 async def put_member_data(
     member_id: str, data: MemberData, request: Request,
-    _: Session = Depends(require_owner_or_admin),
+    session: Session = Depends(require_owner_or_admin),
 ) -> dict:
-    """Whole-document write, used for the bonus and task ledgers."""
-    await repository.replace_member_data(request.app.state.pool, member_id, data)
+    """Whole-document write, used for the bonus, task, book and place ledgers.
+
+    Days travel in this payload too, so it honours the same write-once rule as
+    put_day; otherwise saving a book would be a way to rewrite a prayer.
+    """
+    await repository.replace_member_data(
+        request.app.state.pool, member_id, data,
+        allow_overwrite=session.is_admin,
+    )
     return {"ok": True}
 
 
