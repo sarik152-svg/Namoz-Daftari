@@ -17,7 +17,7 @@ This version replaces both with per-person login.
 
 | | Now |
 |---|---|
-| Getting in | Your name + your own 4-digit PIN, checked by the server |
+| Getting in | Your login + your own 4-digit PIN, checked by the server |
 | Session | A random token, 90-day sliding expiry, stored on your phone |
 | Reading | Any logged-in member sees the whole group. That is the point of the app. |
 | Writing | Only your own records. Enforced by comparing the session identity. |
@@ -45,27 +45,29 @@ combinations is thin. The compensation is that the brute-force throttle (8 failu
 per 5 minutes per member) **lives in Postgres, not memory** — a restart or redeploy no
 longer hands an attacker a fresh budget.
 
-**The login screen lists member names publicly.** Anyone hitting the URL learns that
-Sardor and Behruz use this app, and nothing else. Accepted for the sake of a name
-picker instead of typing.
+**The login screen used to list member names publicly.** That was accepted while the app
+held one group of friends. It stopped being acceptable the moment circles arrived: the
+list would have published the names of other people's wives and children to anyone who
+opened the URL. The picker is gone and you type your login; the device remembers it after
+the first success, so the typing happens once.
 
 ## API
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/health` | none | Liveness + database round trip |
-| GET | `/api/v1/auth/members` | none | Names for the login picker |
 | POST | `/api/v1/auth/login` | none | Member id + PIN, returns a token |
 | POST | `/api/v1/auth/admin` | none | Admin password, returns a token |
 | GET | `/api/v1/auth/me` | session | Skip the login screen on a known phone |
 | DELETE | `/api/v1/auth/session` | session | Log out |
-| GET | `/api/v1/state` | session | Everyone's records |
+| GET | `/api/v1/circles` | session | The circles you belong to |
+| GET | `/api/v1/state?circle=` | member of it | One circle's records |
 | PUT | `/api/v1/members/{id}/days/{date}` | own or admin | One day (the hot path) |
 | PUT | `/api/v1/members/{id}/data` | own or admin | Whole document |
 | POST | `/api/v1/members/{id}/pin` | own + current PIN, or admin | Change a PIN |
 | POST | `/api/v1/members` | admin | Add a member |
 | DELETE | `/api/v1/members/{id}` | own or admin | Remove a member |
-| GET | `/api/v1/admin/roster` | admin | Members with PINs in the clear |
+| GET | `/api/v1/circles/{id}/roster` | its owner | That circle's members with PINs |
 
 Errors always come back as `{"error": {"code": "...", "message": "..."}}`.
 
@@ -297,3 +299,34 @@ inflates a prayer debt:
 
 Only closed days are scored; the current day is shown but never penalised. Every 4
 points of book debt opens one make-up task: 30 pages plus a note.
+
+## Doiralar
+
+A circle answers one question — who is shown together — and nothing else. Records stay
+attached to the member, so one prayer marked once counts in every circle that person
+belongs to, and a family can be invisible to a friends group without any data being
+copied. `circles` and `circle_members` sit beside the personal tables; none of those
+changed.
+
+`GET /state` therefore takes a circle and refuses anyone outside it, and the roster
+belongs to a circle's owner rather than to one global admin. An admin session has
+`member_id = None` and so owns nothing: PINs are read by logging in as yourself and
+opening **Sozlamalar**. The admin password still adds members and resets a forgotten PIN.
+
+The switcher at the top of the app stays hidden while you are in only one circle.
+
+## Testing
+
+There was no suite at all until this stage — the original was lost with the container
+image the source had to be recovered from. What exists now:
+
+```bash
+./.venv/bin/python -m pytest -q     # API and repository, against a fake pool
+node tests/client/run.js            # the browser app, loaded into a sandbox
+```
+
+Neither needs a database. `tests/fakes.py` is a pool that records SQL instead of running
+it, which is deliberate: the only Postgres this project has is the live one.
+`tests/client/harness.js` extracts the inline `<script>` from `static/index.html` and
+evaluates it in a `vm` context with the browser globals stubbed, so the client is tested
+as shipped rather than as a copy.
