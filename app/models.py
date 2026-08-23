@@ -274,11 +274,17 @@ class MemberData(BaseModel):
 
 # ---------------------------------------------------------------- members
 class MemberProfile(BaseModel):
-    """A member as the client renders them. Never carries the PIN."""
+    """A member as the client renders them. Never carries the PIN.
+
+    `is_child` turns off debt and penalty work for that person. It travels with the
+    profile rather than the records because every screen that scores somebody needs
+    to know, and the answer is the same in every circle they are in.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
+    is_child: bool = False
     name: str = Field(min_length=1, max_length=64)
     city: str = Field(min_length=1, max_length=64)
     lat: Latitude
@@ -368,7 +374,7 @@ class CircleMemberAdd(BaseModel):
 
 
 class RosterEntry(BaseModel):
-    """Admin view of a member, including the PIN in the clear."""
+    """A circle owner's view of a member, including the PIN in the clear."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -376,6 +382,7 @@ class RosterEntry(BaseModel):
     name: str
     city: str
     pin: str
+    is_child: bool = False
 
 
 # ---------------------------------------------------------------- auth
@@ -418,14 +425,87 @@ class Session:
         return self.is_admin or self.member_id == member_id
 
 
+# ---------------------------------------------------------------- oila
+class JamoatCall(BaseModel):
+    """One "we are praying this together" for one prayer on one day.
+
+    Who joined is deliberately not stored. Each person marks their own prayer through
+    the ordinary write, so the two rules that make the record trustworthy — nobody
+    marks for anybody else, and a mark is write-once — are never bent for this.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    day: Date
+    prayer: PrayerKey
+    caller_id: str
+
+    _check_caller = field_validator("caller_id")(_validate_member_id)
+
+
+class JamoatCallCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day: Date
+    prayer: PrayerKey
+
+
+class KhatmJuz(BaseModel):
+    """One of the thirty parts, once somebody has taken it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    juz: int = Field(ge=1, le=30)
+    member_id: str | None = None
+    done: bool = False
+
+
+class Khatm(BaseModel):
+    """A Qur'an read between a family, one juz at a time.
+
+    Only taken juz are listed. A number from 1 to 30 that is missing from `juz` is
+    free, which is the whole of the bookkeeping.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    name: str = Field(min_length=1, max_length=64)
+    started: Date
+    finished: Date | None = None
+    juz: list[KhatmJuz] = Field(default_factory=list, max_length=30)
+
+
+class KhatmCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64)
+    started: Date
+
+
+class ChildFlag(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_child: bool
+
+
 class GroupState(BaseModel):
-    """The whole group in one response. Drives the comparison screen."""
+    """The whole group in one response. Drives the comparison screen.
+
+    The family pieces ride along here rather than on endpoints of their own: the app
+    already polls this every minute, so a call to pray together shows up on the other
+    phones without anybody adding a second poll.
+    """
 
     members: list[MemberProfile]
     data: dict[str, MemberData]
+    calls: list[JamoatCall] = Field(default_factory=list)
+    khatm: Khatm | None = None
 
     def to_wire(self) -> dict:
         return {
             "members": [m.model_dump() for m in self.members],
             "data": {member_id: d.to_wire() for member_id, d in self.data.items()},
+            "calls": [c.model_dump(mode="json") for c in self.calls],
+            "khatm": None if self.khatm is None else self.khatm.model_dump(mode="json"),
         }

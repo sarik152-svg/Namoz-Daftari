@@ -321,6 +321,7 @@ async function pull(){
  try{
    const j=await api(circleId?"/state?circle="+encodeURIComponent(circleId):"/state");
    members=j.members;data={};
+   calls=j.calls||[];khatm=j.khatm||null;
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -366,6 +367,9 @@ let screen="login",tab="today",date=today(),pinFor=null,pinErr="",manualCity=fal
 let manualPlace=false,placeMsg="";
 let loginErr="",adminMode=false,roster=[],adminErr="";
 let famMsg="",famErr=false,addMode="new",addPin="";
+/* Oila narsalari: chaqiruvlar va ochiq xatm. Ular /state bilan birga keladi,
+   shuning uchun ilova ikkinchi so'rov yubormaydi. */
+let calls=[],khatm=null,khatmMsg="";
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -388,7 +392,7 @@ const myCfg=()=>cfgNow(M(me));
 const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.length];
 
 /* ══════════════ HISOB ══════════════ */
-function score(u,c){
+function score(u,c,child){
  const days=(u&&u.days)||{},ds=Object.keys(days).sort();
  const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,quran:0,per:{},bonusSum:0,debt:0,tasks:((u&&u.tasks)||[]).length};
  PRAYERS.forEach(p=>o.per[p.k]={ontime:0,qazo:0,bad:0,delaySum:0,delayN:0});
@@ -408,6 +412,10 @@ function score(u,c){
    if(day.quran)o.quran++}}
  /* Tahajjud nafl — jarima yozmaydi, aksincha har biri qarzni kamaytiradi. */
  o.debt=o.penalty-o.bonusSum-o.tasks*TASK_AT-o.tahajjud*NAFL_BALL-o.jamoat*JAMOAT_BALL;
+ /* Bolada qarz ham, jarima ham yo'q — faqat yulduzcha. Kattalar tizimi bolani
+    ilovadan qo'rqitib yuboradi, undan ko'ra o'qiganini sanab turgani ma'qul. */
+ o.stars=o.ontime+o.tahajjud;
+ if(child){o.penalty=0;o.debt=0;o.tasks=0}
  return o}
 function streakOf(days,pk,c){let cur=c?todayFor(c):today(),n=0;
  if(!(days[cur]&&days[cur][pk]&&days[cur][pk].s==="ontime"))cur=shift(cur,-1);
@@ -559,7 +567,7 @@ function perfectStreak(days,c){
 
 function nishonStat(m){
  const u=data[m.id]||blank(),c=cfgNow(m),days=u.days||{};
- const s=score(u,c),k=bookScore(u,c);
+ const s=score(u,c,!!(m&&m.is_child)),k=bookScore(u,c);
  let mukammalKun=0,quranKun=0,jumaMukammal=0;
  Object.keys(days).forEach(d=>{
   const day=days[d];
@@ -607,10 +615,16 @@ function weekGoal(){
  return (c&&c.week_goal)||HAFTA_MAQSAD_ODATIY}
 function jamoaHafta(a,z){
  const maqsad=weekGoal();
- const rows=members.map(m=>{
+ /* Bola nishonni to'smaydi. "Bir kishi hamma uchun" kattalar orasidagi ahd —
+    olti yoshli bola normaga yetmagani uchun butun oila quruq qolsa, qoida
+    ragʻbat emas, jazoga aylanadi. Bolaning o'z yulduzchalari alohida sanaladi. */
+ const rows=members.filter(m=>!m.is_child).map(m=>{
   const o=prayerRange(data[m.id]||blank(),m,a,z);
   return{m:m,ontime:o.ontime,jamoat:o.jamoat,ok:o.ontime>=maqsad}});
- return{rows:rows,ok:rows.length>0&&rows.every(x=>x.ok)}}
+ const bolalar=members.filter(m=>m.is_child).map(m=>{
+  const o=prayerRange(data[m.id]||blank(),m,a,z);
+  return{m:m,stars:o.ontime+o.tahajjud}});
+ return{rows:rows,bolalar:bolalar,ok:rows.length>0&&rows.every(x=>x.ok)}}
 function jamoaTarix(c){
  let eng=null;
  members.forEach(m=>{const ks=Object.keys((data[m.id]||{}).days||{}).sort();
@@ -752,6 +766,54 @@ const A={
      {method:"DELETE"});
    await A.loadRoster();await pull();render()}
   catch(e){alert(e.message||"Chiqarib bo'lmadi")}},
+ async callJamoat(pk,ds){
+  /* Chaqiruv boshqa hech kimning yozuviga tegmaydi — u shunchaki "birga o'qiymiz"
+     degan xabar. Har kim baribir o'z namozini o'zi belgilaydi. */
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/jamoat",
+     {method:"POST",body:JSON.stringify({day:ds,prayer:pk})});
+   await pull();render()}
+  catch(e){alert(e.message||"Chaqirib bo'lmadi")}},
+ async setChild(id,on){
+  const m=(members||[]).find(x=>x.id===id)||{};
+  if(!confirm((on?"Bolalar rejimi yoqilsinmi? ":"Bolalar rejimi o'chirilsinmi? ")
+    +(m.name||id)+(on?" uchun qarz ham, jarima ham yozilmaydi.":"")))return;
+  try{
+   await api("/members/"+encodeURIComponent(id)+"/child",
+     {method:"POST",body:JSON.stringify({is_child:on})});
+   await A.loadRoster();await pull();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+ async startKhatm(){
+  const el=document.getElementById("kh_name");
+  const name=((el&&el.value)||"").trim();
+  if(!name){khatmMsg="Xatm nomini yozing";render();return}
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/khatm",
+     {method:"POST",body:JSON.stringify({name:name,started:todayFor(myCfg())})});
+   khatmMsg="";await pull();render()}
+  catch(e){khatmMsg=e.message||"Boshlab bo'lmadi";render()}},
+ async takeJuz(n){
+  if(!khatm)return;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/khatm/"+khatm.id+"/juz/"+n,
+     {method:"POST"});
+   khatmMsg="";await pull();render()}
+  catch(e){khatmMsg=e.message||"Olib bo'lmadi";render()}},
+ async doneJuz(n){
+  if(!khatm)return;
+  if(!confirm(n+"-porani o'qib bo'ldingizmi? Buni qaytarib bo'lmaydi."))return;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/khatm/"+khatm.id+"/juz/"+n+"/done",
+     {method:"POST"});
+   khatmMsg="";await pull();render()}
+  catch(e){khatmMsg=e.message||"Belgilab bo'lmadi";render()}},
+ async dropJuz(n){
+  if(!khatm)return;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/khatm/"+khatm.id+"/juz/"+n,
+     {method:"DELETE"});
+   khatmMsg="";await pull();render()}
+  catch(e){khatmMsg=e.message||"Qaytarib bo'lmadi";render()}},
  async addExisting(){
   const err=document.getElementById("f_err");
   const el=document.getElementById("f_login");
@@ -828,7 +890,7 @@ const A={
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
   render();await pushDay(me,date)},
  async claim(pk,lvl){
-  const s=score(data[me],myCfg());
+  const s=score(data[me],myCfg(),isChild(me));
   const amt=Math.min(BONUS_MAX,Math.max(BONUS_MIN,Math.round(s.debt/2*100)/100));
   data[me]=Object.assign({},data[me],{bonuses:((data[me].bonuses)||[]).concat([{p:pk,lvl:lvl,amt:amt,d:todayFor(myCfg())}])});
   render();await pushData(me);render()},
@@ -1087,6 +1149,12 @@ function addScreen(){
 
 /* Whether `me` owns the circle currently being viewed. Only the owner is shown the
    PINs, because those are what gets read out to a new member. */
+/* Hozir qaralayotgan doira va u oilami. Oilaviy imkoniyatlar do'stlar guruhida
+   ko'rinmaydi: ular har xil shaharda, bir xonada o'qiy olmaydi. */
+function curCircle(){return (circles||[]).find(c=>c.id===circleId)||null}
+function isFamily(){const c=curCircle();return !!c&&c.kind==="family"}
+function isChild(id){const m=(members||[]).find(x=>x.id===id);return !!(m&&m.is_child)}
+
 function ownsCircle(list,id){
  const found=(list||[]).find(c=>c.id===id);
  return !!found&&found.owner_id===me}
@@ -1168,7 +1236,14 @@ function syncScreen(){
      ${m.id===dc.owner_id
       ?`<span class="muted tiny" style="flex:1;text-align:center;align-self:center">doira egasi</span>`
       :`<button class="btn" style="flex:1;font-size:11px" onclick="A.dropMember('${esc(m.id)}')">Chiqarish</button>`}
-    </div></div>`).join("")}
+    </div>
+    <button class="btn btn-wide" style="margin-top:7px;font-size:11px;${m.is_child
+      ?"border-color:var(--brass);color:var(--brass)":""}"
+      onclick="A.setChild('${esc(m.id)}',${m.is_child?"false":"true"})">${m.is_child
+      ?"\u2B50 Bolalar rejimi yoqilgan — o'chirish":"Bolalar rejimini yoqish"}</button></div>`).join("")}
+  <p class="muted small" style="margin:0 0 12px;line-height:1.6">Bolalar rejimida qarz ham,
+   jarima vazifasi ham yozilmaydi — bola yulduzcha yig'adi. Haftalik jamoa nishonini ham
+   to'smaydi, ya'ni bola normaga yetmagani uchun oila nishondan quruq qolmaydi.</p>
   <button class="btn btn-green btn-wide" onclick="A.go('add')">+ A'zo qo'shish</button>`:""}
  <div class="label">Oilam</div>
  <p class="muted small" style="margin:0 0 9px;line-height:1.6">Oila alohida doira: uni
@@ -1198,11 +1273,38 @@ function syncScreen(){
  <button class="btn btn-wide" style="margin-top:18px" onclick="A.logout()">Chiqish</button>
  <div style="height:40px"></div></div>`}
 
+/* ══════════════ UYDA JAMOAT ══════════════ */
+/* Chaqiruv faqat "birga o'qiymiz" degan xabar. Hech kimning namozi yozilmaydi:
+   har kim o'zi belgilaydi, shuning uchun "birov uchun belgilamaydi" va "belgilangani
+   o'zgarmaydi" qoidalari buzilmaydi. */
+function activeCalls(cfg){
+ if(!isFamily())return [];
+ return (calls||[]).filter(c=>{
+  const p=PRAYERS.find(x=>x.k===c.prayer);
+  return !!p&&p.fard&&c.day===liveDay(c.prayer,cfg)&&winState(c.prayer,c.day,cfg)==="open"})}
+function calledFor(pk,ds){return (calls||[]).some(c=>c.prayer===pk&&c.day===ds)}
+function jamoatBanner(cfg){
+ return activeCalls(cfg).map(c=>{
+  const p=PRAYERS.find(x=>x.k===c.prayer)||{n:c.prayer};
+  const kim=(members.find(x=>x.id===c.caller_id)||{}).name||c.caller_id;
+  const belgilangan=((data[me].days||{})[c.day]||{})[c.prayer];
+  return `<div class="panel p14 mb14" style="border-color:#4CAF8B66">
+   <div class="flex center gap3">
+    <div style="font-size:26px">\u{1F54C}</div>
+    <div style="flex:1;min-width:0">
+     <div style="font-family:var(--serif);font-size:17px">${
+       c.caller_id===me?"Siz":esc(first(kim))} ${esc(p.n)} namoziga chaqirdi${
+       c.caller_id===me?"ngiz":""}</div>
+     <p class="muted small" style="margin:4px 0 0;line-height:1.6">${belgilangan
+       ?"Siz belgilab bo'ldingiz."
+       :"Birga o'qigach, "+esc(p.n)+" qatoridagi \u{1F54C} tugmasini o'zingiz bosing."}</p>
+    </div></div></div>`}).join("")}
+
 /* ────────── BUGUN ────────── */
 function todayTab(){
  const cfg=myCfg(),sc=daySchedule(new Date(date+"T12:00:00"),cfgAt(M(me),date));
  const isT=date===todayFor(cfg),now=nowFor(cfg),nowDec=decOf(now);
- const day=(data[me].days||{})[date]||{},s=score(data[me],cfg);
+ const day=(data[me].days||{})[date]||{},s=score(data[me],cfg,isChild(me));
  let dayBall=0;PRAYERS.forEach(p=>{const r=day[p.k];
   if(r&&STATUS[r.s])dayBall+=STATUS[r.s].ball+(r.j&&r.s==="ontime"?JAMOAT_BALL:0)});
  let nx=null;
@@ -1220,13 +1322,16 @@ function todayTab(){
  </div>
  <div class="grid2 mb14">
   <div class="panel stat"><b class="${dayBall===0?"jade":"clay"}">${dayBall===0?"0":fmt(dayBall)}</b><i>Shu kun bali</i></div>
-  <div class="panel stat"><b class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Umumiy qarz":"Zaxira ball"}</i></div>
+  ${isChild(me)
+   ?`<div class="panel stat"><b class="brass">\u2B50 ${s.stars}</b><i>Yulduzchalar</i></div>`
+   :`<div class="panel stat"><b class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Umumiy qarz":"Zaxira ball"}</i></div>`}
  </div>`;
  if(nx){const mm=Math.round((nx.t-nowDec)*60);
   h+=`<div class="panel p14 mb14 flex between center">
    <div><div class="eyebrow">Keyingi vaqt</div><div style="font-family:var(--serif);font-size:20px;margin-top:2px">${nx.p.n}</div></div>
    <div style="text-align:right"><div class="brass" style="font-family:var(--serif);font-size:26px">${hm(nx.t)}</div>
    <div class="muted small">${Math.floor(mm/60)} soat ${mm%60} daqiqa qoldi</div></div></div>`}
+ if(isT)h+=jamoatBanner(cfg);
  PRAYERS.forEach(p=>{
   /* Ochiq kunda har bir namoz o'z kuniga bog'lanadi: xufton bomdodgacha
      kechagi kunning xuftoni bo'lib qolaveradi. */
@@ -1259,6 +1364,9 @@ function todayTab(){
      <div class="muted small">${st0} — ${en}${crosses?" <span class='tiny'>(ertangi bomdodgacha)</span>":""}${
        !p.fard?" <span class='jade tiny'>· istalgan vaqtda</span>":""}</div>
      ${shifted?`<div class="brass tiny" style="margin-top:2px">${pretty(tgt)} kunining xuftoni</div>`:""}
+     ${isFamily()&&isT&&open&&p.fard?(calledFor(p.k,tgt)
+       ?`<div class="jade tiny" style="margin-top:3px">\u{1F54C} uyda birga o'qiymiz deb chaqirilgan</div>`
+       :`<button class="link" style="font-size:11px;margin-top:2px" onclick="A.callJamoat('${p.k}','${tgt}')">\u{1F54C} Uyda birga o'qiymiz</button>`):""}
     </div>
     ${p.fard?btn(!!(r&&r.j),"\u{1F54C}","jamoat","Jamoat bilan o'qidim"):""}
     ${btn(!!r&&!(r&&r.j)&&r.s!=="missed","\u2713","pray",p.fard?"Yolg'iz o'qidim":"O'qidim")}
@@ -1293,6 +1401,76 @@ function todayTab(){
  return h}
 
 /* ────────── STATISTIKA ────────── */
+/* ══════════════ OILAVIY NAMOZ TAHLILI ══════════════ */
+/* Do'stlar doirasidan olib tashlangan edi — hech kim o'qimasdi. Oilada esa
+   ota-onaga haqiqiy ma'lumot beradi: qaysi namoz qoldirilyapti, kim qancha
+   kechikyapti. Shuning uchun faqat oila turidagi doirada ko'rinadi. */
+function oilaTahlil(kunlar){
+ const td=todayFor(myCfg()),bosh=shift(td,-(kunlar-1));
+ const jami={},kishi=[];
+ PRAYERS.filter(p=>p.fard).forEach(p=>jami[p.k]={bad:0,qazo:0});
+ members.forEach(m=>{
+  const u=data[m.id]||blank(),days=u.days||{};
+  const boshi=Object.keys(days).sort()[0];
+  const per={},kech={sum:0,n:0};
+  PRAYERS.filter(p=>p.fard).forEach(p=>per[p.k]={ontime:0,qazo:0,bad:0});
+  if(boshi){
+   const openX=liveDay("xufton",cfgNow(m));
+   for(let d=bosh<boshi?boshi:bosh,i=0;i<40&&d<=td;i++,d=shift(d,1)){
+    const day=days[d]||{},closed=d<td;
+    const sc=daySchedule(new Date(d+"T12:00:00"),cfgAt(m,d));
+    PRAYERS.filter(p=>p.fard).forEach(p=>{
+     const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
+     if(!r){if(shut){per[p.k].bad++;jami[p.k].bad++}return}
+     if(r.s==="ontime"){per[p.k].ontime++;
+      if(r.t){const dq=diffMin(hm(sc[p.k]),r.t);if(dq>=0&&dq<600){kech.sum+=dq;kech.n++}}}
+     else if(r.s==="qazo"){per[p.k].qazo++;jami[p.k].qazo++}
+     else{per[p.k].bad++;jami[p.k].bad++}})}}
+  let ogir=null;
+  PRAYERS.filter(p=>p.fard).forEach(p=>{
+   const yomon=per[p.k].bad+per[p.k].qazo;
+   if(yomon>0&&(!ogir||yomon>ogir.n))ogir={p:p,n:yomon}});
+  kishi.push({m:m,per:per,ogir:ogir,kech:kech.n?Math.round(kech.sum/kech.n):null})});
+ let engOgir=null;
+ PRAYERS.filter(p=>p.fard).forEach(p=>{
+  const n=jami[p.k].bad+jami[p.k].qazo;
+  if(n>0&&(!engOgir||n>engOgir.n))engOgir={p:p,n:n}});
+ return{kishi:kishi,engOgir:engOgir,kunlar:kunlar}}
+
+function oilaTahlilView(){
+ if(!isFamily())return "";
+ const t=oilaTahlil(30);
+ let h=`<div class="eyebrow">Oila</div>
+  <h2 style="font-size:24px;margin:6px 0 12px">Namoz tahlili</h2>
+  <p class="muted small" style="margin:0 0 12px;line-height:1.6">So'nggi ${t.kunlar} kun.
+   Bu faqat oilada ko'rinadi — do'stlar guruhida yo'q.</p>`;
+ h+=`<div class="panel p14 mb10">
+   <div class="eyebrow">Oilada eng og'iri</div>
+   <div style="font-family:var(--serif);font-size:19px;margin-top:4px">${t.engOgir
+     ?esc(t.engOgir.p.n)+` <span class="clay" style="font-size:14px">· ${t.engOgir.n} marta qoldirilgan yoki qazo</span>`
+     :`<span class="jade">Bironta ham qoldirilmagan</span>`}</div></div>`;
+ t.kishi.forEach(x=>{
+  h+=`<div class="panel p14 mb10">
+   <div class="flex center gap2" style="margin-bottom:9px">
+    <div class="hd" style="height:24px;background:${colorOf(x.m.id)}"></div>
+    <div><div style="font-family:var(--serif);font-size:16px">${esc(first(x.m.name))}${
+      x.m.is_child?` <span class="chip">BOLA</span>`:""}</div>
+     <div class="muted tiny">${x.kech===null?"kechikish ma'lumoti yo'q"
+       :"o'rtacha "+x.kech+" daqiqa kechikib o'qiydi"}</div></div></div>`;
+  PRAYERS.filter(p=>p.fard).forEach(p=>{
+   const c=x.per[p.k],tot=c.ontime+c.qazo+c.bad;
+   const pct=tot?Math.round(c.ontime/tot*100):0;
+   h+=`<div style="margin-bottom:7px">
+    <div class="flex between tiny" style="margin-bottom:3px">
+     <span>${p.n}</span>
+     <span class="muted">${c.ontime} vaqtida · ${c.qazo} qazo · ${c.bad} qoldirilgan</span></div>
+    <div class="bar"><div style="width:${pct}%;background:${
+      pct>=80?"var(--jade)":pct>=50?"var(--brass)":"var(--clay)"}"></div></div></div>`});
+  h+=`<div class="muted tiny" style="margin-top:8px">${x.ogir
+    ?"Eng og'iri: "+esc(x.ogir.p.n)
+    :"Hammasi joyida"}</div></div>`});
+ return h}
+
 function statsTab(){
  const cfg=myCfg(),td=todayFor(cfg),oy=A.statPeriod==="oy";
  const rng=oy?monthRange(td):weekRange(td);
@@ -1304,12 +1482,12 @@ function statsTab(){
    <button class="btn" style="flex:1;${oy?on:""}" onclick="A.setStatPeriod('oy')">Bu oy</button></div>`;
  ch+=podium(oy?"Oy qahramoni":"Hafta qahramoni",rng[0],rng[1],periodDone(rng[1],cfg));
  const ranked=members.slice().sort((a,b)=>{
-  const sa=score(data[a.id],cfgNow(a)),sb=score(data[b.id],cfgNow(b));
+  const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
   return (pb?sb.ontime/pb:0)-(pa?sa.ontime/pa:0)});
  let h=ch+`<div class="eyebrow">Jamoa</div><h2 style="font-size:24px;margin:6px 0 14px">Taqqoslash</h2><div class="grid2 mb14">`;
  ranked.forEach((m,i)=>{
-  const s=score(data[m.id],cfgNow(m)),tot=s.ontime+s.qazo+s.bad,pct=tot?Math.round(s.ontime/tot*100):0;
+  const s=score(data[m.id],cfgNow(m),!!m.is_child),tot=s.ontime+s.qazo+s.bad,pct=tot?Math.round(s.ontime/tot*100):0;
   h+=`<div class="panel p14" style="border-color:${m.id===me?"#C9A22766":"var(--line)"}">
    <div class="flex center gap2" style="margin-bottom:8px">
     <div class="hd" style="height:26px;background:${colorOf(m.id)}"></div>
@@ -1323,10 +1501,13 @@ function statsTab(){
    <div class="row"><span>O'tkazilgan</span><span class="clay">${s.bad}</span></div>
    <div class="row"><span>Tahajjud</span><span class="brass">${s.tahajjud}</span></div>
    <div class="row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px">
-     <span>${s.debt>0?"Qarz":"Zaxira"}</span>
-     <span class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</span></div>
+     ${m.is_child
+      ?`<span>Yulduzcha</span><span class="brass">\u2B50 ${s.stars}</span>`
+      :`<span>${s.debt>0?"Qarz":"Zaxira"}</span>
+        <span class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</span>`}</div>
   </div>`});
  h+=`</div>`;
+ h+=oilaTahlilView();
  /* strike */
  h+=`<div class="panel p14 mb14" style="border-color:#C9A22744"><div class="eyebrow">Strike — har ${STREAK_STEP} kun mukofot</div>
   <p class="muted small" style="margin:6px 0 12px">Bir namozni ${STREAK_STEP} kun ketma-ket vaqtida o'qisangiz,
@@ -1388,7 +1569,7 @@ function sunnatTab(){
 
 /* ────────── VAZIFA ────────── */
 function taskTab(){
- const s=score(data[me],myCfg()),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
+ const s=score(data[me],myCfg(),isChild(me)),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
  let h=`<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
  <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
   <div><span class="jade">Vaqtida o'qilsa</span> — 0 ball</div>
@@ -1429,11 +1610,13 @@ function taskTab(){
    <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Vazifa yo'q</div>
    <p class="muted" style="font-size:13px;margin-top:6px">${s.debt>0?"Yana "+fmt(TASK_AT-s.debt)+" ball qarz yig'ilsa vazifa ochiladi.":"Qarzingiz yo'q. Strike'ni uzmang."}</p></div>`}
  h+=`<div class="panel p14 mt14"><div class="eyebrow">Jamoa holati</div><div class="mt12">`;
- members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],cfgNow(m));
+ members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],cfgNow(m),!!m.is_child);
   h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
    <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))}</div>
    <div class="row"><span>Minus / mukofot / nafl</span><span class="muted">${fmt(o.penalty)} · −${fmt(o.bonusSum)} · ${o.tahajjud}</span></div>
-   <div class="row"><span>${o.debt>0?"Qarz":"Zaxira"}</span><span class="${o.debt>0?"clay":"jade"}">${o.debt>0?"−"+fmt(o.debt):"+"+fmt(-o.debt)}</span></div></div>`});
+   <div class="row">${m.is_child
+     ?`<span>Yulduzcha</span><span class="brass">\u2B50 ${o.stars}</span>`
+     :`<span>${o.debt>0?"Qarz":"Zaxira"}</span><span class="${o.debt>0?"clay":"jade"}">${o.debt>0?"−"+fmt(o.debt):"+"+fmt(-o.debt)}</span>`}</div></div>`});
  h+=`</div></div>`;
  const bs=(data[me].bonuses)||[];
  if(bs.length){h+=`<div class="panel p14 mt14"><div class="eyebrow">Mukofot tarixi</div><div class="mt12">`;
@@ -1443,7 +1626,69 @@ function taskTab(){
  return h}
 
 /* ────────── KITOB ────────── */
-function bookTab(){return A.bookView==="all"?booksAllView():booksMineView()}
+function bookTab(){
+ return khatmView()+(A.bookView==="all"?booksAllView():booksMineView())}
+
+/* ══════════════ OILAVIY XATM ══════════════ */
+/* O'ttiz pora. Hech kimga taqsimlanmaydi — kimning vaqti bo'lsa bo'sh poradan
+   o'zi oladi, shunda sekin o'qiydigan odam boshqalarni to'smaydi. Raqamning
+   qatori yo'q bo'lsa — u bo'sh; butun hisob shundan iborat. */
+function khatmView(){
+ if(!isFamily())return "";
+ const xabar=khatmMsg?`<div class="clay small mb10">${esc(khatmMsg)}</div>`:"";
+ if(!khatm)return `<div class="panel p18 mb14">
+  <div class="eyebrow">Oilaviy xatm</div>
+  <h2 style="font-size:20px;margin:6px 0 8px">Birgalikda xatm qilamiz</h2>
+  <p class="muted small" style="margin:0 0 10px;line-height:1.65">O'ttiz pora oila
+   a'zolari orasida bo'linadi. Hech kimga majburan berilmaydi — kim vaqt topsa,
+   bo'sh poradan o'zi oladi va o'qib belgilaydi.</p>
+  ${xabar}
+  <input id="kh_name" class="input" maxlength="64" placeholder="Xatm nomi, masalan: Ramazon xatmi">
+  <button class="btn btn-green btn-wide" style="margin-top:8px" onclick="A.startKhatm()">Xatm boshlash</button>
+ </div>`;
+ const olingan={};(khatm.juz||[]).forEach(j=>olingan[j.juz]=j);
+ const oqilgan=(khatm.juz||[]).filter(j=>j.done).length;
+ const pct=Math.round(oqilgan/30*100);
+ const meniki=(khatm.juz||[]).filter(j=>j.member_id===me);
+ let h=`<div class="panel p18 mb14">
+  <div class="flex between center">
+   <div><div class="eyebrow">Oilaviy xatm</div>
+    <div style="font-family:var(--serif);font-size:19px;margin-top:3px">${esc(khatm.name)}</div></div>
+   <div style="text-align:right"><div class="brass" style="font-family:var(--serif);font-size:24px">${oqilgan}/30</div>
+    <div class="muted tiny">o'qildi</div></div></div>
+  <div class="bar" style="margin-top:11px"><div style="width:${pct}%;background:var(--jade)"></div></div>
+  ${xabar}
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:13px">`;
+ for(let n=1;n<=30;n++){
+  const j=olingan[n];
+  if(!j){
+   h+=`<button class="btn" style="padding:8px 0;font-size:12px" onclick="A.takeJuz(${n})">${n}</button>`;
+   continue}
+  if(j.done){
+   h+=`<div class="btn" style="padding:8px 0;font-size:12px;background:var(--jade);
+     color:#0D1220;border-color:transparent;text-align:center">${n} \u2713</div>`;
+   continue}
+  const kim=(members.find(x=>x.id===j.member_id)||{}).name||"";
+  const oz=j.member_id===me;
+  h+=`<div class="btn" style="padding:8px 0;font-size:12px;text-align:center;${
+    oz?"border-color:var(--brass);color:var(--brass)":"opacity:.5"}"
+    title="${esc(kim)}">${n}</div>`}
+ h+=`</div>`;
+ if(meniki.length){
+  h+=`<div class="label" style="margin-top:14px">Mening poralarim</div>`;
+  meniki.forEach(j=>{
+   h+=`<div class="flex between center" style="margin-bottom:7px">
+    <span style="font-family:var(--serif);font-size:16px">${j.juz}-pora${j.done?" \u2713":""}</span>
+    ${j.done?`<span class="jade tiny">o'qildi</span>`:`<span class="flex gap2">
+      <button class="btn" style="padding:4px 10px;font-size:11px" onclick="A.doneJuz(${j.juz})">O'qib bo'ldim</button>
+      <button class="btn" style="padding:4px 10px;font-size:11px" onclick="A.dropJuz(${j.juz})">Qaytarish</button>
+     </span>`}</div>`})}
+ else h+=`<p class="muted small" style="margin:12px 0 0;line-height:1.6">Bo'sh raqamni
+   bosib o'zingizga pora oling.</p>`;
+ const qolgan=30-Object.keys(olingan).length;
+ h+=`<div class="muted tiny" style="margin-top:11px">${qolgan} pora hali egasiz${
+   khatm.started?" \u00b7 "+pretty(khatm.started)+" da boshlandi":""}</div></div>`;
+ return h}
 
 function bookSwitch(){
  const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
@@ -1630,6 +1875,13 @@ function nishonTab(){
     <span class="${x.ok?"jade":"muted"}">${x.ontime} / ${weekGoal()}</span></div>
    <div class="bar"><div style="width:${pct}%;background:${x.ok?"var(--jade)":"var(--brass)"}"></div></div>
   </div>`});
+ if(jh.bolalar&&jh.bolalar.length){
+  h+=`<div style="margin-top:4px;padding-top:9px;border-top:1px solid var(--line)">
+   <div class="muted tiny" style="margin-bottom:6px">Bolalar nishonni to'smaydi — yulduzchalari:</div>`;
+  jh.bolalar.forEach(b=>{h+=`<div class="flex between tiny" style="margin-bottom:3px">
+    <span style="color:${colorOf(b.m.id)}">${esc(first(b.m.name))}</span>
+    <span class="brass">${"\u2B50"} ${b.stars}</span></div>`});
+  h+=`</div>`}
  h+=`</div><div class="muted tiny">${pretty(wk[0])} — ${pretty(wk[1])} · jami olingan: ${tarix} hafta</div></div>`;
 
  h+=`<div class="flex gap2 mb14" style="flex-wrap:wrap">`;
@@ -1697,7 +1949,7 @@ function render(){
    <button class="btn btn-gold btn-wide" style="margin-top:16px" onclick="A.refresh()">Qayta urinish</button>
    <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
   </div>`;return}
- const cfg=myCfg();
+ const cfg=myCfg(),bola=isChild(me);
  let h=`<div class="flex between center mb18">
   <div class="flex center gap3">
    <div class="hd" style="height:36px;background:${colorOf(me)}"></div>
@@ -1712,6 +1964,9 @@ function render(){
   </div></div>
  <div class="ayat mb18"><span class="brass">❝</span><span>${AYAT[new Date(date+"T12:00:00").getDate()%AYAT.length]}</span></div>`;
  h+=circleSwitcher(circles);
+ /* Bolada jarima vazifasi yo'q, shuning uchun bo'lim ham yo'q — bo'sh ekranga
+    olib boradigan tugma qo'yishdan ko'ra olib turgani ma'qul. */
+ if(bola&&tab==="task")tab="today";
  h+= tab==="today"?todayTab():tab==="stats"?statsTab():tab==="sunnat"?sunnatTab():tab==="book"?bookTab():tab==="nishon"?nishonTab():taskTab();
  h+=`<div class="tabbar"><div>
   <button class="${tab==="today"?"on":""}" onclick="A.setTab('today')"><span>📋</span>Bugun</button>
@@ -1719,7 +1974,7 @@ function render(){
   <button class="${tab==="sunnat"?"on":""}" onclick="A.setTab('sunnat')"><span>📖</span>Sunnat</button>
   <button class="${tab==="book"?"on":""}" onclick="A.setTab('book')"><span>📚</span>Kitob</button>
   <button class="${tab==="nishon"?"on":""}" onclick="A.setTab('nishon')"><span>🏅</span>Nishon</button>
-  <button class="${tab==="task"?"on":""}" onclick="A.setTab('task')"><span>🔥</span>Vazifa</button>
+  ${bola?"":`<button class="${tab==="task"?"on":""}" onclick="A.setTab('task')"><span>🔥</span>Vazifa</button>`}
  </div></div>`;
  app.innerHTML=h;
  window.scrollTo(0,y)}

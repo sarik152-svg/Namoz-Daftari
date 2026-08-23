@@ -19,7 +19,7 @@ from app import repository
 from app.models import DayRecord, MemberData
 
 MEMBER_ROW = {
-    "id": "sardor", "name": "Sardor", "city": "Toshkent",
+    "id": "sardor", "name": "Sardor", "city": "Toshkent", "is_child": False,
     "lat": 41.3, "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0,
 }
 
@@ -29,6 +29,7 @@ def state_rows(**extra) -> dict:
         "FROM members m": [MEMBER_ROW],
         "FROM day_records": [], "FROM bonuses": [],
         "FROM tasks": [], "FROM books": [], "FROM places": [],
+        "FROM jamoat_calls": [], "FROM khatms": [],
     }
     rows.update(extra)
     return rows

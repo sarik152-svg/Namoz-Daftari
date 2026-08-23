@@ -32,10 +32,13 @@ from app.config import (
 from app.db import create_pool, run_migrations
 from app.models import (
     AdminLoginRequest,
+    ChildFlag,
     CircleCreate,
     CircleMemberAdd,
     CircleUpdate,
     DayRecord,
+    JamoatCallCreate,
+    KhatmCreate,
     LoginRequest,
     MemberData,
     Session,
@@ -463,6 +466,135 @@ async def remove_circle_member(
         raise _error(
             "no_member", f"'{member_id}' bu doirada emas", status.HTTP_404_NOT_FOUND
         )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- family routes
+async def _require_family(request: Request, session: Session, circle_id: int):
+    """A family circle the caller is inside.
+
+    The family features are refused elsewhere rather than merely hidden: friends live
+    in different cities and cannot pray in one room, and a khatm between people who
+    do not see each other daily is a different thing than the one being built here.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if not await repository.is_circle_member(pool, circle_id, session.member_id or ""):
+        raise _error(
+            "not_your_circle", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN
+        )
+    circle = await repository.fetch_circle(pool, circle_id)
+    if circle is None or circle.kind != "family":
+        raise _error("not_a_family", "Bu imkoniyat faqat oilada ishlaydi", 409)
+    return circle
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/child")
+async def set_child(
+    member_id: str, body: ChildFlag, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Turn debt and penalty work off for a child, or back on when they grow.
+
+    A parent sets this, not the child: somebody marking themselves a child would
+    simply be switching off their own arrears.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error(
+                "not_circle_owner", "Buni doira egasi belgilaydi",
+                status.HTTP_403_FORBIDDEN,
+            )
+    if not await repository.set_child(pool, member_id, body.is_child):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/jamoat", status_code=201)
+async def call_jamoat(
+    circle_id: int, body: JamoatCallCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Say "we are praying this one together". Anyone in the family may start it.
+
+    This records the call, never anybody's prayer. Each person still marks their own,
+    which is why joining costs the caller nothing and gives them nothing.
+    """
+    await _require_family(request, session, circle_id)
+    call = await repository.call_jamoat(
+        request.app.state.pool, circle_id, body.day, body.prayer,
+        session.member_id or "",
+    )
+    return call.model_dump(mode="json")
+
+
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/khatm", status_code=201)
+async def start_khatm(
+    circle_id: int, body: KhatmCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Open a khatm for the family. One at a time, so the progress bar means something."""
+    pool: asyncpg.Pool = request.app.state.pool
+    await _require_family(request, session, circle_id)
+    if await repository.fetch_open_khatm(pool, circle_id) is not None:
+        raise _error("khatm_open", "Tugallanmagan xatm bor", 409)
+    khatm = await repository.create_khatm(pool, circle_id, body.name, body.started)
+    return khatm.model_dump(mode="json")
+
+
+async def _require_khatm(request: Request, circle_id: int, khatm_id: int) -> None:
+    if not await repository.khatm_belongs_to(
+        request.app.state.pool, khatm_id, circle_id
+    ):
+        raise _error("no_khatm", "Xatm topilmadi", status.HTTP_404_NOT_FOUND)
+
+
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/khatm/{{khatm_id}}/juz/{{juz}}")
+async def take_juz(
+    circle_id: int, khatm_id: int, juz: int, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Take a free juz. Whoever has time reaches for one; nobody is assigned."""
+    await _require_family(request, session, circle_id)
+    await _require_khatm(request, circle_id, khatm_id)
+    if not 1 <= juz <= 30:
+        raise _error("bad_juz", "Pora 1 dan 30 gacha", 422)
+    if not await repository.take_juz(
+        request.app.state.pool, khatm_id, juz, session.member_id or ""
+    ):
+        raise _error("juz_taken", f"{juz}-pora allaqachon olingan", 409)
+    return {"ok": True}
+
+
+@app.delete(f"{API_PREFIX}/circles/{{circle_id}}/khatm/{{khatm_id}}/juz/{{juz}}")
+async def release_juz(
+    circle_id: int, khatm_id: int, juz: int, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Give back a juz you took and have not read. Read stays read."""
+    await _require_family(request, session, circle_id)
+    await _require_khatm(request, circle_id, khatm_id)
+    if not await repository.release_juz(
+        request.app.state.pool, khatm_id, juz, session.member_id or ""
+    ):
+        raise _error("not_yours", "Bu pora sizniki emas yoki o'qib bo'lingan", 409)
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/khatm/{{khatm_id}}/juz/{{juz}}/done")
+async def finish_juz(
+    circle_id: int, khatm_id: int, juz: int, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Mark your juz read. The khatm closes itself once all thirty are."""
+    pool: asyncpg.Pool = request.app.state.pool
+    await _require_family(request, session, circle_id)
+    await _require_khatm(request, circle_id, khatm_id)
+    if not await repository.finish_juz(pool, khatm_id, juz, session.member_id or ""):
+        raise _error("not_yours", "Bu pora sizniki emas yoki o'qib bo'lingan", 409)
+    await repository.close_khatm_if_complete(pool, khatm_id, Date.today())
     return {"ok": True}
 
 

@@ -71,6 +71,12 @@ the first success, so the typing happens once.
 | GET | `/api/v1/circles/{id}/roster` | its owner | That circle's members with PINs |
 | POST | `/api/v1/circles/{id}/members` | its owner | Add an existing login, or a new person |
 | DELETE | `/api/v1/circles/{id}/members/{id}` | its owner, or yourself | Take somebody out |
+| POST | `/api/v1/members/{id}/child` | a circle owner, or admin | Children's mode on or off |
+| POST | `/api/v1/circles/{id}/jamoat` | inside that **family** | "We are praying this one together" |
+| POST | `/api/v1/circles/{id}/khatm` | inside that **family** | Open a khatm |
+| POST | `.../khatm/{kid}/juz/{n}` | inside that family | Take a free juz |
+| POST | `.../khatm/{kid}/juz/{n}/done` | whoever took it | Mark it read |
+| DELETE | `.../khatm/{kid}/juz/{n}` | whoever took it | Give it back, if unread |
 
 Errors always come back as `{"error": {"code": "...", "message": "..."}}`.
 
@@ -78,6 +84,20 @@ Errors always come back as `{"error": {"code": "...", "message": "..."}}`.
 because an account made outside one belongs to no group: it can log in and then see
 nothing, with no screen able to help it. Adding through the circle makes that state
 unreachable rather than merely unlikely.
+
+**The family features are refused for a friends circle, not merely hidden.** People in
+different cities cannot pray in one room, and the analysis screen reports on a household.
+`_require_family` is the single gate.
+
+**Calling a family to prayer records the call and nothing else.** Who joined is not
+stored: each person still marks their own prayer through the ordinary write. That keeps
+both standing rules intact — nobody marks for anybody else, and a mark is write-once.
+
+**A child accrues no debt and no penalty work,** and is left out of the weekly team
+badge so they cannot cost the family a badge they cannot yet earn. They are still in
+the ranking, with stars in place of arrears. `members.is_child` is set by a circle
+owner, never by the member themselves, since that would just be switching off your own
+arrears.
 
 **A circle's owner can reset the PIN of anyone in it.** A forgotten PIN inside a family
 has to be fixable inside that family. This grants nothing new — the roster already shows

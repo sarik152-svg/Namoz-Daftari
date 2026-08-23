@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from datetime import date as Date
 
 from tests.conftest import ADMIN_PASSWORD
 from tests.fakes import FakeConnection
@@ -25,7 +26,7 @@ async def test_state_requires_a_session(api, connection):
 
 MEMBER_JSON = {
     "id": "sardor", "name": "Sardor", "city": "Toshkent", "lat": 41.3,
-    "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0,
+    "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0, "is_child": False,
 }
 
 
@@ -109,7 +110,7 @@ async def test_owner_sees_the_roster_with_pins(api, connection, settings):
         "owner_id": "sardor", "week_goal": 25,
     }]
     connection.rows["pin_encrypted"] = [{
-        "id": "behruz", "name": "Behruz", "city": "Dubay",
+        "id": "behruz", "name": "Behruz", "city": "Dubay", "is_child": False,
         "pin_encrypted": encrypt_pin("1234", settings.pin_encryption_key),
     }]
     async with api as client:
@@ -402,3 +403,200 @@ def test_members_are_no_longer_created_outside_a_circle():
     }
     assert ("/api/v1/members", "POST") not in paths
     assert ("/api/v1/circles/{circle_id}/members", "POST") in paths
+
+
+# ---------------------------------------------------------------- oilaviy imkoniyatlar
+FRIENDS_ROW = {"id": 1, "name": "Do'stlar", "kind": "friends",
+               "owner_id": "sardor", "week_goal": 25}
+KHATM_ROW = {"id": 5, "name": "Ramazon xatmi", "started": Date(2026, 8, 1),
+             "finished": None}
+
+
+def inside_family(connection: FakeConnection, member_id="sardor") -> dict:
+    """A session for somebody who is in family circle 2."""
+    connection.rows["FROM circles WHERE id"] = [FAMILY]
+    connection.scalars["FROM circle_members WHERE circle_id"] = True
+    return as_session(connection, member_id=member_id)
+
+
+@pytest.mark.asyncio
+async def test_the_owner_marks_someone_a_child(api, connection):
+    headers = as_session(connection)
+    connection.scalars["JOIN circle_members"] = True
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/aziz/child", headers=headers, json={"is_child": True}
+        )
+    assert response.status_code == 200
+    assert connection.args_for("SET is_child") == ("aziz", True)
+
+
+@pytest.mark.asyncio
+async def test_you_cannot_declare_yourself_a_child(api, connection):
+    """It would be a way to switch off your own arrears."""
+    headers = as_session(connection, member_id="aziz")
+    connection.scalars["JOIN circle_members"] = None
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/aziz/child", headers=headers, json={"is_child": True}
+        )
+    assert response.status_code == 403
+    assert not connection.issued("SET is_child")
+
+
+@pytest.mark.asyncio
+async def test_calling_everyone_to_pray_records_the_call_not_the_prayer(api, connection):
+    headers = inside_family(connection)
+    connection.rows["INSERT INTO jamoat_calls"] = [
+        {"day": Date(2026, 8, 23), "prayer": "shom", "caller_id": "sardor"}
+    ]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/jamoat", headers=headers,
+            json={"day": "2026-08-23", "prayer": "shom"},
+        )
+    assert response.status_code == 201
+    assert response.json()["caller_id"] == "sardor"
+    assert not connection.issued("INSERT INTO day_records"), "nobody's prayer is written"
+
+
+@pytest.mark.asyncio
+async def test_the_friends_circle_has_no_praying_together(api, connection):
+    """They are in different cities; the invitation would only be noise."""
+    headers = as_session(connection)
+    connection.rows["FROM circles WHERE id"] = [FRIENDS_ROW]
+    connection.scalars["FROM circle_members WHERE circle_id"] = True
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/1/jamoat", headers=headers,
+            json={"day": "2026-08-23", "prayer": "shom"},
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "not_a_family"
+
+
+@pytest.mark.asyncio
+async def test_an_outsider_cannot_call_a_family_to_prayer(api, connection):
+    headers = as_session(connection, member_id="behruz")
+    connection.rows["FROM circles WHERE id"] = [FAMILY]
+    connection.scalars["FROM circle_members WHERE circle_id"] = None
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/jamoat", headers=headers,
+            json={"day": "2026-08-23", "prayer": "shom"},
+        )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_khatm_starts_empty(api, connection):
+    headers = inside_family(connection)
+    connection.rows["FROM khatms"] = []
+    connection.rows["INSERT INTO khatms"] = [KHATM_ROW]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/khatm", headers=headers,
+            json={"name": "Ramazon xatmi", "started": "2026-08-01"},
+        )
+    assert response.status_code == 201
+    assert response.json()["juz"] == []
+
+
+@pytest.mark.asyncio
+async def test_only_one_khatm_runs_at_a_time(api, connection):
+    """Two at once and the progress bar stops meaning anything."""
+    headers = inside_family(connection)
+    connection.rows["FROM khatms"] = [KHATM_ROW]
+    connection.rows["FROM khatm_juz"] = []
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/khatm", headers=headers,
+            json={"name": "Yana bitta", "started": "2026-08-23"},
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "khatm_open"
+
+
+@pytest.mark.asyncio
+async def test_a_free_juz_can_be_taken(api, connection):
+    headers = inside_family(connection)
+    connection.scalars["true AS ours"] = True
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/khatm/5/juz/7", headers=headers
+        )
+    assert response.status_code == 200
+    assert connection.args_for("INSERT INTO khatm_juz") == (5, 7, "sardor")
+
+
+@pytest.mark.asyncio
+async def test_a_taken_juz_is_refused(api, connection):
+    headers = inside_family(connection)
+    connection.scalars["true AS ours"] = True
+    connection.results["INSERT INTO khatm_juz"] = "INSERT 0 0"
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/khatm/5/juz/7", headers=headers
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "juz_taken"
+
+
+@pytest.mark.asyncio
+async def test_a_khatm_from_another_family_is_out_of_reach(api, connection):
+    headers = inside_family(connection)
+    connection.scalars["true AS ours"] = None
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/khatm/99/juz/7", headers=headers
+        )
+    assert response.status_code == 404
+    assert not connection.issued("INSERT INTO khatm_juz")
+
+
+@pytest.mark.asyncio
+async def test_you_can_only_give_back_your_own_unread_juz(api, connection):
+    headers = inside_family(connection)
+    connection.scalars["true AS ours"] = True
+    connection.results["DELETE FROM khatm_juz"] = "DELETE 0"
+    async with api as client:
+        response = await client.delete(
+            "/api/v1/circles/2/khatm/5/juz/7", headers=headers
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "not_yours"
+
+
+@pytest.mark.asyncio
+async def test_reading_a_juz_tries_to_close_the_khatm(api, connection):
+    """Nobody has to declare a khatm finished; the thirtieth juz does it."""
+    headers = inside_family(connection)
+    connection.scalars["true AS ours"] = True
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/khatm/5/juz/30/done", headers=headers
+        )
+    assert response.status_code == 200
+    assert connection.issued("UPDATE khatm_juz SET done_at")
+    assert connection.issued("UPDATE khatms SET finished")
+
+
+@pytest.mark.asyncio
+async def test_state_carries_the_call_and_the_khatm(api, connection):
+    headers = as_session(connection)
+    connection.scalars["FROM circle_members WHERE circle_id"] = True
+    connection.rows["FROM members m"] = [MEMBER_JSON]
+    for table in ("day_records", "bonuses", "tasks", "books", "places"):
+        connection.rows[f"FROM {table}"] = []
+    connection.rows["FROM jamoat_calls"] = [
+        {"day": Date(2026, 8, 23), "prayer": "shom", "caller_id": "sardor"}
+    ]
+    connection.rows["FROM khatms"] = [KHATM_ROW]
+    connection.rows["FROM khatm_juz"] = [
+        {"juz": 3, "member_id": "sardor", "done_at": None}
+    ]
+    async with api as client:
+        response = await client.get("/api/v1/state?circle=2", headers=headers)
+    body = response.json()
+    assert body["calls"] == [{"day": "2026-08-23", "prayer": "shom", "caller_id": "sardor"}]
+    assert body["khatm"]["juz"] == [{"juz": 3, "member_id": "sardor", "done": False}]

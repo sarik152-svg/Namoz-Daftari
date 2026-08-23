@@ -23,6 +23,9 @@ from app.models import (
     Book,
     Circle,
     DayRecord,
+    JamoatCall,
+    Khatm,
+    KhatmJuz,
     Place,
     GroupState,
     MemberCreate,
@@ -36,7 +39,7 @@ from app.security import decrypt_pin, encrypt_pin, generate_pin, new_session_tok
 
 logger = logging.getLogger("namoz.repo")
 
-_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia"
+_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child"
 _SEED_FIELD_COUNT = 9
 
 # asyncpg binds parameters by their Postgres type, so a DATE column needs a real
@@ -204,7 +207,8 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
     async with pool.acquire() as connection:
         member_rows = await connection.fetch(
             """
-            SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa, m.ia
+            SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa,
+                   m.ia, m.is_child
               FROM members m
               JOIN circle_members cm ON cm.member_id = m.id
              WHERE cm.circle_id = $1
@@ -226,6 +230,37 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         )
         place_rows = await connection.fetch(
             "SELECT member_id, place FROM places ORDER BY id"
+        )
+        # Two days back covers every timezone the group could be spread across, and
+        # the client narrows it to its own day. A call from last week is not an
+        # invitation, it is clutter on the screen.
+        since = datetime.now(timezone.utc).date() - timedelta(days=2)
+        call_rows = await connection.fetch(
+            """
+            SELECT day, prayer, caller_id FROM jamoat_calls
+             WHERE circle_id = $1 AND day >= $2
+             ORDER BY day, id
+            """,
+            circle_id, since,
+        )
+        khatm_row = await connection.fetchrow(
+            """
+            SELECT id, name, started, finished FROM khatms
+             WHERE circle_id = $1 AND finished IS NULL
+             ORDER BY id DESC LIMIT 1
+            """,
+            circle_id,
+        )
+        juz_rows = (
+            []
+            if khatm_row is None
+            else await connection.fetch(
+                """
+                SELECT juz, member_id, done_at FROM khatm_juz
+                 WHERE khatm_id = $1 ORDER BY juz
+                """,
+                khatm_row["id"],
+            )
         )
 
     days: dict[str, dict[str, DayRecord]] = defaultdict(dict)
@@ -266,7 +301,22 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         )
         for member in members
     }
-    return GroupState(members=members, data=data)
+    khatm = None if khatm_row is None else Khatm(
+        **dict(khatm_row),
+        juz=[
+            KhatmJuz(
+                juz=part["juz"], member_id=part["member_id"],
+                done=part["done_at"] is not None,
+            )
+            for part in juz_rows
+        ],
+    )
+    return GroupState(
+        members=members,
+        data=data,
+        calls=[JamoatCall(**dict(row)) for row in call_rows],
+        khatm=khatm,
+    )
 
 
 async def fetch_roster(pool: asyncpg.Pool, circle_id: int, key: str) -> list[RosterEntry]:
@@ -274,7 +324,7 @@ async def fetch_roster(pool: asyncpg.Pool, circle_id: int, key: str) -> list[Ros
     async with pool.acquire() as connection:
         rows = await connection.fetch(
             """
-            SELECT m.id, m.name, m.city, m.pin_encrypted FROM members m
+            SELECT m.id, m.name, m.city, m.is_child, m.pin_encrypted FROM members m
               JOIN circle_members cm ON cm.member_id = m.id
              WHERE cm.circle_id = $1
              ORDER BY m.created_at
@@ -284,7 +334,7 @@ async def fetch_roster(pool: asyncpg.Pool, circle_id: int, key: str) -> list[Ros
     return [
         RosterEntry(
             id=row["id"], name=row["name"], city=row["city"],
-            pin=decrypt_pin(row["pin_encrypted"], key),
+            is_child=row["is_child"], pin=decrypt_pin(row["pin_encrypted"], key),
         )
         for row in rows
     ]
@@ -305,6 +355,173 @@ async def count_members(pool: asyncpg.Pool) -> int:
 
 
 # ---------------------------------------------------------------- membership
+# ---------------------------------------------------------------- oila
+async def set_child(pool: asyncpg.Pool, member_id: str, is_child: bool) -> bool:
+    """Turn debt and penalty work off for one person. False if nobody changed."""
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            "UPDATE members SET is_child = $2, updated_at = now() WHERE id = $1",
+            member_id, is_child,
+        )
+    return result.endswith(" 1")
+
+
+async def call_jamoat(
+    pool: asyncpg.Pool, circle_id: int, day: Date, prayer: str, caller_id: str
+) -> JamoatCall:
+    """Start "we are praying this one together", or join the call already standing.
+
+    Two people reaching for the same prayer at once is the ordinary case in a house,
+    not a race to lose: the second insert conflicts, and the row already there is
+    returned as-is so both phones show the same call.
+    """
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO jamoat_calls (circle_id, day, prayer, caller_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (circle_id, day, prayer) DO UPDATE SET prayer = EXCLUDED.prayer
+            RETURNING day, prayer, caller_id
+            """,
+            circle_id, day, prayer, caller_id,
+        )
+    return JamoatCall(**dict(row))
+
+
+async def fetch_jamoat_calls(
+    pool: asyncpg.Pool, circle_id: int, since: Date
+) -> list[JamoatCall]:
+    """Recent calls only. A call from last week is noise, not an invitation."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT day, prayer, caller_id FROM jamoat_calls
+             WHERE circle_id = $1 AND day >= $2
+             ORDER BY day, id
+            """,
+            circle_id, since,
+        )
+    return [JamoatCall(**dict(row)) for row in rows]
+
+
+async def create_khatm(
+    pool: asyncpg.Pool, circle_id: int, name: str, started: Date
+) -> Khatm:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO khatms (circle_id, name, started)
+            VALUES ($1, $2, $3)
+            RETURNING id, name, started, finished
+            """,
+            circle_id, name, started,
+        )
+    return Khatm(**dict(row), juz=[])
+
+
+async def fetch_open_khatm(pool: asyncpg.Pool, circle_id: int) -> Khatm | None:
+    """The circle's unfinished khatm with the juz people have taken, if there is one."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            SELECT id, name, started, finished FROM khatms
+             WHERE circle_id = $1 AND finished IS NULL
+             ORDER BY id DESC LIMIT 1
+            """,
+            circle_id,
+        )
+        if row is None:
+            return None
+        taken = await connection.fetch(
+            """
+            SELECT juz, member_id, done_at FROM khatm_juz
+             WHERE khatm_id = $1 ORDER BY juz
+            """,
+            row["id"],
+        )
+    return Khatm(
+        **dict(row),
+        juz=[
+            KhatmJuz(
+                juz=part["juz"], member_id=part["member_id"],
+                done=part["done_at"] is not None,
+            )
+            for part in taken
+        ],
+    )
+
+
+async def take_juz(
+    pool: asyncpg.Pool, khatm_id: int, juz: int, member_id: str
+) -> bool:
+    """Claim a free juz. False when somebody already has it."""
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            """
+            INSERT INTO khatm_juz (khatm_id, juz, member_id) VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
+            """,
+            khatm_id, juz, member_id,
+        )
+    return result.endswith(" 1")
+
+
+async def release_juz(
+    pool: asyncpg.Pool, khatm_id: int, juz: int, member_id: str
+) -> bool:
+    """Give a juz back. Only yours, and only while it is still unread."""
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            """
+            DELETE FROM khatm_juz
+             WHERE khatm_id = $1 AND juz = $2 AND member_id = $3 AND done_at IS NULL
+            """,
+            khatm_id, juz, member_id,
+        )
+    return result.endswith(" 1")
+
+
+async def finish_juz(
+    pool: asyncpg.Pool, khatm_id: int, juz: int, member_id: str
+) -> bool:
+    """Mark your own juz read. Already-read stays read, so this does not toggle."""
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            """
+            UPDATE khatm_juz SET done_at = now()
+             WHERE khatm_id = $1 AND juz = $2 AND member_id = $3 AND done_at IS NULL
+            """,
+            khatm_id, juz, member_id,
+        )
+    return result.endswith(" 1")
+
+
+async def close_khatm_if_complete(
+    pool: asyncpg.Pool, khatm_id: int, day: Date
+) -> bool:
+    """Finish the khatm once all thirty are read. Nobody has to declare it done."""
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            """
+            UPDATE khatms SET finished = $2
+             WHERE id = $1 AND finished IS NULL
+               AND (SELECT count(*) FROM khatm_juz
+                     WHERE khatm_id = $1 AND done_at IS NOT NULL) >= 30
+            """,
+            khatm_id, day,
+        )
+    return result.endswith(" 1")
+
+
+async def khatm_belongs_to(pool: asyncpg.Pool, khatm_id: int, circle_id: int) -> bool:
+    """Stops a member of one family from writing into another family's khatm."""
+    async with pool.acquire() as connection:
+        return bool(await connection.fetchval(
+            "SELECT true AS ours FROM khatms WHERE id = $1 AND circle_id = $2",
+            khatm_id, circle_id,
+        ))
+
+
 async def fetch_member_profile(
     pool: asyncpg.Pool, member_id: str
 ) -> MemberProfile | None:

@@ -1,7 +1,7 @@
 # Oila doiralari — loyiha hujjati
 
 **Sana:** 2026-08-23
-**Holat:** kelishildi. 1-bosqich va 2-bosqich bajarildi, 3-bosqich qoldi.
+**Holat:** kelishildi va uchala bosqich ham bajarildi (2026-08-23).
 
 ## Maqsad
 
@@ -134,7 +134,7 @@ Shu bosqich oxirida so'ralgan narsa to'liq ishlaydi.
 o'z mehnati. Doiraga qarab o'zgaradigani — kimning nishonlarini ko'rish va **haftalik jamoa
 nishoni**, chunki u doiradagi hammaga bog'liq va har doirada alohida hisoblanadi.
 
-### 3-bosqich — oilaviy imkoniyatlar (keyingi)
+### 3-bosqich — oilaviy imkoniyatlar ✓ bajarildi
 
 **Uyda jamoat namozi.** Bir kishi "birga o'qiymiz" deb boshlaydi, oila a'zolariga o'sha namoz
 oynasi ichida taklif ko'rinadi, har biri "men ham" deb bir marta bosadi va **o'z** yozuviga
@@ -172,8 +172,13 @@ Amalga oshirish paytida hal qilinadi, hozir to'sqinlik qilmaydi:
 
 - ~~Oila uchun haftalik maqsad 25 dan boshqa bo'lsinmi?~~ Hal qilindi: maqsad doiraga
   tegishli va egasi Sozlamalardan o'zgartiradi; boshlang'ich qiymat 25.
-- Bolalar rejimidagi a'zo doira reytingida qatnashadimi yoki alohida ko'rsatiladimi?
-- Doiradan chiqib ketgan a'zoning eski yozuvlari doira tarixida qoladimi?
+- ~~Bolalar rejimidagi a'zo doira reytingida qatnashadimi?~~ Hal qilindi: reytingda
+  qatnashadi (qarz o'rniga yulduzcha ko'rinadi), lekin haftalik jamoa nishoni
+  hisobidan chetda qoladi — bola normaga yetmagani uchun oila nishondan quruq
+  qolmasligi kerak.
+- ~~Doiradan chiqib ketgan a'zoning eski yozuvlari doira tarixida qoladimi?~~ Hal
+  qilindi: yozuv odamga tegishli, doiraga emas — chiqib ketgan odam hamma narsasini
+  o'zi bilan olib ketadi va doira tarixida qolmaydi.
 
 ## Xavflar
 
@@ -184,3 +189,14 @@ Amalga oshirish paytida hal qilinadi, hozir to'sqinlik qilmaydi:
   yumshatiladi.
 - **Ma'lumot hajmi.** Doira kattalashsa `/state` bitta so'rovda hammasini beradi. Hozirgi
   o'lchamda muammo emas, 20-30 a'zodan keyin sahifalash kerak bo'ladi.
+
+## Keyingi qadamlar uchun eslatma
+
+Sardor 2026-08-23 da aytdi: bosh admin parol bilan hamma narsani ko'rsa muammo emas,
+chunki login-parollar faqat o'zida. Ya'ni yuqoridagi "bosh admin ko'rmaydi" qoidasi
+endi texnik talab emas — hozircha admin sessiyasi doiraga a'zo bo'lmagani uchun
+baribir ko'rmaydi, lekin buni to'sish uchun alohida ish qilinmaydi.
+
+Tugallangan xatm hozir saqlanmaydi: yopilgandan keyin ekrandan yo'qoladi va yangisini
+boshlash taklif qilinadi. Xatm tarixi so'ralsa, `khatms` jadvalida yozuv turibdi —
+faqat ko'rsatish kerak bo'ladi.
