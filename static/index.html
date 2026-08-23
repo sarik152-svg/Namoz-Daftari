@@ -692,9 +692,11 @@ const A={
    LS.set("nd_circle",circleId);
   }catch(e){circles=LS.get("nd_circles",[])}},
  async setCircle(id){
+  /* Avval yuklab olamiz, keyin chizamiz. Bo'shatilgan data bilan darrov chizsak,
+     render o'zi qulab tushadi va pull() ga umuman yetib bormaydi. */
   circleId=id;LS.set("nd_circle",id);
   data={};LS.set("nd_data",data);
-  window.scrollTo(0,0);render();await pull();render()},
+  window.scrollTo(0,0);await pull();render()},
  async adminResetPin(){
   /* The roster is gone from this screen, so the login is typed rather than tapped.
      This stays the only way back in for somebody who has forgotten their PIN. */
@@ -953,8 +955,13 @@ function adminScreen(){
    PIN kodlarni ko'rish endi doira egasiga tegishli: o'z loginingiz bilan kiring va
    <b>Sozlamalar</b> bo'limidan ko'ring.</p>
    <button class="btn btn-wide" onclick="A.adminResetPin()">PIN kodni tiklash</button></div>`;
- h+=`<button onclick="A.go('add')" style="width:100%;margin-top:6px;padding:15px;border-radius:14px;background:none;
-   border:1px dashed var(--line);color:var(--brass);font-size:13px;cursor:pointer">+ Yangi odam qo'shish</button>
+ /* Yangi a'zoni qo'shish 2-bosqichga qoldirildi: hozir uni doiraga bog'laydigan
+    yo'l yo'q, qo'shilgan odam esa hech qaysi doirada bo'lmay, ilovaga kira olsa ham
+    hech narsa ko'rmaydi. Buzuq tugmani qoldirgandan ko'ra olib turgan ma'qul. */
+ h+=`<div class="panel p14" style="border-style:dashed">
+   <p class="muted small" style="margin:0;line-height:1.7">Yangi a'zo qo'shish keyingi
+    bosqichda, oila imkoniyati bilan birga qaytadi — hozir qo'shilgan odam hech qaysi
+    doiraga tushmaydi.</p></div>
   <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
   <div style="height:40px"></div></div>`;
  return h}
@@ -1553,7 +1560,20 @@ function render(){
  if(screen==="add"){app.innerHTML=addScreen();return}
  if(screen==="admin"){app.innerHTML=adminScreen();return}
  if(screen==="sync"){app.innerHTML=syncScreen();return}
- if(!me||!myCfg()){app.innerHTML=loginScreen();return}
+ /* Doirasi yo'q yoki ma'lumoti kelmagan a'zo: ilgari bunday holat bo'lmasdi,
+    endi bo'lishi mumkin. Chizishga urinsak render qulab, ekran butunlay oq
+    qoladi — na xabar, na chiqish tugmasi. Shuning uchun aniq to'xtatamiz. */
+ if(!me||!members.some(x=>x.id===me)||!data[me]){
+  app.innerHTML=`<div style="max-width:420px;margin:0 auto;padding-top:40px">
+   <div class="eyebrow">Namoz Daftari</div>
+   <h1 style="font-size:26px;margin:10px 0 8px">Doira topilmadi</h1>
+   <p class="muted" style="font-size:14px;line-height:1.7">Siz hali hech qaysi doiraga
+    qo'shilmagansiz, yoki ma'lumot yuklanmadi. Internetni tekshirib qayta urinib ko'ring —
+    yordam bermasa, doira egasiga ayting.</p>
+   ${syncMsg?`<p class="clay small">${esc(syncMsg)}</p>`:""}
+   <button class="btn btn-gold btn-wide" style="margin-top:16px" onclick="A.refresh()">Qayta urinish</button>
+   <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
+  </div>`;return}
  const cfg=myCfg();
  let h=`<div class="flex between center mb18">
   <div class="flex center gap3">
