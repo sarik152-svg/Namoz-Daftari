@@ -28,13 +28,28 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
   /* Every assignment to #app is kept, not just the last one: a screen that flashes
      and is immediately replaced is still a screen the user saw. */
   const renders = [];
-  const element = { value: "", textContent: "", className: "" };
-  let painted = "";
-  Object.defineProperty(element, "innerHTML", {
-    get: () => painted,
-    set(value) { painted = value; renders.push(value); },
-  });
+  /* One element per id, created on demand. A screen that reads six fields has to be
+     able to see six different values; a single shared element made every input
+     answer with whatever the last test wrote. */
+  const elements = {};
+  function elementFor(id) {
+    if (!elements[id]) {
+      const made = { id, value: "", textContent: "", className: "", checked: false };
+      let painted = "";
+      Object.defineProperty(made, "innerHTML", {
+        get: () => painted,
+        set(value) {
+          painted = value;
+          if (id === "app") renders.push(value);
+        },
+      });
+      elements[id] = made;
+    }
+    return elements[id];
+  }
+  const element = elementFor("app");
   const confirms = [];
+  const alerts = [];
   const calls = [];
   const reply = (status, body) => ({
     status,
@@ -44,15 +59,24 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
   const sandbox = {
     console,
     setInterval() {},
-    alert() {},
-    prompt: () => null,
+    alert(message) { alerts.push(String(message)); },
+    prompt: () => sandbox.__prompt,
     confirm(question) { confirms.push(question); return sandbox.__confirm; },
     localStorage: { getItem: () => null, setItem() {} },
-    document: { getElementById: () => element, addEventListener() {} },
+    document: {
+      getElementById: (id) => elementFor(id),
+      /* The add-member form reads its Asr radio with querySelector. Answer with an
+         element carrying the value the test set, so the form can be submitted. */
+      querySelector: (selector) => elementFor("query:" + selector),
+      createElement: (tag) => elementFor("made:" + tag),
+      addEventListener() {},
+    },
     window: { scrollTo() {}, scrollY: 0 },
     fetch: (url, options) => {
       const path = String(url).replace(/^\/api\/v1/, "");
-      calls.push({ path, method: (options && options.method) || "GET" });
+      let sent = null;
+      if (options && options.body) { try { sent = JSON.parse(options.body); } catch (e) {} }
+      calls.push({ path, method: (options && options.method) || "GET", body: sent });
       if (!routes) return Promise.reject(new Error("offline"));
       const found = routes[path];
       if (found === undefined) {
@@ -62,6 +86,7 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
       return Promise.resolve(reply(body && body.__status ? body.__status : 200, body));
     },
     __confirm: true,
+    __prompt: null,
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
@@ -95,8 +120,16 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
   return {
     ...sandbox.__exports,
     element,
+    elements,
     confirms,
+    alerts,
     setConfirm(answer) { sandbox.__confirm = answer; },
+    setPrompt(answer) { sandbox.__prompt = answer; },
+    /* Fill in form fields by id: setFields({f_name: "Zuhra", f_pin: "4821"}). */
+    setFields(values) {
+      for (const [id, value] of Object.entries(values)) elementFor(id).value = value;
+    },
+    field(id) { return elementFor(id); },
     setState: sandbox.__setState,
     /* Every request the app made, in order. */
     calls,

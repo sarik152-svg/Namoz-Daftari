@@ -33,6 +33,12 @@ MAX_BONUSES_PER_MEMBER = 2000
 MAX_TASKS_PER_MEMBER = 5000
 MAX_MEMBERS = 50
 
+# --- Doiralar ---
+# A circle is cheap, so the caps only exist to stop a runaway client. Owning five
+# circles already means a friends group plus four families.
+MAX_CIRCLES_OWNED = 5
+MAX_CIRCLE_MEMBERS = 20
+
 # --- Kitob daftari ---
 # A book's notes and reading log travel inside the book document, so the caps are
 # per book as well as per member. The whole list is replaced on every write, which

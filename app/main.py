@@ -21,13 +21,22 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import repository
-from app.config import ADMIN_SUBJECT, MAX_MEMBERS, STATIC_DIR, load_settings
+from app.config import (
+    ADMIN_SUBJECT,
+    MAX_CIRCLE_MEMBERS,
+    MAX_CIRCLES_OWNED,
+    MAX_MEMBERS,
+    STATIC_DIR,
+    load_settings,
+)
 from app.db import create_pool, run_migrations
 from app.models import (
     AdminLoginRequest,
+    CircleCreate,
+    CircleMemberAdd,
+    CircleUpdate,
     DayRecord,
     LoginRequest,
-    MemberCreate,
     MemberData,
     Session,
     SetPinRequest,
@@ -101,12 +110,6 @@ async def require_session(request: Request, authorization: str = Header(default=
     session = await repository.load_session(request.app.state.pool, _bearer(authorization))
     if session is None:
         raise _error("no_session", "Iltimos, qaytadan kiring", status.HTTP_401_UNAUTHORIZED)
-    return session
-
-
-async def require_admin(session: Session = Depends(require_session)) -> Session:
-    if not session.is_admin:
-        raise _error("not_admin", "Faqat admin uchun", status.HTTP_403_FORBIDDEN)
     return session
 
 
@@ -266,19 +269,33 @@ async def put_member_data(
 @app.post(f"{API_PREFIX}/members/{{member_id}}/pin")
 async def change_pin(
     member_id: str, body: SetPinRequest, request: Request,
-    session: Session = Depends(require_owner_or_admin),
+    session: Session = Depends(require_session),
 ) -> dict:
-    """Members prove the current PIN to change it. Admin sets it outright."""
+    """Members prove the current PIN to change it. Admin and the owner of a circle
+    the member is in set it outright.
+
+    Giving the owner that power is the point: a forgotten PIN in somebody's family
+    has to be fixable inside that family, not only by whoever holds the server
+    password. It is also the honest reading of what the roster already shows them.
+    """
     pool: asyncpg.Pool = request.app.state.pool
     key = request.app.state.settings.pin_encryption_key
 
-    if not session.is_admin:
+    if session.member_id == member_id:
         stored = await repository.fetch_encrypted_pin(pool, member_id)
         await _guard_throttle(pool, member_id)
         if stored is None or not verify_pin(body.current_pin, stored, key):
             await repository.record_failure(pool, member_id)
             raise _error("bad_pin", "Joriy PIN noto'g'ri", status.HTTP_403_FORBIDDEN)
         await repository.clear_failures(pool, member_id)
+    elif not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error(
+                "not_your_record", "Bu sizning yozuvingiz emas",
+                status.HTTP_403_FORBIDDEN,
+            )
 
     if not await repository.set_pin(pool, member_id, body.new_pin, key):
         raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
@@ -295,6 +312,57 @@ async def remove_member(
 
 
 # ---------------------------------------------------------------- circle routes
+async def _require_owned_circle(request: Request, session: Session, circle_id: int):
+    """The gate in front of everything only a circle's owner may do."""
+    circle = await repository.fetch_circle(request.app.state.pool, circle_id)
+    if circle is None or circle.owner_id != session.member_id:
+        raise _error(
+            "not_circle_owner", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN
+        )
+    return circle
+
+
+@app.post(f"{API_PREFIX}/circles", status_code=status.HTTP_201_CREATED)
+async def create_circle(
+    body: CircleCreate, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Start a family. The caller owns it and is its first member.
+
+    Nobody's permission is needed: a person's own family is theirs to open, which is
+    the whole reason circles exist rather than one group with a flag on it.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if session.member_id is None:
+        raise _error(
+            "not_a_member", "Admin sessiyasi doira ocha olmaydi",
+            status.HTTP_403_FORBIDDEN,
+        )
+    if await repository.count_circles_owned(pool, session.member_id) >= MAX_CIRCLES_OWNED:
+        raise _error(
+            "too_many_circles",
+            f"{MAX_CIRCLES_OWNED} tadan ortiq doira ocholmaysiz", 409,
+        )
+    circle = await repository.create_circle(
+        pool, body.name, session.member_id, body.week_goal
+    )
+    return circle.model_dump()
+
+
+@app.patch(f"{API_PREFIX}/circles/{{circle_id}}")
+async def edit_circle(
+    circle_id: int, body: CircleUpdate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Rename a circle and set its weekly goal."""
+    await _require_owned_circle(request, session, circle_id)
+    circle = await repository.update_circle(
+        request.app.state.pool, circle_id, body.name, body.week_goal
+    )
+    if circle is None:
+        raise _error("no_circle", "Doira topilmadi", status.HTTP_404_NOT_FOUND)
+    return circle.model_dump()
+
+
 @app.get(f"{API_PREFIX}/circles/{{circle_id}}/roster")
 async def circle_roster(
     circle_id: int, request: Request, session: Session = Depends(require_session)
@@ -304,34 +372,98 @@ async def circle_roster(
     This replaces the single global admin roster: with families in the picture,
     "everyone" is no longer a group anybody should be able to enumerate.
     """
-    pool: asyncpg.Pool = request.app.state.pool
-    circle = await repository.fetch_circle(pool, circle_id)
-    if circle is None or circle.owner_id != session.member_id:
-        raise _error("not_circle_owner", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN)
+    await _require_owned_circle(request, session, circle_id)
     entries = await repository.fetch_roster(
-        pool, circle_id, request.app.state.settings.pin_encryption_key
+        request.app.state.pool, circle_id,
+        request.app.state.settings.pin_encryption_key,
     )
     return {"members": [e.model_dump() for e in entries]}
 
 
 @app.post(
-    f"{API_PREFIX}/members",
-    dependencies=[Depends(require_admin)],
+    f"{API_PREFIX}/circles/{{circle_id}}/members",
     status_code=status.HTTP_201_CREATED,
 )
-async def add_member(member: MemberCreate, request: Request) -> dict:
+async def add_circle_member(
+    circle_id: int, body: CircleMemberAdd, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Put somebody in a circle: an existing login, or a person created here.
+
+    Creating runs through this route rather than a bare `POST /members` so that
+    nobody can be made into no circle at all. Such an account can log in and then see
+    nothing, which is the dead end the previous stage had to put a guard in front of.
+
+    An existing login joins without a second account, which is what lets one person
+    mark a prayer once and have it count in their friends group and their family.
+    """
     pool: asyncpg.Pool = request.app.state.pool
+    await _require_owned_circle(request, session, circle_id)
+    if await repository.count_circle_members(pool, circle_id) >= MAX_CIRCLE_MEMBERS:
+        raise _error(
+            "circle_full",
+            f"Doirada {MAX_CIRCLE_MEMBERS} tadan ortiq a'zo bo'lmaydi", 409,
+        )
+
+    if body.member_id is not None:
+        profile = await repository.fetch_member_profile(pool, body.member_id)
+        if profile is None:
+            raise _error(
+                "no_member", f"'{body.member_id}' topilmadi",
+                status.HTTP_404_NOT_FOUND,
+            )
+        await repository.add_to_circle(pool, circle_id, profile.id)
+        return {"member": profile.model_dump()}
+
     if await repository.count_members(pool) >= MAX_MEMBERS:
-        raise _error("group_full", f"Guruhda {MAX_MEMBERS} tadan ortiq a'zo bo'lmaydi", 409)
+        raise _error("group_full", f"{MAX_MEMBERS} tadan ortiq a'zo bo'lmaydi", 409)
+    requested = body.new_member
+    assert requested is not None  # the model guarantees one of the two
+    member_id = await repository.free_member_id(pool, requested.id)
+    if member_id is None:
+        raise _error("duplicate_id", f"'{requested.id}' bo'sh emas", 409)
+    member = requested.model_copy(update={"id": member_id})
     try:
         profile = await repository.create_member(
             pool, member, request.app.state.settings.pin_encryption_key
         )
     except asyncpg.UniqueViolationError:
-        raise _error("duplicate_id", f"'{member.id}' allaqachon mavjud", 409) from None
+        raise _error("duplicate_id", f"'{member_id}' allaqachon mavjud", 409) from None
     except AuthError as exc:
-        raise _error("bad_pin_format", str(exc), status.HTTP_422_UNPROCESSABLE_ENTITY) from None
-    return profile.model_dump()
+        raise _error(
+            "bad_pin_format", str(exc), status.HTTP_422_UNPROCESSABLE_ENTITY
+        ) from None
+    await repository.add_to_circle(pool, circle_id, profile.id)
+    # The PIN comes back once so the owner can read it out. It is not a new secret:
+    # the roster shows it to the same person on the same screen.
+    return {"member": profile.model_dump(), "pin": member.pin}
+
+
+@app.delete(f"{API_PREFIX}/circles/{{circle_id}}/members/{{member_id}}")
+async def remove_circle_member(
+    circle_id: int, member_id: str, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Take somebody out of a circle, or leave one yourself.
+
+    Records are untouched. Leaving a family does not erase the prayers somebody
+    logged while in it, and does not touch any other circle they are in.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    circle = await repository.fetch_circle(pool, circle_id)
+    if circle is None:
+        raise _error("no_circle", "Doira topilmadi", status.HTTP_404_NOT_FOUND)
+    if circle.owner_id != session.member_id and session.member_id != member_id:
+        raise _error(
+            "not_circle_owner", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN
+        )
+    if circle.owner_id == member_id:
+        raise _error("owner_stays", "Doira egasini chiqarib bo'lmaydi", 409)
+    if not await repository.remove_from_circle(pool, circle_id, member_id):
+        raise _error(
+            "no_member", f"'{member_id}' bu doirada emas", status.HTTP_404_NOT_FOUND
+        )
+    return {"ok": True}
 
 
 class RevalidatingStatic(StaticFiles):

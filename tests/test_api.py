@@ -158,3 +158,247 @@ async def test_resetting_the_pin_of_a_real_member_succeeds(api, connection):
             "/api/v1/members/behruz/pin", json={"new_pin": "1234"}, headers=headers
         )
     assert response.status_code == 200
+
+
+# ---------------------------------------------------------------- oila doiralari
+FAMILY = {"id": 2, "name": "Oilam", "kind": "family",
+          "owner_id": "sardor", "week_goal": 20}
+NEW_PERSON = {
+    "id": "zuhra", "name": "Zuhra", "city": "Toshkent", "lat": 41.3,
+    "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0, "pin": "4821",
+}
+
+
+def owning(connection: FakeConnection, member_id="sardor") -> dict:
+    """A session for the owner of circle 2, with that circle readable."""
+    connection.rows["FROM circles WHERE id"] = [FAMILY]
+    return as_session(connection, member_id=member_id)
+
+
+@pytest.mark.asyncio
+async def test_creating_a_family_returns_it(api, connection):
+    headers = as_session(connection)
+    connection.scalars["count(*) AS owned"] = 0
+    connection.rows["INSERT INTO circles"] = [FAMILY]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles", headers=headers, json={"name": "Oilam", "week_goal": 20}
+        )
+    assert response.status_code == 201
+    assert response.json() == FAMILY
+
+
+@pytest.mark.asyncio
+async def test_an_admin_session_cannot_open_a_family(api, connection):
+    """Admin owns no member row, so a circle it created would belong to nobody."""
+    headers = as_session(connection, member_id=None, is_admin=True)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles", headers=headers, json={"name": "Oilam"}
+        )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_a_member"
+
+
+@pytest.mark.asyncio
+async def test_circles_are_capped(api, connection):
+    headers = as_session(connection)
+    connection.scalars["count(*) AS owned"] = 5
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles", headers=headers, json={"name": "Yana bitta"}
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "too_many_circles"
+
+
+@pytest.mark.asyncio
+async def test_only_the_owner_may_rename_a_circle(api, connection):
+    headers = owning(connection, member_id="behruz")
+    async with api as client:
+        response = await client.patch(
+            "/api/v1/circles/2", headers=headers,
+            json={"name": "Meniki endi", "week_goal": 30},
+        )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_circle_owner"
+
+
+@pytest.mark.asyncio
+async def test_the_owner_may_move_the_weekly_goal(api, connection):
+    headers = owning(connection)
+    connection.rows["UPDATE circles"] = [dict(FAMILY, week_goal=12)]
+    async with api as client:
+        response = await client.patch(
+            "/api/v1/circles/2", headers=headers,
+            json={"name": "Oilam", "week_goal": 12},
+        )
+    assert response.status_code == 200
+    assert response.json()["week_goal"] == 12
+
+
+@pytest.mark.asyncio
+async def test_an_existing_login_joins_without_a_second_account(api, connection):
+    """The point of circles: one record, shown in two places."""
+    headers = owning(connection)
+    connection.scalars["count(*) AS people"] = 1
+    connection.rows["FROM members WHERE id"] = [MEMBER_JSON]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/members", headers=headers, json={"member_id": "sardor"}
+        )
+    assert response.status_code == 201
+    assert connection.issued("INSERT INTO circle_members")
+    assert not connection.issued("INSERT INTO members")
+
+
+@pytest.mark.asyncio
+async def test_a_new_person_is_created_and_joined_in_one_call(api, connection):
+    headers = owning(connection)
+    connection.scalars["count(*) AS people"] = 1
+    connection.scalars["count(*) FROM members"] = 3
+    connection.rows["OR id LIKE"] = []
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/members", headers=headers,
+            json={"new_member": NEW_PERSON},
+        )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["member"]["id"] == "zuhra"
+    assert body["pin"] == "4821"
+    assert connection.args_for("INSERT INTO circle_members")[1] == "zuhra"
+
+
+@pytest.mark.asyncio
+async def test_a_taken_login_is_moved_aside_instead_of_failing(api, connection):
+    headers = owning(connection)
+    connection.scalars["count(*) AS people"] = 1
+    connection.scalars["count(*) FROM members"] = 3
+    connection.rows["OR id LIKE"] = [{"id": "zuhra"}]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/members", headers=headers,
+            json={"new_member": NEW_PERSON},
+        )
+    assert response.status_code == 201
+    assert response.json()["member"]["id"] == "zuhra2"
+
+
+@pytest.mark.asyncio
+async def test_adding_needs_exactly_one_of_the_two_ways(api, connection):
+    headers = owning(connection)
+    async with api as client:
+        both = await client.post(
+            "/api/v1/circles/2/members", headers=headers,
+            json={"member_id": "sardor", "new_member": NEW_PERSON},
+        )
+        neither = await client.post(
+            "/api/v1/circles/2/members", headers=headers, json={}
+        )
+    assert both.status_code == 422
+    assert neither.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_stranger_cannot_add_to_your_circle(api, connection):
+    headers = owning(connection, member_id="behruz")
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/members", headers=headers, json={"member_id": "behruz"}
+        )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_full_circle_refuses_more_people(api, connection):
+    headers = owning(connection)
+    connection.scalars["count(*) AS people"] = 20
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/members", headers=headers, json={"member_id": "behruz"}
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "circle_full"
+
+
+@pytest.mark.asyncio
+async def test_the_owner_removes_a_member(api, connection):
+    headers = owning(connection)
+    async with api as client:
+        response = await client.delete("/api/v1/circles/2/members/zuhra", headers=headers)
+    assert response.status_code == 200
+    assert connection.args_for("DELETE FROM circle_members") == (2, "zuhra")
+
+
+@pytest.mark.asyncio
+async def test_removing_a_member_does_not_delete_them(api, connection):
+    headers = owning(connection)
+    async with api as client:
+        await client.delete("/api/v1/circles/2/members/zuhra", headers=headers)
+    assert not connection.issued("DELETE FROM members")
+
+
+@pytest.mark.asyncio
+async def test_a_member_may_leave_a_circle_themselves(api, connection):
+    headers = owning(connection, member_id="zuhra")
+    async with api as client:
+        response = await client.delete("/api/v1/circles/2/members/zuhra", headers=headers)
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_one_member_cannot_evict_another(api, connection):
+    headers = owning(connection, member_id="behruz")
+    async with api as client:
+        response = await client.delete("/api/v1/circles/2/members/zuhra", headers=headers)
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_the_owner_cannot_be_taken_out_of_their_own_circle(api, connection):
+    """Otherwise the circle is left with nobody who can manage it."""
+    headers = owning(connection)
+    async with api as client:
+        response = await client.delete("/api/v1/circles/2/members/sardor", headers=headers)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "owner_stays"
+
+
+@pytest.mark.asyncio
+async def test_a_circle_owner_resets_a_forgotten_pin(api, connection):
+    headers = as_session(connection)
+    connection.scalars["JOIN circle_members"] = True
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/zuhra/pin", headers=headers, json={"new_pin": "1111"}
+        )
+    assert response.status_code == 200
+    assert connection.issued("UPDATE members SET pin_encrypted")
+
+
+@pytest.mark.asyncio
+async def test_someone_who_owns_no_circle_of_yours_cannot_reset_your_pin(api, connection):
+    headers = as_session(connection, member_id="behruz")
+    connection.scalars["JOIN circle_members"] = None
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/zuhra/pin", headers=headers, json={"new_pin": "1111"}
+        )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_your_record"
+    assert not connection.issued("UPDATE members SET pin_encrypted")
+
+
+def test_members_are_no_longer_created_outside_a_circle():
+    """The route that made circle-less accounts is gone. Such a person can log in
+    and then see nothing at all, so creating one now runs through a circle."""
+    from app.main import app
+
+    paths = {
+        (route.path, method)
+        for route in app.routes
+        for method in getattr(route, "methods", ())
+    }
+    assert ("/api/v1/members", "POST") not in paths
+    assert ("/api/v1/circles/{circle_id}/members", "POST") in paths

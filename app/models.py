@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date as Date
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.config import (
     MAX_BONUSES_PER_MEMBER,
@@ -313,6 +313,58 @@ class MemberCreate(BaseModel):
 
     _check_id = field_validator("id")(_validate_member_id)
     _check_pin = field_validator("pin")(_validate_pin)
+
+
+# ---------------------------------------------------------------- circle bodies
+class CircleCreate(BaseModel):
+    """Body for starting a family.
+
+    There is no `kind` to choose. The friends circle already exists and a second one
+    would only be a family wearing the wrong label, so everything created here is a
+    family and the caller becomes its owner.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64)
+    week_goal: int = Field(default=25, ge=1, le=100)
+
+
+class CircleUpdate(BaseModel):
+    """Rename a circle, or move its weekly goal. Owner only.
+
+    The goal is per circle because a family holds children and grandparents to a
+    different number than three friends hold each other to.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=64)
+    week_goal: int = Field(ge=1, le=100)
+
+
+class CircleMemberAdd(BaseModel):
+    """Put somebody in a circle: an existing login, or a person created right here.
+
+    Exactly one of the two. Sending both would leave it ambiguous whether an account
+    is being made or reused, and sending neither is a no-op the caller thinks worked.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: str | None = None
+    new_member: MemberCreate | None = None
+
+    @field_validator("member_id")
+    @classmethod
+    def _check_member_id(cls, value: str | None) -> str | None:
+        return None if value is None else _validate_member_id(value)
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> "CircleMemberAdd":
+        if (self.member_id is None) == (self.new_member is None):
+            raise ValueError("send either member_id or new_member, not both")
+        return self
 
 
 class RosterEntry(BaseModel):

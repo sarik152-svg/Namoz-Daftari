@@ -1,7 +1,7 @@
 # Oila doiralari — loyiha hujjati
 
 **Sana:** 2026-08-23
-**Holat:** kelishildi, amalga oshirilmagan
+**Holat:** kelishildi. 1-bosqich va 2-bosqich bajarildi, 3-bosqich qoldi.
 
 ## Maqsad
 
@@ -107,7 +107,7 @@ beradi. U "mening doiram a'zolari" ga aylanadi va har bir doira egasiga ochiladi
 Har bir bosqich **o'z ishlash rejasini** oladi va alohida yakunlanadi. Bu hujjat uchalasining
 umumiy shakli; reja faqat boshlanayotgan bosqich uchun yoziladi.
 
-### 1-bosqich — poydevor
+### 1-bosqich — poydevor ✓ bajarildi
 
 Ko'rinadigan yangilik deyarli yo'q, lekin busiz qolgani qurilmaydi. Ishlab turgan narsaga
 tegadigan yagona bosqich, shuning uchun eng ehtiyotkorlik talab qiladi.
@@ -121,7 +121,7 @@ tegadigan yagona bosqich, shuning uchun eng ehtiyotkorlik talab qiladi.
 **Tekshirish:** uch a'zo uchun ekranlar va ballar 1-bosqichdan oldingi holat bilan bir xil
 chiqishi kerak.
 
-### 2-bosqich — oila
+### 2-bosqich — oila ✓ bajarildi
 
 Shu bosqich oxirida so'ralgan narsa to'liq ishlaydi.
 
@@ -134,7 +134,7 @@ Shu bosqich oxirida so'ralgan narsa to'liq ishlaydi.
 o'z mehnati. Doiraga qarab o'zgaradigani — kimning nishonlarini ko'rish va **haftalik jamoa
 nishoni**, chunki u doiradagi hammaga bog'liq va har doirada alohida hisoblanadi.
 
-### 3-bosqich — oilaviy imkoniyatlar
+### 3-bosqich — oilaviy imkoniyatlar (keyingi)
 
 **Uyda jamoat namozi.** Bir kishi "birga o'qiymiz" deb boshlaydi, oila a'zolariga o'sha namoz
 oynasi ichida taklif ko'rinadi, har biri "men ham" deb bir marta bosadi va **o'z** yozuviga
@@ -170,8 +170,8 @@ Bular Sardorning qarorlari — so'ramasdan "tuzatilmasin".
 
 Amalga oshirish paytida hal qilinadi, hozir to'sqinlik qilmaydi:
 
-- Oila uchun haftalik maqsad 25 dan boshqa bo'lsinmi? (bir-ikki hafta ishlatib ko'rgach
-  ma'lum bo'ladi)
+- ~~Oila uchun haftalik maqsad 25 dan boshqa bo'lsinmi?~~ Hal qilindi: maqsad doiraga
+  tegishli va egasi Sozlamalardan o'zgartiradi; boshlang'ich qiymat 25.
 - Bolalar rejimidagi a'zo doira reytingida qatnashadimi yoki alohida ko'rsatiladimi?
 - Doiradan chiqib ketgan a'zoning eski yozuvlari doira tarixida qoladimi?
 

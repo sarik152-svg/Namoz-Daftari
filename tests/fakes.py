@@ -27,10 +27,20 @@ class FakeConnection:
         self.executed_many: list[tuple[str, list]] = []
 
     def _match(self, table: dict, query: str):
+        """The most specific fragment wins.
+
+        Several queries now touch the same table, so `"FROM circle_members"` and
+        `"count(*) AS people FROM circle_members"` can both match one query. Longest
+        match makes the answer depend on which fragment says more, not on the order
+        the test happened to write its keys in.
+        """
+        best_fragment, best_value = None, None
         for fragment, value in table.items():
-            if fragment in query:
-                return value
-        return None
+            if fragment in query and (
+                best_fragment is None or len(fragment) > len(best_fragment)
+            ):
+                best_fragment, best_value = fragment, value
+        return best_value
 
     async def fetch(self, query: str, *args):
         self.executed.append((flatten(query), args))

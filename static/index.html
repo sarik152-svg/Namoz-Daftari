@@ -365,6 +365,7 @@ let circles=LS.get("nd_circles",[]),circleId=LS.get("nd_circle",null);
 let screen="login",tab="today",date=today(),pinFor=null,pinErr="",manualCity=false;
 let manualPlace=false,placeMsg="";
 let loginErr="",adminMode=false,roster=[],adminErr="";
+let famMsg="",famErr=false,addMode="new",addPin="";
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -597,11 +598,18 @@ const NISHONLAR=[
 /* ══════════════ HAFTALIK JAMOA NISHONI ══════════════ */
 /* Hamma bir kishi uchun, bir kishi hamma uchun: nishon HAMMA a'zo o'z
    maqsadiga yetgandagina olinadi. Bittasi yetmasa — hech kim olmaydi. */
-const HAFTA_MAQSAD=25;
+/* Maqsad doiraga tegishli, hammaga bitta emas: oilada bola ham, keksa ham bor,
+   ularni uch do'st bir-birini tutgan raqam bilan tutib bo'lmaydi. Doira egasi uni
+   Sozlamalardan o'zgartiradi; ko'rsatilmagan bo'lsa eskisi — 25. */
+const HAFTA_MAQSAD_ODATIY=25;
+function weekGoal(){
+ const c=(circles||[]).find(x=>x.id===circleId);
+ return (c&&c.week_goal)||HAFTA_MAQSAD_ODATIY}
 function jamoaHafta(a,z){
+ const maqsad=weekGoal();
  const rows=members.map(m=>{
   const o=prayerRange(data[m.id]||blank(),m,a,z);
-  return{m:m,ontime:o.ontime,jamoat:o.jamoat,ok:o.ontime>=HAFTA_MAQSAD}});
+  return{m:m,ontime:o.ontime,jamoat:o.jamoat,ok:o.ontime>=maqsad}});
  return{rows:rows,ok:rows.length>0&&rows.every(x=>x.ok)}}
 function jamoaTarix(c){
  let eng=null;
@@ -643,8 +651,12 @@ const A={
   document.addEventListener("visibilitychange",tick)},
  async go(s){
   screen=s;pinErr="";loginErr="";adminErr="";
-  if(s==="sync"&&ownsCircle(circles,circleId))await A.loadRoster();
+  /* PIN bir marta, ekranga kirilganda tanlanadi. Har chizishda yangisi chiqsa,
+     doira egasi aytmoqchi bo'lgan raqam ko'z oldida o'zgarib ketardi. */
+  if(s==="add"){addMode="new";addPin=String(Math.floor(1000+Math.random()*9000))}
+  if(s==="sync"){famMsg="";famErr=false;if(ownsCircle(circles,circleId))await A.loadRoster()}
   render()},
+ setAddMode(m){addMode=m;render()},
  setTab(t){tab=t;window.scrollTo(0,0);render()},
  statPeriod:"hafta",
  setStatPeriod(v){A.statPeriod=v;render()},
@@ -695,7 +707,61 @@ const A={
      render o'zi qulab tushadi va pull() ga umuman yetib bormaydi. */
   circleId=id;LS.set("nd_circle",id);
   data={};LS.set("nd_data",data);
-  window.scrollTo(0,0);await pull();render()},
+  /* Ro'yxat oldingi doiraniki edi. Tozalamasak, yangi doira ochilgach ham ekranda
+     eskisining PIN kodlari turib qoladi — bu boshqa doiraning ma'lumoti. */
+  roster=[];adminErr="";
+  window.scrollTo(0,0);await pull();
+  if(screen==="sync"&&ownsCircle(circles,id))await A.loadRoster();
+  render()},
+ async createFamily(){
+  const el=document.getElementById("fam_name");
+  const name=((el&&el.value)||"").trim();
+  if(!name){famMsg="Oila nomini yozing";famErr=true;render();return}
+  let c;
+  try{c=await api("/circles",{method:"POST",
+    body:JSON.stringify({name:name,week_goal:25})})}
+  catch(e){famMsg=e.message||"Ochib bo'lmadi";famErr=true;render();return}
+  famMsg=c.name+" ochildi. Endi a'zo qo'shing.";famErr=false;
+  screen="sync";
+  await A.loadCircles();await A.setCircle(c.id)},
+ async saveCircle(){
+  const nEl=document.getElementById("c_name"),gEl=document.getElementById("c_goal");
+  const name=((nEl&&nEl.value)||"").trim(),goal=parseInt((gEl&&gEl.value)||"",10);
+  if(!name){famMsg="Nom bo'sh bo'lmasin";famErr=true;render();return}
+  if(!(goal>=1&&goal<=100)){famMsg="Haftalik maqsad 1 dan 100 gacha";famErr=true;render();return}
+  try{
+   await api("/circles/"+encodeURIComponent(circleId),
+     {method:"PATCH",body:JSON.stringify({name:name,week_goal:goal})});
+   await A.loadCircles();famMsg="Saqlandi";famErr=false;render()}
+  catch(e){famMsg=e.message||"Saqlab bo'lmadi";famErr=true;render()}},
+ async resetPin(id){
+  const v=(prompt("Yangi PIN (4 raqam): "+id)||"").trim();
+  if(!v)return;
+  if(!/^[0-9]{4}$/.test(v)){alert("PIN 4 ta raqam bo'lsin");return}
+  try{
+   await api("/members/"+encodeURIComponent(id)+"/pin",
+     {method:"POST",body:JSON.stringify({new_pin:v})});
+   await A.loadRoster();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+ async dropMember(id){
+  /* Doiradan chiqarish yozuvlarni o'chirmaydi: odam o'zi bilan hamma narsasini
+     olib ketadi va boshqa doirasida qolaveradi. Shuni ogohlantirishda ham aytamiz. */
+  if(!confirm(id+" doiradan chiqarilsinmi? Yozuvlari o'chmaydi."))return;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/members/"+encodeURIComponent(id),
+     {method:"DELETE"});
+   await A.loadRoster();await pull();render()}
+  catch(e){alert(e.message||"Chiqarib bo'lmadi")}},
+ async addExisting(){
+  const err=document.getElementById("f_err");
+  const el=document.getElementById("f_login");
+  const id=((el&&el.value)||"").trim().toLowerCase();
+  if(!circleId){err.textContent="Doira tanlanmagan";return}
+  if(!id){err.textContent="Loginni yozing";return}
+  try{await api("/circles/"+encodeURIComponent(circleId)+"/members",
+    {method:"POST",body:JSON.stringify({member_id:id})})}
+  catch(e){err.textContent=e.message||"Qo'shib bo'lmadi";return}
+  screen="sync";await A.loadRoster();await pull();render()},
  async adminResetPin(){
   /* The roster is gone from this screen, so the login is typed rather than tapped.
      This stays the only way back in for somebody who has forgotten their PIN. */
@@ -861,8 +927,9 @@ const A={
     {places:((data[me].places)||[]).filter(x=>x.d!==d)});
   placeMsg="";date=todayFor(myCfg());render();await pushData(me);render()},
  async addMember(){
-  const name=document.getElementById("f_name").value.trim();
   const err=document.getElementById("f_err");
+  const name=document.getElementById("f_name").value.trim();
+  if(!circleId){err.textContent="Doira tanlanmagan";return}
   if(!name){err.textContent="Ism kiriting";return}
   let city,lat,lng,fa=18,ia=18;
   if(manualCity){
@@ -876,16 +943,20 @@ const A={
   const asr=+document.querySelector("[name=f_asr]:checked").value;
   const pin=document.getElementById("f_pin").value.trim();
   if(!/^[0-9]{4}$/.test(pin)){err.textContent="PIN 4 ta raqam bo'lsin";return}
-  let b=name.toLowerCase().replace(/[^a-z0-9]+/g,"").slice(0,12)||"user",id=b,i=2;
-  const taken=(roster.length?roster:members).map(x=>x.id);
-  while(taken.indexOf(id)>=0)id=b+(i++);
-  try{await api("/members",{method:"POST",
-    body:JSON.stringify({id:id,name:name,city:city,lat:lat,lng:lng,tz:tz,asr:asr,fa:fa,ia:ia,pin:pin})})}
+  const yozilgan=(document.getElementById("f_id").value||"").trim().toLowerCase();
+  const id=yozilgan||slugId(name);
+  if(!/^[a-z0-9]{1,32}$/.test(id)){
+   err.textContent="Login lotin harfi va raqamdan iborat bo'lsin";return}
+  let javob;
+  try{javob=await api("/circles/"+encodeURIComponent(circleId)+"/members",{method:"POST",
+    body:JSON.stringify({new_member:{id:id,name:name,city:city,lat:lat,lng:lng,
+      tz:tz,asr:asr,fa:fa,ia:ia,pin:pin}})})}
   catch(e){err.textContent=e.message||"Qo'shib bo'lmadi";return}
-  /* Login shu yerda yasaladi va boshqa hech qayerda ko'rinmaydi — ro'yxat endi
-     doira egasida. Qo'shgan odam uni darrov o'qib olmasa, yo'qoladi. */
-  alert("Qo'shildi.\n\nLogin: "+id+"\nPIN: "+pin+"\n\nShu ikkisini odamga ayting.");
-  screen="admin";render()},
+  /* Login band bo'lsa server bo'shini o'zi tanlaydi, shuning uchun javobdan
+     o'qiymiz — yuborganimizdan emas. Bu ikkisi har doim ham bir xil emas. */
+  alert("Qo'shildi.\n\nLogin: "+javob.member.id+"\nPIN: "+javob.pin+
+    "\n\nShu ikkisini odamga ayting.");
+  screen="sync";await A.loadRoster();await pull();render()},
  exportJSON(){
   const blob=new Blob([JSON.stringify({members:members,data:data},null,1)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -948,25 +1019,49 @@ function adminScreen(){
    PIN kodlarni ko'rish endi doira egasiga tegishli: o'z loginingiz bilan kiring va
    <b>Sozlamalar</b> bo'limidan ko'ring.</p>
    <button class="btn btn-wide" onclick="A.adminResetPin()">PIN kodni tiklash</button></div>`;
- /* Yangi a'zoni qo'shish 2-bosqichga qoldirildi: hozir uni doiraga bog'laydigan
-    yo'l yo'q, qo'shilgan odam esa hech qaysi doirada bo'lmay, ilovaga kira olsa ham
-    hech narsa ko'rmaydi. Buzuq tugmani qoldirgandan ko'ra olib turgan ma'qul. */
+ /* A'zo qo'shish endi doiraga bog'langan va shuning uchun doira egasida —
+    Sozlamalarda. Bu yerdan qo'shilgan odam hech qaysi doirada bo'lmasdi. */
  h+=`<div class="panel p14" style="border-style:dashed">
-   <p class="muted small" style="margin:0;line-height:1.7">Yangi a'zo qo'shish keyingi
-    bosqichda, oila imkoniyati bilan birga qaytadi — hozir qo'shilgan odam hech qaysi
-    doiraga tushmaydi.</p></div>
+   <p class="muted small" style="margin:0;line-height:1.7">A'zo qo'shish va chiqarish
+    doira egasida: o'z loginingiz bilan kiring va <b>Sozlamalar</b> bo'limiga o'ting.</p></div>
   <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
   <div style="height:40px"></div></div>`;
  return h}
 
+/* Ismdan login: "Zuhra Ismoilova" → "zuhra". O'zbekcha apostroflar (o', g', \u02bb)
+   tushib qoladi, chunki login faqat lotin harfi va raqamdan iborat bo'ladi. */
+function slugId(name){
+ const bosh=String(name||"").trim().split(/\s+/)[0]||"";
+ return bosh.toLowerCase()
+  .replace(/[\u02bb\u02bc\u2018\u2019']/g,"")
+  .replace(/[^a-z0-9]/g,"").slice(0,12)}
+
 function addScreen(){
  const autoTz=Math.round(-new Date().getTimezoneOffset()/60*2)/2;
+ const dc=(circles||[]).find(c=>c.id===circleId)||null;
+ const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
  return `<div style="max-width:460px;margin:0 auto">
- <button class="btn" onclick="A.go(isAdmin?'admin':'app')">← Orqaga</button>
- <div class="eyebrow" style="margin-top:16px">Yangi a'zo</div>
- <h1 style="font-size:28px;margin:8px 0 4px">Odam qo'shish</h1>
- <div class="label">Ism familiya</div>
+ <button class="btn" onclick="A.go('sync')">← Orqaga</button>
+ <div class="eyebrow" style="margin-top:16px">${dc?esc(dc.name):"Doira"}</div>
+ <h1 style="font-size:28px;margin:8px 0 4px">A'zo qo'shish</h1>
+ <div class="flex gap2" style="margin:14px 0 4px">
+  <button class="btn" style="flex:1;${addMode==="new"?on:""}" onclick="A.setAddMode('new')">Yangi odam</button>
+  <button class="btn" style="flex:1;${addMode==="old"?on:""}" onclick="A.setAddMode('old')">Mavjud login</button>
+ </div>
+ ${addMode==="old"
+ ?`<p class="muted small" style="margin:10px 0 0;line-height:1.65">Ilovadan allaqachon
+    foydalanadigan odamni logini orqali qo'shasiz. Yangi hisob ochilmaydi — o'sha odam
+    bitta yozuv bilan ikkala doirada ham qatnashadi.</p>
+   <div class="label">Login</div>
+   <input id="f_login" class="input" placeholder="masalan: behruz">
+   <div id="f_err" class="clay small" style="margin-top:12px"></div>
+   <button class="btn btn-green btn-wide" style="margin-top:16px" onclick="A.addExisting()">Qo'shish</button>`
+ :`<div class="label">Ism familiya</div>
  <input id="f_name" class="input" placeholder="Masalan: Aziz Rahimov">
+ <div class="label">Login</div>
+ <input id="f_id" class="input" placeholder="bo'sh qoldirsangiz ismdan olinadi">
+ <p class="muted small" style="margin:6px 0 0">Band bo'lsa ilova o'zi bo'shini beradi va qaysi
+  login berilganini oxirida ko'rsatadi.</p>
  <div class="label">Shahar</div>
  ${manualCity?`<input id="f_city" class="input" placeholder="Shahar nomi">
    <div class="flex gap2" style="margin-top:8px">
@@ -983,10 +1078,11 @@ function addScreen(){
   <label class="btn" style="flex:1;padding:11px 0"><input type="radio" name="f_asr" value="2" checked style="margin-right:7px">Hanafiy</label>
   <label class="btn" style="flex:1;padding:11px 0"><input type="radio" name="f_asr" value="1" style="margin-right:7px">Shofe'iy</label>
  </div>
- <div class="label">PIN kod (ixtiyoriy)</div>
- <input id="f_pin" class="input" inputmode="numeric" maxlength="6" placeholder="4-6 raqam">
+ <div class="label">PIN kod</div>
+ <input id="f_pin" class="input" inputmode="numeric" maxlength="4" value="${esc(addPin)}">
+ <p class="muted small" style="margin:6px 0 0">Ilova tasodifiy tanladi. Xohlasangiz o'zgartiring — odamga shu kodni aytasiz.</p>
  <div id="f_err" class="clay small" style="margin-top:12px"></div>
- <button class="btn btn-green btn-wide" style="margin-top:16px" onclick="A.addMember()">Qo'shish</button>
+ <button class="btn btn-green btn-wide" style="margin-top:16px" onclick="A.addMember()">Qo'shish</button>`}
  <div style="height:40px"></div></div>`}
 
 /* Whether `me` owns the circle currently being viewed. Only the owner is shown the
@@ -997,6 +1093,9 @@ function ownsCircle(list,id){
 
 function syncScreen(){
  const who=me?myCfg():null;
+ const dc=(circles||[]).find(c=>c.id===circleId)||null;
+ const egasi=!!dc&&dc.owner_id===me;
+ const oilalarim=(circles||[]).filter(c=>c.kind==="family"&&c.owner_id===me);
  const cur=myCfg(),inList=CITIES.some(c=>c.n===cur.city);
  const sc=daySchedule(new Date(todayFor(cur)+"T12:00:00"),cur);
  const hist=((data[me]&&data[me].places)||[]).slice().sort((a,b)=>a.d<b.d?1:-1);
@@ -1043,16 +1142,47 @@ function syncScreen(){
       <button class="btn" style="padding:2px 7px;font-size:10px" onclick="A.delPlace('${x.d}')">×</button></span></div>`).join("")}
    </div>`:""}
  </div>
- ${ownsCircle(circles,circleId)?`<div class="label">Doira a'zolari</div>
-  <p class="muted small" style="margin:0 0 9px;line-height:1.6">Siz shu doiraning egasisiz.
-   Yangi a'zoga o'z PIN kodini shu yerdan aytasiz.</p>
+ ${egasi?`<div class="label">Doira sozlamalari</div>
+  <p class="muted small" style="margin:0 0 9px;line-height:1.6">Siz <b>${esc(dc.name)}</b>
+   doirasining egasisiz. Nomini va haftalik maqsadini shu yerdan o'zgartirasiz.</p>
+  <input id="c_name" class="input" maxlength="64" value="${esc(dc.name)}">
+  <div class="flex gap2" style="margin-top:8px">
+   <div style="flex:1"><div class="muted tiny" style="margin-bottom:4px">Haftalik maqsad</div>
+    <input id="c_goal" class="input" type="number" min="1" max="100" value="${dc.week_goal}"></div>
+   <button class="btn btn-gold" style="align-self:flex-end;padding:11px 16px" onclick="A.saveCircle()">Saqlash</button>
+  </div>
+  <p class="muted small" style="margin:8px 0 0;line-height:1.6">Haftalik jamoa nishoni shu
+   raqamga qarab beriladi. Oilada bola yoki keksa bo'lsa pasaytiring — nishon hamma
+   yetganda olinadi, shuning uchun raqam eng zaifiga qarab qo'yiladi.</p>
+  <div class="label">A'zolar</div>
   ${adminErr?`<div class="clay small mb10">${esc(adminErr)}</div>`:""}
-  ${roster.map(m=>`<div class="panel p14 mb10 flex between center">
-    <div><div style="font-family:var(--serif);font-size:17px">${esc(m.name)}</div>
-     <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
-    <div style="text-align:right">
-     <div class="brass" style="font-family:var(--serif);font-size:24px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
-     <div class="muted tiny">PIN</div></div></div>`).join("")}`:""}
+  ${roster.map(m=>`<div class="panel p14 mb10">
+    <div class="flex between center">
+     <div><div style="font-family:var(--serif);font-size:17px">${esc(m.name)}</div>
+      <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
+     <div style="text-align:right">
+      <div class="brass" style="font-family:var(--serif);font-size:24px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
+      <div class="muted tiny">PIN</div></div></div>
+    <div class="flex gap2" style="margin-top:10px">
+     <button class="btn" style="flex:1;font-size:11px" onclick="A.resetPin('${esc(m.id)}')">PIN tiklash</button>
+     ${m.id===dc.owner_id
+      ?`<span class="muted tiny" style="flex:1;text-align:center;align-self:center">doira egasi</span>`
+      :`<button class="btn" style="flex:1;font-size:11px" onclick="A.dropMember('${esc(m.id)}')">Chiqarish</button>`}
+    </div></div>`).join("")}
+  <button class="btn btn-green btn-wide" onclick="A.go('add')">+ A'zo qo'shish</button>`:""}
+ <div class="label">Oilam</div>
+ <p class="muted small" style="margin:0 0 9px;line-height:1.6">Oila alohida doira: uni
+  faqat siz va oiladagilar ko'radi, do'stlar guruhiga ko'rinmaydi. Namozni bir marta
+  belgilaysiz, ball ikkala joyda ham hisoblanadi.</p>
+ ${oilalarim.map(c=>`<div class="panel p14 mb10 flex between center">
+   <div><div style="font-family:var(--serif);font-size:17px">${esc(c.name)}</div>
+    <div class="muted small" style="margin-top:3px">haftalik maqsad: ${c.week_goal}</div></div>
+   ${c.id===circleId?`<span class="jade tiny">ochiq</span>`
+    :`<button class="btn" onclick="A.setCircle(${c.id})">Ochish</button>`}
+  </div>`).join("")}
+ <input id="fam_name" class="input" maxlength="64" placeholder="Oila nomi, masalan: Valixanovlar">
+ <button class="btn btn-green btn-wide" style="margin-top:8px" onclick="A.createFamily()">Oila ochish</button>
+ ${famMsg?`<div class="${famErr?"clay":"jade"} small" style="margin-top:8px">${esc(famMsg)}</div>`:""}
  <div class="label">PIN kodni o'zgartirish</div>
  <input id="p_cur" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="joriy PIN">
  <input id="p_new" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="yangi PIN (4 raqam)" style="margin-top:8px">
@@ -1487,17 +1617,17 @@ function nishonTab(){
     <div style="font-family:var(--serif);font-size:19px" class="${jh.ok?"jade":""}">${
       jh.ok?"Nishon olindi":"Hammamiz uchun"}</div>
     <p class="muted small" style="margin:5px 0 0;line-height:1.65">Har bir a'zo shu hafta
-     ${HAFTA_MAQSAD} ta namozni vaqtida o'qisa, nishonni hammamiz olamiz.
+     ${weekGoal()} ta namozni vaqtida o'qisa, nishonni hammamiz olamiz.
      Bittamiz yetmasa — hech kim olmaydi.</p></div>
    <div style="font-size:36px;${jh.ok?"":"opacity:.22;filter:grayscale(1)"}">\u{1F91D}</div>
   </div>
   <div style="margin-top:14px">`;
  jh.rows.forEach(x=>{
-  const pct=Math.min(100,Math.round(x.ontime/HAFTA_MAQSAD*100));
+  const pct=Math.min(100,Math.round(x.ontime/weekGoal()*100));
   h+=`<div style="margin-bottom:10px">
    <div class="flex between tiny" style="margin-bottom:4px">
     <span style="color:${colorOf(x.m.id)}">${esc(first(x.m.name))}${x.ok?" \u2713":""}</span>
-    <span class="${x.ok?"jade":"muted"}">${x.ontime} / ${HAFTA_MAQSAD}</span></div>
+    <span class="${x.ok?"jade":"muted"}">${x.ontime} / ${weekGoal()}</span></div>
    <div class="bar"><div style="width:${pct}%;background:${x.ok?"var(--jade)":"var(--brass)"}"></div></div>
   </div>`});
  h+=`</div><div class="muted tiny">${pretty(wk[0])} — ${pretty(wk[1])} · jami olingan: ${tarix} hafta</div></div>`;

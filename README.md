@@ -64,12 +64,24 @@ the first success, so the typing happens once.
 | GET | `/api/v1/state?circle=` | member of it | One circle's records |
 | PUT | `/api/v1/members/{id}/days/{date}` | own or admin | One day (the hot path) |
 | PUT | `/api/v1/members/{id}/data` | own or admin | Whole document |
-| POST | `/api/v1/members/{id}/pin` | own + current PIN, or admin | Change a PIN |
-| POST | `/api/v1/members` | admin | Add a member |
+| POST | `/api/v1/members/{id}/pin` | own + current PIN, or admin, or a circle owner | Change a PIN |
 | DELETE | `/api/v1/members/{id}` | own or admin | Remove a member |
+| POST | `/api/v1/circles` | session | Start a family; the caller owns it |
+| PATCH | `/api/v1/circles/{id}` | its owner | Name and weekly goal |
 | GET | `/api/v1/circles/{id}/roster` | its owner | That circle's members with PINs |
+| POST | `/api/v1/circles/{id}/members` | its owner | Add an existing login, or a new person |
+| DELETE | `/api/v1/circles/{id}/members/{id}` | its owner, or yourself | Take somebody out |
 
 Errors always come back as `{"error": {"code": "...", "message": "..."}}`.
+
+**There is no `POST /api/v1/members`.** Creating a person happens through a circle,
+because an account made outside one belongs to no group: it can log in and then see
+nothing, with no screen able to help it. Adding through the circle makes that state
+unreachable rather than merely unlikely.
+
+**A circle's owner can reset the PIN of anyone in it.** A forgotten PIN inside a family
+has to be fixable inside that family. This grants nothing new — the roster already shows
+the owner those PINs — it only removes the trip through the server password.
 
 Books add no endpoints. A member's books ride inside `MemberData`, so they are read
 by `GET /api/v1/state` and written by `PUT /api/v1/members/{id}/data` alongside the

@@ -91,6 +91,109 @@ async def fetch_circle(pool: asyncpg.Pool, circle_id: int) -> Circle | None:
     return None if row is None else Circle(**dict(row))
 
 
+async def count_circles_owned(pool: asyncpg.Pool, owner_id: str) -> int:
+    async with pool.acquire() as connection:
+        return int(await connection.fetchval(
+            "SELECT count(*) AS owned FROM circles WHERE owner_id = $1", owner_id
+        ) or 0)
+
+
+async def count_circle_members(pool: asyncpg.Pool, circle_id: int) -> int:
+    async with pool.acquire() as connection:
+        return int(await connection.fetchval(
+            "SELECT count(*) AS people FROM circle_members WHERE circle_id = $1",
+            circle_id,
+        ) or 0)
+
+
+async def owns_circle_containing(
+    pool: asyncpg.Pool, owner_id: str, member_id: str
+) -> bool:
+    """Whether `owner_id` owns some circle that `member_id` belongs to.
+
+    This is what lets a family reset its own forgotten PIN. Without it the only way
+    back in runs through the server password, which one person holds.
+    """
+    async with pool.acquire() as connection:
+        return bool(await connection.fetchval(
+            """
+            SELECT true AS owns FROM circles c
+              JOIN circle_members cm ON cm.circle_id = c.id
+             WHERE c.owner_id = $1 AND cm.member_id = $2
+            """,
+            owner_id, member_id,
+        ))
+
+
+async def create_circle(
+    pool: asyncpg.Pool, name: str, owner_id: str, week_goal: int
+) -> Circle:
+    """A new family, with its owner already inside it.
+
+    Both rows go in one transaction on purpose: a circle whose owner is not a member
+    of it would be invisible to the person who had just made it.
+    """
+    async with pool.acquire() as connection:
+        async with connection.transaction():
+            row = await connection.fetchrow(
+                f"""
+                INSERT INTO circles (name, kind, owner_id, week_goal)
+                VALUES ($1, 'family', $2, $3)
+                RETURNING {_CIRCLE_COLUMNS}
+                """,
+                name, owner_id, week_goal,
+            )
+            await connection.execute(
+                "INSERT INTO circle_members (circle_id, member_id) VALUES ($1, $2)",
+                row["id"], owner_id,
+            )
+    return Circle(**dict(row))
+
+
+async def update_circle(
+    pool: asyncpg.Pool, circle_id: int, name: str, week_goal: int
+) -> Circle | None:
+    """Rename a circle and move its weekly goal. None when it no longer exists."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            f"""
+            UPDATE circles SET name = $2, week_goal = $3
+             WHERE id = $1
+             RETURNING {_CIRCLE_COLUMNS}
+            """,
+            circle_id, name, week_goal,
+        )
+    return None if row is None else Circle(**dict(row))
+
+
+async def add_to_circle(pool: asyncpg.Pool, circle_id: int, member_id: str) -> None:
+    """Idempotent: adding somebody twice is the same as adding them once."""
+    async with pool.acquire() as connection:
+        await connection.execute(
+            """
+            INSERT INTO circle_members (circle_id, member_id) VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            """,
+            circle_id, member_id,
+        )
+
+
+async def remove_from_circle(
+    pool: asyncpg.Pool, circle_id: int, member_id: str
+) -> bool:
+    """Take somebody out of one circle, reporting whether they were in it.
+
+    Their records are not touched. A person is not their membership: they keep
+    everything they logged, and keep any other circle they are in.
+    """
+    async with pool.acquire() as connection:
+        result = await connection.execute(
+            "DELETE FROM circle_members WHERE circle_id = $1 AND member_id = $2",
+            circle_id, member_id,
+        )
+    return result.endswith(" 1")
+
+
 async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
     """Load one circle's members and everything they have logged.
 
@@ -202,6 +305,38 @@ async def count_members(pool: asyncpg.Pool) -> int:
 
 
 # ---------------------------------------------------------------- membership
+async def fetch_member_profile(
+    pool: asyncpg.Pool, member_id: str
+) -> MemberProfile | None:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            f"SELECT {_MEMBER_COLUMNS} FROM members WHERE id = $1", member_id
+        )
+    return None if row is None else MemberProfile(**dict(row))
+
+
+async def free_member_id(pool: asyncpg.Pool, base: str) -> str | None:
+    """`zuhra`, or `zuhra2` when that login is taken. None when nothing is free.
+
+    A circle's owner types a name, not a login, so a clash must not come back as an
+    error for them to solve. The app picks the next free login and shows what it
+    picked. Truncated to 30 so the suffix still fits the 32-character limit.
+    """
+    base = base[:30]
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            "SELECT id FROM members WHERE id = $1 OR id LIKE $2", base, base + "%"
+        )
+    taken = {row["id"] for row in rows}
+    if base not in taken:
+        return base
+    for suffix in range(2, 21):
+        candidate = f"{base}{suffix}"
+        if candidate not in taken:
+            return candidate
+    return None
+
+
 async def create_member(pool: asyncpg.Pool, member: MemberCreate, key: str) -> MemberProfile:
     """Insert a member. Raises asyncpg.UniqueViolationError if the id is taken."""
     async with pool.acquire() as connection:
