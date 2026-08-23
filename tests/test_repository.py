@@ -74,3 +74,16 @@ async def test_saving_books_cannot_rewrite_a_prayer():
     )
     written = json.loads(connection.args_for("INSERT INTO day_records")[2])
     assert written["bomdod"]["s"] == "qazo"
+
+
+from app.models import Circle
+
+
+def test_circle_rejects_an_unknown_kind():
+    with pytest.raises(Exception):
+        Circle(id=1, name="Oila", kind="mosque", owner_id="sardor", week_goal=25)
+
+
+def test_circle_rejects_an_impossible_week_goal():
+    with pytest.raises(Exception):
+        Circle(id=1, name="Oila", kind="family", owner_id="sardor", week_goal=0)

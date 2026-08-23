@@ -210,6 +210,25 @@ class Place(BaseModel):
     ia: TwilightAngle
 
 
+class Circle(BaseModel):
+    """A group of people who see each other.
+
+    Records belong to members, never to a circle: this only answers "who is shown
+    together", which is what lets one person be in a friends circle and a family at
+    the same time while marking a prayer once.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    name: str = Field(min_length=1, max_length=64)
+    kind: Literal["friends", "family"]
+    owner_id: str
+    week_goal: int = Field(default=25, ge=1, le=100)
+
+    _check_owner = field_validator("owner_id")(_validate_member_id)
+
+
 class MemberData(BaseModel):
     """Everything one member has logged."""
 
