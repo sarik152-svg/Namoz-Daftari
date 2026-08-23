@@ -10,7 +10,7 @@ const blank = () => ({ days: {}, bonuses: [], tasks: [], books: [], places: [] }
 function client(at = "2026-08-22T09:00:00Z") {
   const loaded = loadClient({
     at,
-    expose: ["daySchedule", "hm", "liveDay", "winState", "score", "todayFor", "JAMOAT_BALL"],
+    expose: ["daySchedule", "calcTimes", "hm", "liveDay", "winState", "score", "todayFor", "JAMOAT_BALL"],
   });
   loaded.setState({
     members: [TOSHKENT], data: { sardor: blank() },
@@ -23,7 +23,13 @@ module.exports = {
   "xufton closes at tomorrow's fajr, not today's"(assert) {
     const c = client();
     const schedule = c.daySchedule(new Date("2026-08-22T12:00:00"), TOSHKENT);
+    const today = c.calcTimes(new Date("2026-08-22T12:00:00"), TOSHKENT);
+    const tomorrow = c.calcTimes(new Date("2026-08-23T12:00:00"), TOSHKENT);
     assert.ok(schedule.endXufton < schedule.xufton, "window must wrap past midnight");
+    /* The two fajrs are about a minute apart, so asserting the wrap alone passes
+       even with the old bug in place. Pin the actual value. */
+    assert.strictEqual(schedule.endXufton, tomorrow.fajr, "must be tomorrow's fajr");
+    assert.notStrictEqual(schedule.endXufton, today.fajr, "must not be today's fajr");
   },
 
   "a xufton prayed after midnight belongs to yesterday"(assert) {
