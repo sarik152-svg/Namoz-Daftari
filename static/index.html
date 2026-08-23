@@ -362,7 +362,7 @@ let data=LS.get("nd_data",{});
 let me=LS.get("nd_me",null);
 let screen="login",tab="today",date=today(),pinFor=null,pinErr="",manualCity=false;
 let manualPlace=false,placeMsg="";
-let loginNames=[],loginPick=null,loginErr="",adminMode=false,roster=[],adminErr="";
+let loginErr="",adminMode=false,roster=[],adminErr="";
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -625,7 +625,6 @@ function allNotes(){
 /* ══════════════ AMALLAR ══════════════ */
 const A={
  async boot(){
-  await A.loadNames();
   if(loggedIn()){
    try{
      const who=await api("/auth/me");
@@ -640,8 +639,6 @@ const A={
    if(loggedIn()&&!isAdmin&&document.visibilityState==="visible"){await pull();render()}};
   setInterval(tick,60000);
   document.addEventListener("visibilitychange",tick)},
- async loadNames(){
-  try{const j=await api("/auth/members");loginNames=j.members}catch(e){loginNames=[]}},
  go(s){screen=s;pinErr="";loginErr="";adminErr="";render()},
  setTab(t){tab=t;window.scrollTo(0,0);render()},
  statPeriod:"hafta",
@@ -649,19 +646,20 @@ const A={
  nishonKim:null,
  setNishonKim(id){A.nishonKim=id;window.scrollTo(0,0);render()},
  setDate(n){const td=todayFor(myCfg()),d=shift(date,n);date=d>td?td:d;render()},
- pickLogin(id){loginPick=loginPick===id?null:id;adminMode=false;loginErr="";render()},
- toggleAdmin(){adminMode=!adminMode;loginPick=null;loginErr="";render()},
- async doLogin(id){
-  const v=(document.getElementById("pinput")||{}).value||"";
+ toggleAdmin(){adminMode=!adminMode;loginErr="";render()},
+ async doLogin(){
+  const id=((document.getElementById("lg_id")||{}).value||"").trim().toLowerCase();
+  const v=(document.getElementById("lg_pin")||{}).value||"";
+  if(!id){loginErr="Loginni yozing";render();return}
   try{
    const j=await api("/auth/login",{method:"POST",
      body:JSON.stringify({member_id:id,pin:v})});
    token=j.token;isAdmin=false;LS.set("nd_token",token);LS.set("nd_admin",false);
-   me=id;LS.set("nd_me",id);data={};LS.set("nd_data",data);
-   screen="app";loginPick=null;loginErr="";
+   me=id;LS.set("nd_me",id);LS.set("nd_login",id);data={};LS.set("nd_data",data);
+   screen="app";loginErr="";
    await pull();if(M(me))date=todayFor(myCfg());render();
   }catch(e){
-   loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"PIN noto'g'ri";render()}},
+   loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Login yoki PIN noto'g'ri";render()}},
  async doAdminLogin(){
   const v=(document.getElementById("apass")||{}).value||"";
   try{
@@ -672,8 +670,8 @@ const A={
    loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Parol noto'g'ri";render()}},
  async logout(){
   try{await api("/auth/session",{method:"DELETE"})}catch(e){}
-  forgetSession();loginPick=null;adminMode=false;
-  await A.loadNames();render()},
+  forgetSession();adminMode=false;
+  render()},
  async loadRoster(){
   try{const j=await api("/admin/roster");roster=j.members;adminErr=""}
   catch(e){roster=[];adminErr=e.message||"Ro'yxatni olib bo'lmadi"}},
@@ -864,7 +862,7 @@ const A={
   if(!confirm(id+" va uning barcha yozuvlari o'chirilsinmi?"))return;
   try{await api("/members/"+encodeURIComponent(id),{method:"DELETE"})}
   catch(e){alert(e.message||"O'chirib bo'lmadi");return}
-  if(isAdmin){await A.loadRoster()}else{forgetSession();await A.loadNames()}
+  if(isAdmin){await A.loadRoster()}else{forgetSession()}
   render()},
  exportJSON(){
   const blob=new Blob([JSON.stringify({members:members,data:data},null,1)],{type:"application/json"});
@@ -890,20 +888,19 @@ function loginScreen(){
  <p class="muted" style="font-size:14px;margin:0 0 22px">Kim ekanligingizni tanlang va PIN kodingizni kiriting.
   Har kim faqat o'z belgisini qo'yadi, statistika hammaga ochiq.</p>`;
  if(!adminMode){
-  if(!loginNames.length)h+=`<p class="clay small">Serverga ulanib bo'lmadi. Internetni tekshiring.</p>`;
-  loginNames.forEach(m=>{
-   h+=`<div class="panel p14 mb10" style="border-color:${loginPick===m.id?"var(--brass)":"var(--line)"}">
-    <div class="flex center gap3" style="cursor:pointer" onclick="A.pickLogin('${m.id}')">
-     <div class="hd" style="height:34px;background:${PALETTE[Math.max(0,loginNames.findIndex(x=>x.id===m.id))%PALETTE.length]}"></div>
-     <div style="flex:1"><div style="font-family:var(--serif);font-size:19px">${esc(m.name)}</div>
-      <div class="muted small" style="margin-top:3px">\u{1F512} PIN bilan kiriladi</div></div>
-    </div>`;
-   if(loginPick===m.id)h+=`<div class="flex gap2" style="margin-top:12px">
-     <input id="pinput" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN kod"
-       onkeydown="if(event.key==='Enter')A.doLogin('${m.id}')">
-     <button class="btn btn-gold" style="padding:0 16px" onclick="A.doLogin('${m.id}')">Kirish</button></div>
-     ${loginErr?`<div class="clay small" style="margin-top:7px">${esc(loginErr)}</div>`:""}`;
-   h+=`</div>`});
+  /* Ismlar ro'yxati olib tashlandi: u sahifani ochgan har kimga boshqalarning
+     oilasidagi ayol va bolalar ismini ko'rsatib qo'yardi. Login birinchi
+     muvaffaqiyatli kirishdan keyin telefonda saqlanadi, ya'ni yozish bir marta. */
+  h+=`<div class="panel p14 mb10">
+   <div class="label" style="margin-top:0">Login</div>
+   <input id="lg_id" class="input" autocapitalize="none" autocorrect="off"
+     placeholder="masalan: sardor" value="${esc(LS.get("nd_login",""))}">
+   <div class="label">PIN kod</div>
+   <input id="lg_pin" class="input" type="password" inputmode="numeric" maxlength="4"
+     placeholder="4 raqam" onkeydown="if(event.key==='Enter')A.doLogin()">
+   <button class="btn btn-gold btn-wide" style="margin-top:12px" onclick="A.doLogin()">Kirish</button>
+   ${loginErr?`<div class="clay small" style="margin-top:9px">${esc(loginErr)}</div>`:""}
+  </div>`;
  }else{
   h+=`<div class="panel p14 mb10" style="border-color:var(--brass)">
    <div class="label" style="margin-top:0">Admin paroli</div>
