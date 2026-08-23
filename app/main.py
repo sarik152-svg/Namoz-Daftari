@@ -1,11 +1,12 @@
 """HTTP layer for Namoz Daftari.
 
-Every request except the login screen's name list carries a session token. The
+Every request carries a session token; there is no longer a public name list. The
 session says who you are, and writes compare that identity against the member being
 written to. There is no shared secret: ownership is structural, not a header check.
 
-Admin is a second kind of session with unrestricted power, including reading PINs.
-That is a deliberate, owner-approved trade-off recorded in the design spec.
+Admin is a second kind of session that can overwrite a mark and reset a PIN. It can
+no longer read them: an admin session has no member_id and so owns no circle, and PINs
+belong to a circle's owner.
 """
 from __future__ import annotations
 
@@ -141,14 +142,6 @@ async def health(request: Request) -> dict:
     return {"status": "ok"}
 
 
-@app.get(f"{API_PREFIX}/auth/members")
-async def list_login_names(request: Request) -> dict:
-    """Names for the login picker. Deliberately public, and deliberately minimal:
-    ids and display names only, never a city, a PIN, or a record."""
-    members = await repository.fetch_public_members(request.app.state.pool)
-    return {"members": [m.model_dump() for m in members]}
-
-
 @app.post(f"{API_PREFIX}/auth/login")
 async def login(body: LoginRequest, request: Request) -> dict:
     pool: asyncpg.Pool = request.app.state.pool
@@ -195,10 +188,40 @@ async def whoami(session: Session = Depends(require_session)) -> dict:
 
 
 # ---------------------------------------------------------------- data routes
+async def _require_circle(request: Request, session: Session, circle: int | None) -> int:
+    """Resolve which circle a read is about, and prove the caller belongs to it.
+
+    Omitting `circle` means "my first one", so a client that has not caught up still
+    gets a sensible answer instead of an error.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if circle is None:
+        mine = await repository.fetch_circles_for(pool, session.member_id or "")
+        if not mine:
+            raise _error("no_circle", "Siz hech qaysi doirada emassiz", status.HTTP_404_NOT_FOUND)
+        return mine[0].id
+    if not await repository.is_circle_member(pool, circle, session.member_id or ""):
+        raise _error("not_your_circle", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN)
+    return circle
+
+
+@app.get(f"{API_PREFIX}/circles")
+async def list_circles(request: Request, session: Session = Depends(require_session)) -> dict:
+    """The circles this member belongs to. Drives the switcher in the client."""
+    circles = await repository.fetch_circles_for(
+        request.app.state.pool, session.member_id or ""
+    )
+    return {"circles": [c.model_dump() for c in circles]}
+
+
 @app.get(f"{API_PREFIX}/state")
-async def get_state(request: Request, _: Session = Depends(require_session)) -> dict:
-    """Everyone's profile and everyone's records. Any member may read the group."""
-    state = await repository.fetch_group_state(request.app.state.pool)
+async def get_state(
+    request: Request, circle: int | None = None,
+    session: Session = Depends(require_session),
+) -> dict:
+    """One circle's profiles and records. A circle is only readable from inside it."""
+    circle_id = await _require_circle(request, session, circle)
+    state = await repository.fetch_group_state(request.app.state.pool, circle_id)
     return state.to_wire()
 
 
@@ -257,7 +280,8 @@ async def change_pin(
             raise _error("bad_pin", "Joriy PIN noto'g'ri", status.HTTP_403_FORBIDDEN)
         await repository.clear_failures(pool, member_id)
 
-    await repository.set_pin(pool, member_id, body.new_pin, key)
+    if not await repository.set_pin(pool, member_id, body.new_pin, key):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
     return {"ok": True}
 
 
@@ -270,12 +294,22 @@ async def remove_member(
     return {"ok": True}
 
 
-# ---------------------------------------------------------------- admin routes
-@app.get(f"{API_PREFIX}/admin/roster", dependencies=[Depends(require_admin)])
-async def admin_roster(request: Request) -> dict:
-    """The roster with PINs in the clear. Admin only, by explicit design."""
+# ---------------------------------------------------------------- circle routes
+@app.get(f"{API_PREFIX}/circles/{{circle_id}}/roster")
+async def circle_roster(
+    circle_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """A circle's members with PINs in the clear, for its owner only.
+
+    This replaces the single global admin roster: with families in the picture,
+    "everyone" is no longer a group anybody should be able to enumerate.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    circle = await repository.fetch_circle(pool, circle_id)
+    if circle is None or circle.owner_id != session.member_id:
+        raise _error("not_circle_owner", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN)
     entries = await repository.fetch_roster(
-        request.app.state.pool, request.app.state.settings.pin_encryption_key
+        pool, circle_id, request.app.state.settings.pin_encryption_key
     )
     return {"members": [e.model_dump() for e in entries]}
 

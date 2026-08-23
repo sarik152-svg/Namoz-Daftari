@@ -21,13 +21,13 @@ from app.models import (
     ALL_PRAYERS,
     Bonus,
     Book,
+    Circle,
     DayRecord,
     Place,
     GroupState,
     MemberCreate,
     MemberData,
     MemberProfile,
-    PublicMember,
     RosterEntry,
     Session,
     Task,
@@ -55,11 +55,59 @@ def _now() -> datetime:
 
 
 # ---------------------------------------------------------------- reads
-async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
-    """Load every member and everything they have logged."""
+_CIRCLE_COLUMNS = "id, name, kind, owner_id, week_goal"
+
+
+async def fetch_circles_for(pool: asyncpg.Pool, member_id: str) -> list[Circle]:
+    """Every circle this member belongs to, oldest first."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            f"""
+            SELECT {_CIRCLE_COLUMNS} FROM circles
+             WHERE id IN (SELECT circle_id FROM circle_members WHERE member_id = $1)
+             ORDER BY created_at
+            """,
+            member_id,
+        )
+    return [Circle(**dict(row)) for row in rows]
+
+
+async def is_circle_member(pool: asyncpg.Pool, circle_id: int, member_id: str) -> bool:
+    """The single gate in front of every circle-scoped read."""
+    async with pool.acquire() as connection:
+        return bool(
+            await connection.fetchval(
+                "SELECT true FROM circle_members WHERE circle_id = $1 AND member_id = $2",
+                circle_id, member_id,
+            )
+        )
+
+
+async def fetch_circle(pool: asyncpg.Pool, circle_id: int) -> Circle | None:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            f"SELECT {_CIRCLE_COLUMNS} FROM circles WHERE id = $1", circle_id
+        )
+    return None if row is None else Circle(**dict(row))
+
+
+async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
+    """Load one circle's members and everything they have logged.
+
+    The record tables are read whole and filtered in Python rather than joined per
+    table: there are five of them, the group is small, and one join condition in one
+    place is easier to keep correct than five.
+    """
     async with pool.acquire() as connection:
         member_rows = await connection.fetch(
-            f"SELECT {_MEMBER_COLUMNS} FROM members ORDER BY created_at"
+            """
+            SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa, m.ia
+              FROM members m
+              JOIN circle_members cm ON cm.member_id = m.id
+             WHERE cm.circle_id = $1
+             ORDER BY m.created_at
+            """,
+            circle_id,
         )
         day_rows = await connection.fetch(
             "SELECT member_id, day, entries FROM day_records ORDER BY day"
@@ -100,6 +148,11 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
         places[row["member_id"]].append(Place(**json.loads(row["place"])))
 
     members = [MemberProfile(**dict(row)) for row in member_rows]
+    inside = {member.id for member in members}
+    for bucket in (days, bonuses, tasks, books, places):
+        for member_id in list(bucket):
+            if member_id not in inside:
+                del bucket[member_id]
     data = {
         member.id: MemberData(
             days=days.get(member.id, {}),
@@ -113,18 +166,17 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
     return GroupState(members=members, data=data)
 
 
-async def fetch_public_members(pool: asyncpg.Pool) -> list[PublicMember]:
-    """Names for the login picker. The only thing readable without a session."""
-    async with pool.acquire() as connection:
-        rows = await connection.fetch("SELECT id, name FROM members ORDER BY created_at")
-    return [PublicMember(id=row["id"], name=row["name"]) for row in rows]
-
-
-async def fetch_roster(pool: asyncpg.Pool, key: str) -> list[RosterEntry]:
-    """Admin view: every member with their PIN decrypted."""
+async def fetch_roster(pool: asyncpg.Pool, circle_id: int, key: str) -> list[RosterEntry]:
+    """One circle's members with their PINs decrypted. Owner only, by design."""
     async with pool.acquire() as connection:
         rows = await connection.fetch(
-            "SELECT id, name, city, pin_encrypted FROM members ORDER BY created_at"
+            """
+            SELECT m.id, m.name, m.city, m.pin_encrypted FROM members m
+              JOIN circle_members cm ON cm.member_id = m.id
+             WHERE cm.circle_id = $1
+             ORDER BY m.created_at
+            """,
+            circle_id,
         )
     return [
         RosterEntry(
@@ -171,14 +223,22 @@ async def delete_member(pool: asyncpg.Pool, member_id: str) -> bool:
     return result.endswith(" 1")
 
 
-async def set_pin(pool: asyncpg.Pool, member_id: str, pin: str, key: str) -> None:
-    """Replace a member's PIN. Existing sessions stay valid on purpose: changing
-    your own PIN should not log you out of the phone you are holding."""
+async def set_pin(pool: asyncpg.Pool, member_id: str, pin: str, key: str) -> bool:
+    """Replace a member's PIN, reporting whether anybody was actually changed.
+
+    The admin now types the login by hand rather than tapping it off a roster, so a
+    typo has to come back as an error instead of a cheerful "PIN o'zgartirildi" for
+    an account that does not exist.
+
+    Existing sessions stay valid on purpose: changing your own PIN should not log you
+    out of the phone you are holding.
+    """
     async with pool.acquire() as connection:
-        await connection.execute(
+        result = await connection.execute(
             "UPDATE members SET pin_encrypted = $2, updated_at = now() WHERE id = $1",
             member_id, encrypt_pin(pin, key),
         )
+    return result.endswith(" 1")
 
 
 # ---------------------------------------------------------------- sessions
@@ -403,8 +463,22 @@ async def seed_members_if_empty(pool: asyncpg.Pool, spec: str, key: str) -> int:
     if not spec or await count_members(pool) > 0:
         return 0
     seeded = parse_seed_members(spec)
+    if not seeded:
+        return 0
     for member in seeded:
         await create_member(pool, member, key)
     if seeded:
-        logger.info("Seeded %d members with generated PINs (see the admin roster)", len(seeded))
+        async with pool.acquire() as connection:
+            circle_id = await connection.fetchval(
+                """
+                INSERT INTO circles (name, kind, owner_id)
+                VALUES ('Do''stlar', 'friends', $1) RETURNING id
+                """,
+                seeded[0].id,
+            )
+            await connection.executemany(
+                "INSERT INTO circle_members (circle_id, member_id) VALUES ($1,$2)",
+                [(circle_id, member.id) for member in seeded],
+            )
+        logger.info("Seeded %d members with generated PINs (see the roster)", len(seeded))
     return len(seeded)

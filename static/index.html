@@ -119,10 +119,9 @@ const CITIES=[
  {n:"Berlin",lat:52.52,lng:13.405,tz:2,asr:2,fa:18,ia:17},
  {n:"Nyu-York",lat:40.713,lng:-74.006,tz:-4,asr:2,fa:18,ia:17}
 ];
-const DEFAULT_MEMBERS=[
- {id:"sardor",name:"Sardor Valixanov",city:"Toshkent",lat:41.2995,lng:69.2401,tz:5,asr:2,fa:18,ia:18,pin:""},
- {id:"behruz",name:"Behruz Qurbonov",city:"Dubay",lat:25.2048,lng:55.2708,tz:4,asr:1,fa:18.2,ia:18.2,pin:""}
-];
+/* Bo'sh: bu ro'yxat sahifa manbasida turadi va uni ochgan har kim o'qiy oladi.
+   Haqiqiy a'zolar /state dan keladi. */
+const DEFAULT_MEMBERS=[];
 
 /* ══════════════ NAMOZ VAQTI ══════════════ */
 const D2R=Math.PI/180;
@@ -295,7 +294,9 @@ async function api(path,opts){
  return r.status===204?null:r.json()}
 function forgetSession(){
  token="";isAdmin=false;LS.set("nd_token","");LS.set("nd_admin",false);
- me=null;LS.set("nd_me",null);screen="login"}
+ me=null;LS.set("nd_me",null);
+ circles=[];circleId=null;LS.set("nd_circles",circles);LS.set("nd_circle",circleId);
+ screen="login"}
 
 /* Marks made while offline wait here. pull() replaces local data with the
    server's copy, so anything not yet sent must be flushed first or it is lost. */
@@ -318,7 +319,7 @@ async function pull(){
  if(!await flushOutbox()){
    online=false;syncMsg="saqlanmagan belgilar bor - qayta urinilmoqda";return false}
  try{
-   const j=await api("/state");
+   const j=await api(circleId?"/state?circle="+encodeURIComponent(circleId):"/state");
    members=j.members;data={};
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
@@ -360,9 +361,10 @@ const uid=()=>Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
 let members=LS.get("nd_members",DEFAULT_MEMBERS);
 let data=LS.get("nd_data",{});
 let me=LS.get("nd_me",null);
+let circles=LS.get("nd_circles",[]),circleId=LS.get("nd_circle",null);
 let screen="login",tab="today",date=today(),pinFor=null,pinErr="",manualCity=false;
 let manualPlace=false,placeMsg="";
-let loginNames=[],loginPick=null,loginErr="",adminMode=false,roster=[],adminErr="";
+let loginErr="",adminMode=false,roster=[],adminErr="";
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -625,14 +627,13 @@ function allNotes(){
 /* ══════════════ AMALLAR ══════════════ */
 const A={
  async boot(){
-  await A.loadNames();
   if(loggedIn()){
    try{
      const who=await api("/auth/me");
      me=who.member_id;isAdmin=who.is_admin;
      LS.set("nd_me",me);LS.set("nd_admin",isAdmin);
-     if(isAdmin){screen="admin";await A.loadRoster()}
-     else{screen="app";await pull();if(M(me))date=todayFor(myCfg())}
+     if(isAdmin){screen="admin"}
+     else{screen="app";await A.loadCircles();await pull();if(M(me))date=todayFor(myCfg())}
    }catch(e){forgetSession()}
   }
   render();
@@ -640,49 +641,71 @@ const A={
    if(loggedIn()&&!isAdmin&&document.visibilityState==="visible"){await pull();render()}};
   setInterval(tick,60000);
   document.addEventListener("visibilitychange",tick)},
- async loadNames(){
-  try{const j=await api("/auth/members");loginNames=j.members}catch(e){loginNames=[]}},
- go(s){screen=s;pinErr="";loginErr="";adminErr="";render()},
+ async go(s){
+  screen=s;pinErr="";loginErr="";adminErr="";
+  if(s==="sync"&&ownsCircle(circles,circleId))await A.loadRoster();
+  render()},
  setTab(t){tab=t;window.scrollTo(0,0);render()},
  statPeriod:"hafta",
  setStatPeriod(v){A.statPeriod=v;render()},
  nishonKim:null,
  setNishonKim(id){A.nishonKim=id;window.scrollTo(0,0);render()},
  setDate(n){const td=todayFor(myCfg()),d=shift(date,n);date=d>td?td:d;render()},
- pickLogin(id){loginPick=loginPick===id?null:id;adminMode=false;loginErr="";render()},
- toggleAdmin(){adminMode=!adminMode;loginPick=null;loginErr="";render()},
- async doLogin(id){
-  const v=(document.getElementById("pinput")||{}).value||"";
+ toggleAdmin(){adminMode=!adminMode;loginErr="";render()},
+ async doLogin(){
+  const id=((document.getElementById("lg_id")||{}).value||"").trim().toLowerCase();
+  const v=(document.getElementById("lg_pin")||{}).value||"";
+  if(!id){loginErr="Loginni yozing";render();return}
   try{
    const j=await api("/auth/login",{method:"POST",
      body:JSON.stringify({member_id:id,pin:v})});
    token=j.token;isAdmin=false;LS.set("nd_token",token);LS.set("nd_admin",false);
-   me=id;LS.set("nd_me",id);data={};LS.set("nd_data",data);
-   screen="app";loginPick=null;loginErr="";
-   await pull();if(M(me))date=todayFor(myCfg());render();
+   me=id;LS.set("nd_me",id);LS.set("nd_login",id);data={};LS.set("nd_data",data);
+   screen="app";loginErr="";
+   await A.loadCircles();await pull();if(M(me))date=todayFor(myCfg());render();
   }catch(e){
-   loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"PIN noto'g'ri";render()}},
+   loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Login yoki PIN noto'g'ri";render()}},
  async doAdminLogin(){
   const v=(document.getElementById("apass")||{}).value||"";
   try{
    const j=await api("/auth/admin",{method:"POST",body:JSON.stringify({password:v})});
    token=j.token;isAdmin=true;LS.set("nd_token",token);LS.set("nd_admin",true);
-   screen="admin";loginErr="";await A.loadRoster();render();
+   screen="admin";loginErr="";render();
   }catch(e){
    loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Parol noto'g'ri";render()}},
  async logout(){
   try{await api("/auth/session",{method:"DELETE"})}catch(e){}
-  forgetSession();loginPick=null;adminMode=false;
-  await A.loadNames();render()},
+  forgetSession();adminMode=false;
+  render()},
  async loadRoster(){
-  try{const j=await api("/admin/roster");roster=j.members;adminErr=""}
+  /* The roster belongs to a circle's owner now. An admin session owns nothing, so
+     this is reached by logging in as yourself, not with the admin password. */
+  if(!circleId){roster=[];adminErr="Doira tanlanmagan";return}
+  try{const j=await api("/circles/"+encodeURIComponent(circleId)+"/roster");
+   roster=j.members;adminErr=""}
   catch(e){roster=[];adminErr=e.message||"Ro'yxatni olib bo'lmadi"}},
- async adminSetPin(id){
-  const v=prompt("Yangi PIN (4 raqam): "+id);
+ async loadCircles(){
+  try{
+   const j=await api("/circles");circles=j.circles;LS.set("nd_circles",circles);
+   if(!circles.some(c=>c.id===circleId))circleId=circles.length?circles[0].id:null;
+   LS.set("nd_circle",circleId);
+  }catch(e){circles=LS.get("nd_circles",[])}},
+ async setCircle(id){
+  /* Avval yuklab olamiz, keyin chizamiz. Bo'shatilgan data bilan darrov chizsak,
+     render o'zi qulab tushadi va pull() ga umuman yetib bormaydi. */
+  circleId=id;LS.set("nd_circle",id);
+  data={};LS.set("nd_data",data);
+  window.scrollTo(0,0);await pull();render()},
+ async adminResetPin(){
+  /* The roster is gone from this screen, so the login is typed rather than tapped.
+     This stays the only way back in for somebody who has forgotten their PIN. */
+  const id=(prompt("Kimning PIN kodi? Login:")||"").trim().toLowerCase();
+  if(!id)return;
+  const v=(prompt("Yangi PIN (4 raqam): "+id)||"").trim();
   if(!v)return;
   if(!/^[0-9]{4}$/.test(v)){alert("PIN 4 ta raqam bo'lsin");return}
   try{await api("/members/"+encodeURIComponent(id)+"/pin",
-    {method:"POST",body:JSON.stringify({new_pin:v})});await A.loadRoster();render()}
+    {method:"POST",body:JSON.stringify({new_pin:v})});alert("PIN o'zgartirildi: "+id)}
   catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
  async changeMyPin(){
   const cur=(document.getElementById("p_cur")||{}).value||"";
@@ -859,13 +882,10 @@ const A={
   try{await api("/members",{method:"POST",
     body:JSON.stringify({id:id,name:name,city:city,lat:lat,lng:lng,tz:tz,asr:asr,fa:fa,ia:ia,pin:pin})})}
   catch(e){err.textContent=e.message||"Qo'shib bo'lmadi";return}
-  await A.loadRoster();screen="admin";render()},
- async delMember(id){
-  if(!confirm(id+" va uning barcha yozuvlari o'chirilsinmi?"))return;
-  try{await api("/members/"+encodeURIComponent(id),{method:"DELETE"})}
-  catch(e){alert(e.message||"O'chirib bo'lmadi");return}
-  if(isAdmin){await A.loadRoster()}else{forgetSession();await A.loadNames()}
-  render()},
+  /* Login shu yerda yasaladi va boshqa hech qayerda ko'rinmaydi — ro'yxat endi
+     doira egasida. Qo'shgan odam uni darrov o'qib olmasa, yo'qoladi. */
+  alert("Qo'shildi.\n\nLogin: "+id+"\nPIN: "+pin+"\n\nShu ikkisini odamga ayting.");
+  screen="admin";render()},
  exportJSON(){
   const blob=new Blob([JSON.stringify({members:members,data:data},null,1)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -887,23 +907,22 @@ function loginScreen(){
  let h=`<div style="max-width:420px;margin:0 auto">
  <div class="eyebrow">Jamoa daftari</div>
  <h1 style="font-size:33px;margin:10px 0 6px">Namoz <span class="brass">Daftari</span></h1>
- <p class="muted" style="font-size:14px;margin:0 0 22px">Kim ekanligingizni tanlang va PIN kodingizni kiriting.
-  Har kim faqat o'z belgisini qo'yadi, statistika hammaga ochiq.</p>`;
+ <p class="muted" style="font-size:14px;margin:0 0 22px">Loginingiz va PIN kodingizni kiriting.
+  Har kim faqat o'z belgisini qo'yadi, statistika esa doiradagilarga ochiq.</p>`;
  if(!adminMode){
-  if(!loginNames.length)h+=`<p class="clay small">Serverga ulanib bo'lmadi. Internetni tekshiring.</p>`;
-  loginNames.forEach(m=>{
-   h+=`<div class="panel p14 mb10" style="border-color:${loginPick===m.id?"var(--brass)":"var(--line)"}">
-    <div class="flex center gap3" style="cursor:pointer" onclick="A.pickLogin('${m.id}')">
-     <div class="hd" style="height:34px;background:${PALETTE[Math.max(0,loginNames.findIndex(x=>x.id===m.id))%PALETTE.length]}"></div>
-     <div style="flex:1"><div style="font-family:var(--serif);font-size:19px">${esc(m.name)}</div>
-      <div class="muted small" style="margin-top:3px">\u{1F512} PIN bilan kiriladi</div></div>
-    </div>`;
-   if(loginPick===m.id)h+=`<div class="flex gap2" style="margin-top:12px">
-     <input id="pinput" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN kod"
-       onkeydown="if(event.key==='Enter')A.doLogin('${m.id}')">
-     <button class="btn btn-gold" style="padding:0 16px" onclick="A.doLogin('${m.id}')">Kirish</button></div>
-     ${loginErr?`<div class="clay small" style="margin-top:7px">${esc(loginErr)}</div>`:""}`;
-   h+=`</div>`});
+  /* Ismlar ro'yxati olib tashlandi: u sahifani ochgan har kimga boshqalarning
+     oilasidagi ayol va bolalar ismini ko'rsatib qo'yardi. Login birinchi
+     muvaffaqiyatli kirishdan keyin telefonda saqlanadi, ya'ni yozish bir marta. */
+  h+=`<div class="panel p14 mb10">
+   <div class="label" style="margin-top:0">Login</div>
+   <input id="lg_id" class="input" autocapitalize="none" autocorrect="off"
+     placeholder="masalan: sardor" value="${esc(LS.get("nd_login",""))}">
+   <div class="label">PIN kod</div>
+   <input id="lg_pin" class="input" type="password" inputmode="numeric" maxlength="4"
+     placeholder="4 raqam" onkeydown="if(event.key==='Enter')A.doLogin()">
+   <button class="btn btn-gold btn-wide" style="margin-top:12px" onclick="A.doLogin()">Kirish</button>
+   ${loginErr?`<div class="clay small" style="margin-top:9px">${esc(loginErr)}</div>`:""}
+  </div>`;
  }else{
   h+=`<div class="panel p14 mb10" style="border-color:var(--brass)">
    <div class="label" style="margin-top:0">Admin paroli</div>
@@ -925,21 +944,17 @@ function adminScreen(){
  <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 18px">Har bir a'zoning PIN kodi quyida.
   Odamga o'z kodini ayting - keyin u Sozlamalardan o'zgartirib oladi.</p>`;
  if(adminErr)h+=`<div class="clay small mb10">${esc(adminErr)}</div>`;
- roster.forEach(m=>{
-  h+=`<div class="panel p14 mb10">
-   <div class="flex between center">
-    <div><div style="font-family:var(--serif);font-size:18px">${esc(m.name)}</div>
-     <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
-    <div style="text-align:right">
-     <div class="brass" style="font-family:var(--serif);font-size:26px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
-     <div class="muted tiny">PIN</div></div>
-   </div>
-   <div class="flex gap2" style="margin-top:12px">
-    <button class="btn" style="flex:1" onclick="A.adminSetPin('${m.id}')">PIN o'zgartirish</button>
-    <button class="btn" onclick="A.delMember('${m.id}')">\u{1F5D1}</button>
-   </div></div>`});
- h+=`<button onclick="A.go('add')" style="width:100%;margin-top:6px;padding:15px;border-radius:14px;background:none;
-   border:1px dashed var(--line);color:var(--brass);font-size:13px;cursor:pointer">+ Yangi odam qo'shish</button>
+ h+=`<div class="panel p14 mb10"><p class="muted small" style="margin:0 0 10px;line-height:1.7">
+   PIN kodlarni ko'rish endi doira egasiga tegishli: o'z loginingiz bilan kiring va
+   <b>Sozlamalar</b> bo'limidan ko'ring.</p>
+   <button class="btn btn-wide" onclick="A.adminResetPin()">PIN kodni tiklash</button></div>`;
+ /* Yangi a'zoni qo'shish 2-bosqichga qoldirildi: hozir uni doiraga bog'laydigan
+    yo'l yo'q, qo'shilgan odam esa hech qaysi doirada bo'lmay, ilovaga kira olsa ham
+    hech narsa ko'rmaydi. Buzuq tugmani qoldirgandan ko'ra olib turgan ma'qul. */
+ h+=`<div class="panel p14" style="border-style:dashed">
+   <p class="muted small" style="margin:0;line-height:1.7">Yangi a'zo qo'shish keyingi
+    bosqichda, oila imkoniyati bilan birga qaytadi — hozir qo'shilgan odam hech qaysi
+    doiraga tushmaydi.</p></div>
   <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
   <div style="height:40px"></div></div>`;
  return h}
@@ -973,6 +988,12 @@ function addScreen(){
  <div id="f_err" class="clay small" style="margin-top:12px"></div>
  <button class="btn btn-green btn-wide" style="margin-top:16px" onclick="A.addMember()">Qo'shish</button>
  <div style="height:40px"></div></div>`}
+
+/* Whether `me` owns the circle currently being viewed. Only the owner is shown the
+   PINs, because those are what gets read out to a new member. */
+function ownsCircle(list,id){
+ const found=(list||[]).find(c=>c.id===id);
+ return !!found&&found.owner_id===me}
 
 function syncScreen(){
  const who=me?myCfg():null;
@@ -1022,6 +1043,16 @@ function syncScreen(){
       <button class="btn" style="padding:2px 7px;font-size:10px" onclick="A.delPlace('${x.d}')">×</button></span></div>`).join("")}
    </div>`:""}
  </div>
+ ${ownsCircle(circles,circleId)?`<div class="label">Doira a'zolari</div>
+  <p class="muted small" style="margin:0 0 9px;line-height:1.6">Siz shu doiraning egasisiz.
+   Yangi a'zoga o'z PIN kodini shu yerdan aytasiz.</p>
+  ${adminErr?`<div class="clay small mb10">${esc(adminErr)}</div>`:""}
+  ${roster.map(m=>`<div class="panel p14 mb10 flex between center">
+    <div><div style="font-family:var(--serif);font-size:17px">${esc(m.name)}</div>
+     <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
+    <div style="text-align:right">
+     <div class="brass" style="font-family:var(--serif);font-size:24px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
+     <div class="muted tiny">PIN</div></div></div>`).join("")}`:""}
  <div class="label">PIN kodni o'zgartirish</div>
  <input id="p_cur" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="joriy PIN">
  <input id="p_new" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="yangi PIN (4 raqam)" style="margin-top:8px">
@@ -1505,6 +1536,15 @@ function nishonTab(){
   </div>`});
  return h+`<div style="height:16px"></div>`}
 
+/* Doira almashtirgichi. Bitta doira bo'lsa ko'rsatilmaydi — tanlanadigan narsa
+   yo'q joyda tugma qatori shovqindan boshqa narsa emas. */
+function circleSwitcher(list){
+ if(!list||list.length<2)return "";
+ const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
+ return `<div class="flex gap2 mb14" style="flex-wrap:wrap">`+list.map(c=>
+   `<button class="btn" style="${c.id===circleId?on:""}"
+     onclick="A.setCircle(${c.id})">${esc(c.name)}</button>`).join("")+`</div>`}
+
 /* ────────── RENDER ────────── */
 function render(){
  const app=document.getElementById("app");
@@ -1513,7 +1553,20 @@ function render(){
  if(screen==="add"){app.innerHTML=addScreen();return}
  if(screen==="admin"){app.innerHTML=adminScreen();return}
  if(screen==="sync"){app.innerHTML=syncScreen();return}
- if(!me||!myCfg()){app.innerHTML=loginScreen();return}
+ /* Doirasi yo'q yoki ma'lumoti kelmagan a'zo: ilgari bunday holat bo'lmasdi,
+    endi bo'lishi mumkin. Chizishga urinsak render qulab, ekran butunlay oq
+    qoladi — na xabar, na chiqish tugmasi. Shuning uchun aniq to'xtatamiz. */
+ if(!me||!members.some(x=>x.id===me)||!data[me]){
+  app.innerHTML=`<div style="max-width:420px;margin:0 auto;padding-top:40px">
+   <div class="eyebrow">Namoz Daftari</div>
+   <h1 style="font-size:26px;margin:10px 0 8px">Doira topilmadi</h1>
+   <p class="muted" style="font-size:14px;line-height:1.7">Siz hali hech qaysi doiraga
+    qo'shilmagansiz, yoki ma'lumot yuklanmadi. Internetni tekshirib qayta urinib ko'ring —
+    yordam bermasa, doira egasiga ayting.</p>
+   ${syncMsg?`<p class="clay small">${esc(syncMsg)}</p>`:""}
+   <button class="btn btn-gold btn-wide" style="margin-top:16px" onclick="A.refresh()">Qayta urinish</button>
+   <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
+  </div>`;return}
  const cfg=myCfg();
  let h=`<div class="flex between center mb18">
   <div class="flex center gap3">
@@ -1528,6 +1581,7 @@ function render(){
    <button class="btn" onclick="A.go('sync')">⚙</button>
   </div></div>
  <div class="ayat mb18"><span class="brass">❝</span><span>${AYAT[new Date(date+"T12:00:00").getDate()%AYAT.length]}</span></div>`;
+ h+=circleSwitcher(circles);
  h+= tab==="today"?todayTab():tab==="stats"?statsTab():tab==="sunnat"?sunnatTab():tab==="book"?bookTab():tab==="nishon"?nishonTab():taskTab();
  h+=`<div class="tabbar"><div>
   <button class="${tab==="today"?"on":""}" onclick="A.setTab('today')"><span>📋</span>Bugun</button>
