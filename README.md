@@ -80,6 +80,12 @@ the first success, so the typing happens once.
 
 Errors always come back as `{"error": {"code": "...", "message": "..."}}`.
 
+**The tests never reach a database, so one of them reads the SQL instead.**
+`tests/test_sql_matches_schema.py` parses the migrations into a schema and every query
+in `app/repository.py` against it. It runs nothing; it catches the failure the fake pool
+cannot see — a column renamed in a migration and missed in a query, which would ship
+green and break every screen at once.
+
 **There is no `POST /api/v1/members`.** Creating a person happens through a circle,
 because an account made outside one belongs to no group: it can log in and then see
 nothing, with no screen able to help it. Adding through the circle makes that state
