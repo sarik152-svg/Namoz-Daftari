@@ -1,4 +1,5 @@
 import pytest
+from cryptography.fernet import Fernet
 
 from tests.fakes import FakeConnection, FakePool
 
@@ -115,3 +116,14 @@ async def test_state_is_limited_to_one_circle():
     await repository.fetch_group_state(FakePool(connection), circle_id=7)
     assert connection.issued("JOIN circle_members")
     assert 7 in connection.args_for("FROM members")
+
+
+@pytest.mark.asyncio
+async def test_seeding_an_empty_database_creates_the_friends_circle():
+    connection = FakeConnection(scalars={"count(*)": 0})
+    spec = "sardor:Sardor:Toshkent:41.3:69.2:5:2:18:18"
+    await repository.seed_members_if_empty(
+        FakePool(connection), spec, Fernet.generate_key().decode()
+    )
+    assert connection.issued("INSERT INTO circles")
+    assert connection.issued("INSERT INTO circle_members")

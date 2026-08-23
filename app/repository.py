@@ -458,5 +458,17 @@ async def seed_members_if_empty(pool: asyncpg.Pool, spec: str, key: str) -> int:
     for member in seeded:
         await create_member(pool, member, key)
     if seeded:
-        logger.info("Seeded %d members with generated PINs (see the admin roster)", len(seeded))
+        async with pool.acquire() as connection:
+            circle_id = await connection.fetchval(
+                """
+                INSERT INTO circles (name, kind, owner_id)
+                VALUES ('Do''stlar', 'friends', $1) RETURNING id
+                """,
+                seeded[0].id,
+            )
+            await connection.executemany(
+                "INSERT INTO circle_members (circle_id, member_id) VALUES ($1,$2)",
+                [(circle_id, member.id) for member in seeded],
+            )
+        logger.info("Seeded %d members with generated PINs (see the roster)", len(seeded))
     return len(seeded)
