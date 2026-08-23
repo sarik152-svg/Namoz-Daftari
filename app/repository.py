@@ -223,14 +223,22 @@ async def delete_member(pool: asyncpg.Pool, member_id: str) -> bool:
     return result.endswith(" 1")
 
 
-async def set_pin(pool: asyncpg.Pool, member_id: str, pin: str, key: str) -> None:
-    """Replace a member's PIN. Existing sessions stay valid on purpose: changing
-    your own PIN should not log you out of the phone you are holding."""
+async def set_pin(pool: asyncpg.Pool, member_id: str, pin: str, key: str) -> bool:
+    """Replace a member's PIN, reporting whether anybody was actually changed.
+
+    The admin now types the login by hand rather than tapping it off a roster, so a
+    typo has to come back as an error instead of a cheerful "PIN o'zgartirildi" for
+    an account that does not exist.
+
+    Existing sessions stay valid on purpose: changing your own PIN should not log you
+    out of the phone you are holding.
+    """
     async with pool.acquire() as connection:
-        await connection.execute(
+        result = await connection.execute(
             "UPDATE members SET pin_encrypted = $2, updated_at = now() WHERE id = $1",
             member_id, encrypt_pin(pin, key),
         )
+    return result.endswith(" 1")
 
 
 # ---------------------------------------------------------------- sessions
@@ -455,6 +463,8 @@ async def seed_members_if_empty(pool: asyncpg.Pool, spec: str, key: str) -> int:
     if not spec or await count_members(pool) > 0:
         return 0
     seeded = parse_seed_members(spec)
+    if not seeded:
+        return 0
     for member in seeded:
         await create_member(pool, member, key)
     if seeded:

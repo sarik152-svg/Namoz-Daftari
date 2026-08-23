@@ -135,3 +135,26 @@ async def test_admin_password_is_checked(api, connection):
     async with api as client:
         bad = await client.post("/api/v1/auth/admin", json={"password": "wrong"})
     assert bad.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_resetting_the_pin_of_a_missing_member_is_an_error(api, connection):
+    """The admin types the login by hand now, so a typo must not report success."""
+    headers = as_session(connection, member_id=None, is_admin=True)
+    connection.results["UPDATE members SET pin_encrypted"] = "UPDATE 0"
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/nobody/pin", json={"new_pin": "1234"}, headers=headers
+        )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "no_member"
+
+
+@pytest.mark.asyncio
+async def test_resetting_the_pin_of_a_real_member_succeeds(api, connection):
+    headers = as_session(connection, member_id=None, is_admin=True)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/behruz/pin", json={"new_pin": "1234"}, headers=headers
+        )
+    assert response.status_code == 200

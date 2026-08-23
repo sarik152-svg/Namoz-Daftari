@@ -119,10 +119,9 @@ const CITIES=[
  {n:"Berlin",lat:52.52,lng:13.405,tz:2,asr:2,fa:18,ia:17},
  {n:"Nyu-York",lat:40.713,lng:-74.006,tz:-4,asr:2,fa:18,ia:17}
 ];
-const DEFAULT_MEMBERS=[
- {id:"sardor",name:"Sardor Valixanov",city:"Toshkent",lat:41.2995,lng:69.2401,tz:5,asr:2,fa:18,ia:18,pin:""},
- {id:"behruz",name:"Behruz Qurbonov",city:"Dubay",lat:25.2048,lng:55.2708,tz:4,asr:1,fa:18.2,ia:18.2,pin:""}
-];
+/* Bo'sh: bu ro'yxat sahifa manbasida turadi va uni ochgan har kim o'qiy oladi.
+   Haqiqiy a'zolar /state dan keladi. */
+const DEFAULT_MEMBERS=[];
 
 /* ══════════════ NAMOZ VAQTI ══════════════ */
 const D2R=Math.PI/180;
@@ -887,12 +886,6 @@ const A={
      doira egasida. Qo'shgan odam uni darrov o'qib olmasa, yo'qoladi. */
   alert("Qo'shildi.\n\nLogin: "+id+"\nPIN: "+pin+"\n\nShu ikkisini odamga ayting.");
   screen="admin";render()},
- async delMember(id){
-  if(!confirm(id+" va uning barcha yozuvlari o'chirilsinmi?"))return;
-  try{await api("/members/"+encodeURIComponent(id),{method:"DELETE"})}
-  catch(e){alert(e.message||"O'chirib bo'lmadi");return}
-  if(!isAdmin)forgetSession();
-  render()},
  exportJSON(){
   const blob=new Blob([JSON.stringify({members:members,data:data},null,1)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);

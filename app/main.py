@@ -1,11 +1,12 @@
 """HTTP layer for Namoz Daftari.
 
-Every request except the login screen's name list carries a session token. The
+Every request carries a session token; there is no longer a public name list. The
 session says who you are, and writes compare that identity against the member being
 written to. There is no shared secret: ownership is structural, not a header check.
 
-Admin is a second kind of session with unrestricted power, including reading PINs.
-That is a deliberate, owner-approved trade-off recorded in the design spec.
+Admin is a second kind of session that can overwrite a mark and reset a PIN. It can
+no longer read them: an admin session has no member_id and so owns no circle, and PINs
+belong to a circle's owner.
 """
 from __future__ import annotations
 
@@ -279,7 +280,8 @@ async def change_pin(
             raise _error("bad_pin", "Joriy PIN noto'g'ri", status.HTTP_403_FORBIDDEN)
         await repository.clear_failures(pool, member_id)
 
-    await repository.set_pin(pool, member_id, body.new_pin, key)
+    if not await repository.set_pin(pool, member_id, body.new_pin, key):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
     return {"ok": True}
 
 
@@ -292,7 +294,7 @@ async def remove_member(
     return {"ok": True}
 
 
-# ---------------------------------------------------------------- admin routes
+# ---------------------------------------------------------------- circle routes
 @app.get(f"{API_PREFIX}/circles/{{circle_id}}/roster")
 async def circle_roster(
     circle_id: int, request: Request, session: Session = Depends(require_session)

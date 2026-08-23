@@ -16,9 +16,13 @@ def flatten(query: str) -> str:
 
 
 class FakeConnection:
-    def __init__(self, rows: dict | None = None, scalars: dict | None = None):
+    def __init__(self, rows: dict | None = None, scalars: dict | None = None,
+                 results: dict | None = None):
         self.rows = rows or {}
         self.scalars = scalars or {}
+        # asyncpg answers a write with a tag like "UPDATE 1"; callers read the count
+        # off it. Default to one row so the common case needs no setup.
+        self.results = results or {}
         self.executed: list[tuple[str, tuple]] = []
         self.executed_many: list[tuple[str, list]] = []
 
@@ -43,7 +47,8 @@ class FakeConnection:
 
     async def execute(self, query: str, *args):
         self.executed.append((flatten(query), args))
-        return "OK 1"
+        found = self._match(self.results, query)
+        return "OK 1" if found is None else found
 
     async def executemany(self, query: str, args):
         self.executed_many.append((flatten(query), list(args)))
