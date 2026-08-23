@@ -1220,9 +1220,10 @@ async def test_the_name_list_is_gone(api, connection):
 async def test_login_still_works_by_id_and_pin(api, connection, settings):
     from app.security import encrypt_pin
 
-    connection.scalars["SELECT pin_encrypted"] = encrypt_pin(
-        "1234", settings.pin_encryption_key
-    )
+    # fetch_encrypted_pin uses fetchrow, which reads `rows` — not `scalars`.
+    connection.rows["SELECT pin_encrypted"] = [
+        {"pin_encrypted": encrypt_pin("1234", settings.pin_encryption_key)}
+    ]
     async with api as client:
         response = await client.post(
             "/api/v1/auth/login", json={"member_id": "sardor", "pin": "1234"}
