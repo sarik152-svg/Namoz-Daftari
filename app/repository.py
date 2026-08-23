@@ -84,6 +84,14 @@ async def is_circle_member(pool: asyncpg.Pool, circle_id: int, member_id: str) -
         )
 
 
+async def fetch_circle(pool: asyncpg.Pool, circle_id: int) -> Circle | None:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            f"SELECT {_CIRCLE_COLUMNS} FROM circles WHERE id = $1", circle_id
+        )
+    return None if row is None else Circle(**dict(row))
+
+
 async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
     """Load one circle's members and everything they have logged.
 
@@ -166,11 +174,17 @@ async def fetch_public_members(pool: asyncpg.Pool) -> list[PublicMember]:
     return [PublicMember(id=row["id"], name=row["name"]) for row in rows]
 
 
-async def fetch_roster(pool: asyncpg.Pool, key: str) -> list[RosterEntry]:
-    """Admin view: every member with their PIN decrypted."""
+async def fetch_roster(pool: asyncpg.Pool, circle_id: int, key: str) -> list[RosterEntry]:
+    """One circle's members with their PINs decrypted. Owner only, by design."""
     async with pool.acquire() as connection:
         rows = await connection.fetch(
-            "SELECT id, name, city, pin_encrypted FROM members ORDER BY created_at"
+            """
+            SELECT m.id, m.name, m.city, m.pin_encrypted FROM members m
+              JOIN circle_members cm ON cm.member_id = m.id
+             WHERE cm.circle_id = $1
+             ORDER BY m.created_at
+            """,
+            circle_id,
         )
     return [
         RosterEntry(

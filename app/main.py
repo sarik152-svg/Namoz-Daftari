@@ -301,11 +301,21 @@ async def remove_member(
 
 
 # ---------------------------------------------------------------- admin routes
-@app.get(f"{API_PREFIX}/admin/roster", dependencies=[Depends(require_admin)])
-async def admin_roster(request: Request) -> dict:
-    """The roster with PINs in the clear. Admin only, by explicit design."""
+@app.get(f"{API_PREFIX}/circles/{{circle_id}}/roster")
+async def circle_roster(
+    circle_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """A circle's members with PINs in the clear, for its owner only.
+
+    This replaces the single global admin roster: with families in the picture,
+    "everyone" is no longer a group anybody should be able to enumerate.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    circle = await repository.fetch_circle(pool, circle_id)
+    if circle is None or circle.owner_id != session.member_id:
+        raise _error("not_circle_owner", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN)
     entries = await repository.fetch_roster(
-        request.app.state.pool, request.app.state.settings.pin_encryption_key
+        pool, circle_id, request.app.state.settings.pin_encryption_key
     )
     return {"members": [e.model_dump() for e in entries]}
 

@@ -75,11 +75,35 @@ async def test_login_names_are_public(api, connection):
 
 
 @pytest.mark.asyncio
-async def test_roster_is_admin_only(api, connection):
-    headers = as_session(connection, is_admin=False)
+async def test_roster_refuses_a_circle_you_do_not_own(api, connection):
+    headers = as_session(connection)
+    connection.rows["FROM circles WHERE id"] = [{
+        "id": 1, "name": "Oila", "kind": "family",
+        "owner_id": "behruz", "week_goal": 25,
+    }]
     async with api as client:
-        response = await client.get("/api/v1/admin/roster", headers=headers)
+        response = await client.get("/api/v1/circles/1/roster", headers=headers)
     assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_circle_owner"
+
+
+@pytest.mark.asyncio
+async def test_owner_sees_the_roster_with_pins(api, connection, settings):
+    from app.security import encrypt_pin
+
+    headers = as_session(connection)
+    connection.rows["FROM circles WHERE id"] = [{
+        "id": 1, "name": "Do'stlar", "kind": "friends",
+        "owner_id": "sardor", "week_goal": 25,
+    }]
+    connection.rows["pin_encrypted"] = [{
+        "id": "behruz", "name": "Behruz", "city": "Dubay",
+        "pin_encrypted": encrypt_pin("1234", settings.pin_encryption_key),
+    }]
+    async with api as client:
+        response = await client.get("/api/v1/circles/1/roster", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["members"][0]["pin"] == "1234"
 
 
 @pytest.mark.asyncio
