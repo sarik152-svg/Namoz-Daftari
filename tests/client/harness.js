@@ -50,7 +50,8 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [] } = {}) {
        if ("date" in patch) date = patch.date;
        if ("token" in patch) token = patch.token;
        if ("isAdmin" in patch) isAdmin = patch.isAdmin;
-     };`,
+     };
+     globalThis.__state_day = () => ((data[me]||{}).days||{})[date] || {};`,
     sandbox
   );
 
@@ -70,6 +71,13 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [] } = {}) {
     confirms,
     setConfirm(answer) { sandbox.__confirm = answer; },
     setState: sandbox.__setState,
+    /* The prayer written for `me` on `date`; with no argument, the whole day, or
+       undefined when nothing has been marked. */
+    __day(prayer) {
+      const day = sandbox.__state_day();
+      if (prayer) return day[prayer];
+      return Object.keys(day).length ? day : undefined;
+    },
   };
 }
 
