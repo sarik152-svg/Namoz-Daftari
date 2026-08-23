@@ -886,7 +886,7 @@ const A={
   if(!confirm(id+" va uning barcha yozuvlari o'chirilsinmi?"))return;
   try{await api("/members/"+encodeURIComponent(id),{method:"DELETE"})}
   catch(e){alert(e.message||"O'chirib bo'lmadi");return}
-  if(isAdmin){await A.loadRoster()}else{forgetSession()}
+  if(!isAdmin)forgetSession();
   render()},
  exportJSON(){
   const blob=new Blob([JSON.stringify({members:members,data:data},null,1)],{type:"application/json"});
