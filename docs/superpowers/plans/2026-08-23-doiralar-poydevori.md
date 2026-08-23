@@ -1647,12 +1647,32 @@ In `syncScreen()`, immediately before the line `<div class="label">PIN kodni o'z
 In `adminScreen()`, replace the `roster.forEach(...)` block — everything from `roster.forEach(m=>{` through the line ending `</div>`;});` — with:
 
 ```js
- h+=`<div class="panel p14 mb10"><p class="muted small" style="margin:0;line-height:1.7">
+ h+=`<div class="panel p14 mb10"><p class="muted small" style="margin:0 0 10px;line-height:1.7">
    PIN kodlarni ko'rish endi doira egasiga tegishli: o'z loginingiz bilan kiring va
-   <b>Sozlamalar</b> bo'limidan ko'ring. Bu yerdan faqat yangi odam qo'shiladi.</p></div>`;
+   <b>Sozlamalar</b> bo'limidan ko'ring.</p>
+   <button class="btn btn-wide" onclick="A.adminResetPin()">PIN kodni tiklash</button></div>`;
 ```
 
-Also, in `A.boot` and `A.doAdminLogin`, delete the `await A.loadRoster();` calls — the admin screen no longer shows a roster. Delete `A.adminSetPin` and the `A.delMember`/roster buttons that referenced it if they are now unreachable; if `A.delMember` is still called from elsewhere, leave it.
+Removing the roster from this screen would also remove the only way to reset a forgotten
+PIN, so replace `A.adminSetPin` (which took an id from a roster row that no longer exists)
+with one that asks for the login:
+
+```js
+ async adminResetPin(){
+  /* The roster is gone from this screen, so the login is typed rather than tapped.
+     This stays the only way back in for somebody who has forgotten their PIN. */
+  const id=(prompt("Kimning PIN kodi? Login:")||"").trim().toLowerCase();
+  if(!id)return;
+  const v=(prompt("Yangi PIN (4 raqam): "+id)||"").trim();
+  if(!v)return;
+  if(!/^[0-9]{4}$/.test(v)){alert("PIN 4 ta raqam bo'lsin");return}
+  try{await api("/members/"+encodeURIComponent(id)+"/pin",
+    {method:"POST",body:JSON.stringify({new_pin:v})});alert("PIN o'zgartirildi: "+id)}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+```
+
+Also, in `A.boot` and `A.doAdminLogin`, delete the `await A.loadRoster();` calls — the
+admin screen no longer shows a roster.
 
 - [ ] **Step 7: Run both suites**
 
