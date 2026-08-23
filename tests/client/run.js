@@ -8,20 +8,23 @@ const assert = require("assert");
 let passed = 0;
 const failures = [];
 
-for (const file of fs.readdirSync(__dirname).filter(f => f.endsWith(".test.js")).sort()) {
-  const suite = require(path.join(__dirname, file));
-  for (const [name, run] of Object.entries(suite)) {
-    try {
-      run(assert);
-      passed += 1;
-      console.log(`  ok  ${file} · ${name}`);
-    } catch (error) {
-      failures.push({ file, name, error });
-      console.log(`FAIL  ${file} · ${name}`);
-      console.log(`      ${error.message}`);
+async function main() {
+  for (const file of fs.readdirSync(__dirname).filter(f => f.endsWith(".test.js")).sort()) {
+    const suite = require(path.join(__dirname, file));
+    for (const [name, run] of Object.entries(suite)) {
+      try {
+        await run(assert);
+        passed += 1;
+        console.log(`  ok  ${file} · ${name}`);
+      } catch (error) {
+        failures.push({ file, name, error });
+        console.log(`FAIL  ${file} · ${name}`);
+        console.log(`      ${error.message}`);
+      }
     }
   }
+  console.log(`\n${passed} passed, ${failures.length} failed`);
+  process.exit(failures.length ? 1 : 0);
 }
 
-console.log(`\n${passed} passed, ${failures.length} failed`);
-process.exit(failures.length ? 1 : 0);
+main();

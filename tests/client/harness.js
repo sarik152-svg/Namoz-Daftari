@@ -19,11 +19,28 @@ function clientSource() {
 
 /* `at` is the wall-clock instant the app should believe it is, as a UTC ISO string.
    Prayer times depend entirely on the clock, so every test states its own. */
-function loadClient({ at = "2026-08-22T09:00:00Z", expose = [] } = {}) {
+/* `routes` stubs the API: a map of path (without the /api/v1 prefix) to the body it
+   answers with. Give a body a `__status` to make it an error. Without this the app can
+   only be poked at as text, which is how a switcher that never once ran shipped. */
+function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } = {}) {
   const RealDate = Date;
   const frozen = new RealDate(at);
-  const element = { value: "", textContent: "", className: "", innerHTML: "" };
+  /* Every assignment to #app is kept, not just the last one: a screen that flashes
+     and is immediately replaced is still a screen the user saw. */
+  const renders = [];
+  const element = { value: "", textContent: "", className: "" };
+  let painted = "";
+  Object.defineProperty(element, "innerHTML", {
+    get: () => painted,
+    set(value) { painted = value; renders.push(value); },
+  });
   const confirms = [];
+  const calls = [];
+  const reply = (status, body) => ({
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+  });
   const sandbox = {
     console,
     setInterval() {},
@@ -33,7 +50,17 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [] } = {}) {
     localStorage: { getItem: () => null, setItem() {} },
     document: { getElementById: () => element, addEventListener() {} },
     window: { scrollTo() {}, scrollY: 0 },
-    fetch: () => Promise.reject(new Error("offline")),
+    fetch: (url, options) => {
+      const path = String(url).replace(/^\/api\/v1/, "");
+      calls.push({ path, method: (options && options.method) || "GET" });
+      if (!routes) return Promise.reject(new Error("offline"));
+      const found = routes[path];
+      if (found === undefined) {
+        return Promise.resolve(reply(404, { error: { code: "not_found", message: path } }));
+      }
+      const body = typeof found === "function" ? found(options) : found;
+      return Promise.resolve(reply(body && body.__status ? body.__status : 200, body));
+    },
     __confirm: true,
   };
   sandbox.globalThis = sandbox;
@@ -71,6 +98,12 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [] } = {}) {
     confirms,
     setConfirm(answer) { sandbox.__confirm = answer; },
     setState: sandbox.__setState,
+    /* Every request the app made, in order. */
+    calls,
+    /* Whatever render() last wrote into #app. */
+    get html() { return element.innerHTML; },
+    /* Every screen painted, in order. */
+    renders,
     /* The prayer written for `me` on `date`; with no argument, the whole day, or
        undefined when nothing has been marked. */
     __day(prayer) {
