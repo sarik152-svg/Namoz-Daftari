@@ -315,15 +315,6 @@ class MemberCreate(BaseModel):
     _check_pin = field_validator("pin")(_validate_pin)
 
 
-class PublicMember(BaseModel):
-    """What the login screen may know before anyone authenticates: a name only."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    name: str
-
-
 class RosterEntry(BaseModel):
     """Admin view of a member, including the PIN in the clear."""
 

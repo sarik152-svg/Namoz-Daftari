@@ -64,14 +64,26 @@ async def test_state_returns_the_circle(api, connection):
 
 
 @pytest.mark.asyncio
-async def test_login_names_are_public(api, connection):
-    connection.rows["SELECT id, name FROM members"] = [
-        {"id": "sardor", "name": "Sardor Valixanov"}
-    ]
+async def test_the_name_list_is_gone(api, connection):
+    """Publishing every name would leak the names of other people's families."""
     async with api as client:
         response = await client.get("/api/v1/auth/members")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_login_still_works_by_id_and_pin(api, connection, settings):
+    from app.security import encrypt_pin
+
+    connection.rows["SELECT pin_encrypted"] = [
+        {"pin_encrypted": encrypt_pin("1234", settings.pin_encryption_key)}
+    ]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/auth/login", json={"member_id": "sardor", "pin": "1234"}
+        )
     assert response.status_code == 200
-    assert response.json()["members"][0]["name"] == "Sardor Valixanov"
+    assert response.json()["member_id"] == "sardor"
 
 
 @pytest.mark.asyncio

@@ -28,7 +28,6 @@ from app.models import (
     MemberCreate,
     MemberData,
     MemberProfile,
-    PublicMember,
     RosterEntry,
     Session,
     Task,
@@ -165,13 +164,6 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         for member in members
     }
     return GroupState(members=members, data=data)
-
-
-async def fetch_public_members(pool: asyncpg.Pool) -> list[PublicMember]:
-    """Names for the login picker. The only thing readable without a session."""
-    async with pool.acquire() as connection:
-        rows = await connection.fetch("SELECT id, name FROM members ORDER BY created_at")
-    return [PublicMember(id=row["id"], name=row["name"]) for row in rows]
 
 
 async def fetch_roster(pool: asyncpg.Pool, circle_id: int, key: str) -> list[RosterEntry]:

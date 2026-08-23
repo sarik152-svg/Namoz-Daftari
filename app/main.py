@@ -141,14 +141,6 @@ async def health(request: Request) -> dict:
     return {"status": "ok"}
 
 
-@app.get(f"{API_PREFIX}/auth/members")
-async def list_login_names(request: Request) -> dict:
-    """Names for the login picker. Deliberately public, and deliberately minimal:
-    ids and display names only, never a city, a PIN, or a record."""
-    members = await repository.fetch_public_members(request.app.state.pool)
-    return {"members": [m.model_dump() for m in members]}
-
-
 @app.post(f"{API_PREFIX}/auth/login")
 async def login(body: LoginRequest, request: Request) -> dict:
     pool: asyncpg.Pool = request.app.state.pool
