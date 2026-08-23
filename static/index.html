@@ -633,7 +633,7 @@ const A={
      const who=await api("/auth/me");
      me=who.member_id;isAdmin=who.is_admin;
      LS.set("nd_me",me);LS.set("nd_admin",isAdmin);
-     if(isAdmin){screen="admin";await A.loadRoster()}
+     if(isAdmin){screen="admin"}
      else{screen="app";await A.loadCircles();await pull();if(M(me))date=todayFor(myCfg())}
    }catch(e){forgetSession()}
   }
@@ -642,7 +642,10 @@ const A={
    if(loggedIn()&&!isAdmin&&document.visibilityState==="visible"){await pull();render()}};
   setInterval(tick,60000);
   document.addEventListener("visibilitychange",tick)},
- go(s){screen=s;pinErr="";loginErr="";adminErr="";render()},
+ async go(s){
+  screen=s;pinErr="";loginErr="";adminErr="";
+  if(s==="sync"&&ownsCircle(circles,circleId))await A.loadRoster();
+  render()},
  setTab(t){tab=t;window.scrollTo(0,0);render()},
  statPeriod:"hafta",
  setStatPeriod(v){A.statPeriod=v;render()},
@@ -668,7 +671,7 @@ const A={
   try{
    const j=await api("/auth/admin",{method:"POST",body:JSON.stringify({password:v})});
    token=j.token;isAdmin=true;LS.set("nd_token",token);LS.set("nd_admin",true);
-   screen="admin";loginErr="";await A.loadRoster();render();
+   screen="admin";loginErr="";render();
   }catch(e){
    loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Parol noto'g'ri";render()}},
  async logout(){
@@ -676,7 +679,11 @@ const A={
   forgetSession();adminMode=false;
   render()},
  async loadRoster(){
-  try{const j=await api("/admin/roster");roster=j.members;adminErr=""}
+  /* The roster belongs to a circle's owner now. An admin session owns nothing, so
+     this is reached by logging in as yourself, not with the admin password. */
+  if(!circleId){roster=[];adminErr="Doira tanlanmagan";return}
+  try{const j=await api("/circles/"+encodeURIComponent(circleId)+"/roster");
+   roster=j.members;adminErr=""}
   catch(e){roster=[];adminErr=e.message||"Ro'yxatni olib bo'lmadi"}},
  async loadCircles(){
   try{
@@ -688,12 +695,16 @@ const A={
   circleId=id;LS.set("nd_circle",id);
   data={};LS.set("nd_data",data);
   window.scrollTo(0,0);render();await pull();render()},
- async adminSetPin(id){
-  const v=prompt("Yangi PIN (4 raqam): "+id);
+ async adminResetPin(){
+  /* The roster is gone from this screen, so the login is typed rather than tapped.
+     This stays the only way back in for somebody who has forgotten their PIN. */
+  const id=(prompt("Kimning PIN kodi? Login:")||"").trim().toLowerCase();
+  if(!id)return;
+  const v=(prompt("Yangi PIN (4 raqam): "+id)||"").trim();
   if(!v)return;
   if(!/^[0-9]{4}$/.test(v)){alert("PIN 4 ta raqam bo'lsin");return}
   try{await api("/members/"+encodeURIComponent(id)+"/pin",
-    {method:"POST",body:JSON.stringify({new_pin:v})});await A.loadRoster();render()}
+    {method:"POST",body:JSON.stringify({new_pin:v})});alert("PIN o'zgartirildi: "+id)}
   catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
  async changeMyPin(){
   const cur=(document.getElementById("p_cur")||{}).value||"";
@@ -935,19 +946,10 @@ function adminScreen(){
  <p class="muted" style="font-size:13px;line-height:1.6;margin:0 0 18px">Har bir a'zoning PIN kodi quyida.
   Odamga o'z kodini ayting - keyin u Sozlamalardan o'zgartirib oladi.</p>`;
  if(adminErr)h+=`<div class="clay small mb10">${esc(adminErr)}</div>`;
- roster.forEach(m=>{
-  h+=`<div class="panel p14 mb10">
-   <div class="flex between center">
-    <div><div style="font-family:var(--serif);font-size:18px">${esc(m.name)}</div>
-     <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
-    <div style="text-align:right">
-     <div class="brass" style="font-family:var(--serif);font-size:26px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
-     <div class="muted tiny">PIN</div></div>
-   </div>
-   <div class="flex gap2" style="margin-top:12px">
-    <button class="btn" style="flex:1" onclick="A.adminSetPin('${m.id}')">PIN o'zgartirish</button>
-    <button class="btn" onclick="A.delMember('${m.id}')">\u{1F5D1}</button>
-   </div></div>`});
+ h+=`<div class="panel p14 mb10"><p class="muted small" style="margin:0 0 10px;line-height:1.7">
+   PIN kodlarni ko'rish endi doira egasiga tegishli: o'z loginingiz bilan kiring va
+   <b>Sozlamalar</b> bo'limidan ko'ring.</p>
+   <button class="btn btn-wide" onclick="A.adminResetPin()">PIN kodni tiklash</button></div>`;
  h+=`<button onclick="A.go('add')" style="width:100%;margin-top:6px;padding:15px;border-radius:14px;background:none;
    border:1px dashed var(--line);color:var(--brass);font-size:13px;cursor:pointer">+ Yangi odam qo'shish</button>
   <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
@@ -983,6 +985,12 @@ function addScreen(){
  <div id="f_err" class="clay small" style="margin-top:12px"></div>
  <button class="btn btn-green btn-wide" style="margin-top:16px" onclick="A.addMember()">Qo'shish</button>
  <div style="height:40px"></div></div>`}
+
+/* Whether `me` owns the circle currently being viewed. Only the owner is shown the
+   PINs, because those are what gets read out to a new member. */
+function ownsCircle(list,id){
+ const found=(list||[]).find(c=>c.id===id);
+ return !!found&&found.owner_id===me}
 
 function syncScreen(){
  const who=me?myCfg():null;
@@ -1032,6 +1040,16 @@ function syncScreen(){
       <button class="btn" style="padding:2px 7px;font-size:10px" onclick="A.delPlace('${x.d}')">×</button></span></div>`).join("")}
    </div>`:""}
  </div>
+ ${ownsCircle(circles,circleId)?`<div class="label">Doira a'zolari</div>
+  <p class="muted small" style="margin:0 0 9px;line-height:1.6">Siz shu doiraning egasisiz.
+   Yangi a'zoga o'z PIN kodini shu yerdan aytasiz.</p>
+  ${adminErr?`<div class="clay small mb10">${esc(adminErr)}</div>`:""}
+  ${roster.map(m=>`<div class="panel p14 mb10 flex between center">
+    <div><div style="font-family:var(--serif);font-size:17px">${esc(m.name)}</div>
+     <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
+    <div style="text-align:right">
+     <div class="brass" style="font-family:var(--serif);font-size:24px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
+     <div class="muted tiny">PIN</div></div></div>`).join("")}`:""}
  <div class="label">PIN kodni o'zgartirish</div>
  <input id="p_cur" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="joriy PIN">
  <input id="p_new" class="input" type="password" inputmode="numeric" maxlength="4" placeholder="yangi PIN (4 raqam)" style="margin-top:8px">

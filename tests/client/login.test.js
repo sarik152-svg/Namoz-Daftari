@@ -29,4 +29,23 @@ module.exports = {
       { id: 1, name: "Do'stlar" }, { id: 2, name: "Oila" },
     ]).includes("Oila"));
   },
+
+  "the roster is asked for per circle, not per admin"(assert) {
+    const source = clientSource();
+    assert.ok(!source.includes('api("/admin/roster")'), "the old endpoint is gone");
+    assert.ok(source.includes("/roster"), "expected a circle roster call");
+  },
+
+  "settings show the roster only to the circle's owner"(assert) {
+    const client = loadClient({ expose: ["ownsCircle"] });
+    client.setState({
+      members: [{ id: "sardor", name: "Sardor", city: "Toshkent",
+                  lat: 41.3, lng: 69.2, tz: 5, asr: 2, fa: 18, ia: 18 }],
+      data: { sardor: { days: {}, bonuses: [], tasks: [], books: [], places: [] } },
+      me: "sardor", date: "2026-08-22", token: "tok",
+    });
+    assert.strictEqual(client.ownsCircle([{ id: 1, owner_id: "sardor" }], 1), true);
+    assert.strictEqual(client.ownsCircle([{ id: 1, owner_id: "behruz" }], 1), false);
+    assert.strictEqual(client.ownsCircle([], 1), false);
+  },
 };
