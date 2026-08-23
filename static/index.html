@@ -295,7 +295,9 @@ async function api(path,opts){
  return r.status===204?null:r.json()}
 function forgetSession(){
  token="";isAdmin=false;LS.set("nd_token","");LS.set("nd_admin",false);
- me=null;LS.set("nd_me",null);screen="login"}
+ me=null;LS.set("nd_me",null);
+ circles=[];circleId=null;LS.set("nd_circles",circles);LS.set("nd_circle",circleId);
+ screen="login"}
 
 /* Marks made while offline wait here. pull() replaces local data with the
    server's copy, so anything not yet sent must be flushed first or it is lost. */
@@ -318,7 +320,7 @@ async function pull(){
  if(!await flushOutbox()){
    online=false;syncMsg="saqlanmagan belgilar bor - qayta urinilmoqda";return false}
  try{
-   const j=await api("/state");
+   const j=await api(circleId?"/state?circle="+encodeURIComponent(circleId):"/state");
    members=j.members;data={};
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
@@ -360,6 +362,7 @@ const uid=()=>Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
 let members=LS.get("nd_members",DEFAULT_MEMBERS);
 let data=LS.get("nd_data",{});
 let me=LS.get("nd_me",null);
+let circles=LS.get("nd_circles",[]),circleId=LS.get("nd_circle",null);
 let screen="login",tab="today",date=today(),pinFor=null,pinErr="",manualCity=false;
 let manualPlace=false,placeMsg="";
 let loginErr="",adminMode=false,roster=[],adminErr="";
@@ -631,7 +634,7 @@ const A={
      me=who.member_id;isAdmin=who.is_admin;
      LS.set("nd_me",me);LS.set("nd_admin",isAdmin);
      if(isAdmin){screen="admin";await A.loadRoster()}
-     else{screen="app";await pull();if(M(me))date=todayFor(myCfg())}
+     else{screen="app";await A.loadCircles();await pull();if(M(me))date=todayFor(myCfg())}
    }catch(e){forgetSession()}
   }
   render();
@@ -657,7 +660,7 @@ const A={
    token=j.token;isAdmin=false;LS.set("nd_token",token);LS.set("nd_admin",false);
    me=id;LS.set("nd_me",id);LS.set("nd_login",id);data={};LS.set("nd_data",data);
    screen="app";loginErr="";
-   await pull();if(M(me))date=todayFor(myCfg());render();
+   await A.loadCircles();await pull();if(M(me))date=todayFor(myCfg());render();
   }catch(e){
    loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Login yoki PIN noto'g'ri";render()}},
  async doAdminLogin(){
@@ -675,6 +678,16 @@ const A={
  async loadRoster(){
   try{const j=await api("/admin/roster");roster=j.members;adminErr=""}
   catch(e){roster=[];adminErr=e.message||"Ro'yxatni olib bo'lmadi"}},
+ async loadCircles(){
+  try{
+   const j=await api("/circles");circles=j.circles;LS.set("nd_circles",circles);
+   if(!circles.some(c=>c.id===circleId))circleId=circles.length?circles[0].id:null;
+   LS.set("nd_circle",circleId);
+  }catch(e){circles=LS.get("nd_circles",[])}},
+ async setCircle(id){
+  circleId=id;LS.set("nd_circle",id);
+  data={};LS.set("nd_data",data);
+  window.scrollTo(0,0);render();await pull();render()},
  async adminSetPin(id){
   const v=prompt("Yangi PIN (4 raqam): "+id);
   if(!v)return;
@@ -1502,6 +1515,15 @@ function nishonTab(){
   </div>`});
  return h+`<div style="height:16px"></div>`}
 
+/* Doira almashtirgichi. Bitta doira bo'lsa ko'rsatilmaydi — tanlanadigan narsa
+   yo'q joyda tugma qatori shovqindan boshqa narsa emas. */
+function circleSwitcher(list){
+ if(!list||list.length<2)return "";
+ const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
+ return `<div class="flex gap2 mb14" style="flex-wrap:wrap">`+list.map(c=>
+   `<button class="btn" style="${c.id===circleId?on:""}"
+     onclick="A.setCircle(${c.id})">${esc(c.name)}</button>`).join("")+`</div>`}
+
 /* ────────── RENDER ────────── */
 function render(){
  const app=document.getElementById("app");
@@ -1525,6 +1547,7 @@ function render(){
    <button class="btn" onclick="A.go('sync')">⚙</button>
   </div></div>
  <div class="ayat mb18"><span class="brass">❝</span><span>${AYAT[new Date(date+"T12:00:00").getDate()%AYAT.length]}</span></div>`;
+ h+=circleSwitcher(circles);
  h+= tab==="today"?todayTab():tab==="stats"?statsTab():tab==="sunnat"?sunnatTab():tab==="book"?bookTab():tab==="nishon"?nishonTab():taskTab();
  h+=`<div class="tabbar"><div>
   <button class="${tab==="today"?"on":""}" onclick="A.setTab('today')"><span>📋</span>Bugun</button>
