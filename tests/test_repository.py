@@ -25,7 +25,7 @@ MEMBER_ROW = {
 
 def state_rows(**extra) -> dict:
     rows = {
-        "FROM members ORDER BY created_at": [MEMBER_ROW],
+        "FROM members m": [MEMBER_ROW],
         "FROM day_records": [], "FROM bonuses": [],
         "FROM tasks": [], "FROM books": [], "FROM places": [],
     }
@@ -34,9 +34,9 @@ def state_rows(**extra) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_fetch_group_state_returns_every_member():
+async def test_fetch_group_state_returns_the_circle_members():
     connection = FakeConnection(rows=state_rows())
-    state = await repository.fetch_group_state(FakePool(connection))
+    state = await repository.fetch_group_state(FakePool(connection), circle_id=1)
     assert [m.id for m in state.members] == ["sardor"]
 
 
@@ -87,3 +87,31 @@ def test_circle_rejects_an_unknown_kind():
 def test_circle_rejects_an_impossible_week_goal():
     with pytest.raises(Exception):
         Circle(id=1, name="Oila", kind="family", owner_id="sardor", week_goal=0)
+
+
+CIRCLE_ROW = {
+    "id": 1, "name": "Do'stlar", "kind": "friends",
+    "owner_id": "sardor", "week_goal": 25,
+}
+
+
+@pytest.mark.asyncio
+async def test_circles_for_member_reads_only_their_circles():
+    connection = FakeConnection(rows={"FROM circles": [CIRCLE_ROW]})
+    circles = await repository.fetch_circles_for(FakePool(connection), "sardor")
+    assert [c.name for c in circles] == ["Do'stlar"]
+    assert connection.args_for("FROM circles") == ("sardor",)
+
+
+@pytest.mark.asyncio
+async def test_membership_is_checked_against_the_join_table():
+    connection = FakeConnection(scalars={"FROM circle_members": True})
+    assert await repository.is_circle_member(FakePool(connection), 1, "sardor") is True
+
+
+@pytest.mark.asyncio
+async def test_state_is_limited_to_one_circle():
+    connection = FakeConnection(rows=state_rows())
+    await repository.fetch_group_state(FakePool(connection), circle_id=7)
+    assert connection.issued("JOIN circle_members")
+    assert 7 in connection.args_for("FROM members")

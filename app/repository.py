@@ -21,6 +21,7 @@ from app.models import (
     ALL_PRAYERS,
     Bonus,
     Book,
+    Circle,
     DayRecord,
     Place,
     GroupState,
@@ -55,11 +56,51 @@ def _now() -> datetime:
 
 
 # ---------------------------------------------------------------- reads
-async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
-    """Load every member and everything they have logged."""
+_CIRCLE_COLUMNS = "id, name, kind, owner_id, week_goal"
+
+
+async def fetch_circles_for(pool: asyncpg.Pool, member_id: str) -> list[Circle]:
+    """Every circle this member belongs to, oldest first."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            f"""
+            SELECT {_CIRCLE_COLUMNS} FROM circles
+             WHERE id IN (SELECT circle_id FROM circle_members WHERE member_id = $1)
+             ORDER BY created_at
+            """,
+            member_id,
+        )
+    return [Circle(**dict(row)) for row in rows]
+
+
+async def is_circle_member(pool: asyncpg.Pool, circle_id: int, member_id: str) -> bool:
+    """The single gate in front of every circle-scoped read."""
+    async with pool.acquire() as connection:
+        return bool(
+            await connection.fetchval(
+                "SELECT true FROM circle_members WHERE circle_id = $1 AND member_id = $2",
+                circle_id, member_id,
+            )
+        )
+
+
+async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
+    """Load one circle's members and everything they have logged.
+
+    The record tables are read whole and filtered in Python rather than joined per
+    table: there are five of them, the group is small, and one join condition in one
+    place is easier to keep correct than five.
+    """
     async with pool.acquire() as connection:
         member_rows = await connection.fetch(
-            f"SELECT {_MEMBER_COLUMNS} FROM members ORDER BY created_at"
+            """
+            SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa, m.ia
+              FROM members m
+              JOIN circle_members cm ON cm.member_id = m.id
+             WHERE cm.circle_id = $1
+             ORDER BY m.created_at
+            """,
+            circle_id,
         )
         day_rows = await connection.fetch(
             "SELECT member_id, day, entries FROM day_records ORDER BY day"
@@ -100,6 +141,11 @@ async def fetch_group_state(pool: asyncpg.Pool) -> GroupState:
         places[row["member_id"]].append(Place(**json.loads(row["place"])))
 
     members = [MemberProfile(**dict(row)) for row in member_rows]
+    inside = {member.id for member in members}
+    for bucket in (days, bonuses, tasks, books, places):
+        for member_id in list(bucket):
+            if member_id not in inside:
+                del bucket[member_id]
     data = {
         member.id: MemberData(
             days=days.get(member.id, {}),
