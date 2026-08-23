@@ -881,7 +881,10 @@ const A={
   try{await api("/members",{method:"POST",
     body:JSON.stringify({id:id,name:name,city:city,lat:lat,lng:lng,tz:tz,asr:asr,fa:fa,ia:ia,pin:pin})})}
   catch(e){err.textContent=e.message||"Qo'shib bo'lmadi";return}
-  await A.loadRoster();screen="admin";render()},
+  /* Login shu yerda yasaladi va boshqa hech qayerda ko'rinmaydi — ro'yxat endi
+     doira egasida. Qo'shgan odam uni darrov o'qib olmasa, yo'qoladi. */
+  alert("Qo'shildi.\n\nLogin: "+id+"\nPIN: "+pin+"\n\nShu ikkisini odamga ayting.");
+  screen="admin";render()},
  async delMember(id){
   if(!confirm(id+" va uning barcha yozuvlari o'chirilsinmi?"))return;
   try{await api("/members/"+encodeURIComponent(id),{method:"DELETE"})}
