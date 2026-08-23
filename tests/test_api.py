@@ -23,15 +23,42 @@ async def test_state_requires_a_session(api, connection):
     assert response.json()["error"]["code"] == "no_session"
 
 
+MEMBER_JSON = {
+    "id": "sardor", "name": "Sardor", "city": "Toshkent", "lat": 41.3,
+    "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0,
+}
+
+
 @pytest.mark.asyncio
-async def test_state_returns_the_whole_group(api, connection):
+async def test_circles_lists_only_mine(api, connection):
     headers = as_session(connection)
-    connection.rows["FROM members ORDER BY created_at"] = [{
-        "id": "sardor", "name": "Sardor", "city": "Toshkent", "lat": 41.3,
-        "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0,
+    connection.rows["FROM circles"] = [{
+        "id": 1, "name": "Do'stlar", "kind": "friends",
+        "owner_id": "sardor", "week_goal": 25,
     }]
     async with api as client:
-        response = await client.get("/api/v1/state", headers=headers)
+        response = await client.get("/api/v1/circles", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["circles"][0]["name"] == "Do'stlar"
+
+
+@pytest.mark.asyncio
+async def test_state_refuses_a_circle_you_are_not_in(api, connection):
+    headers = as_session(connection)
+    connection.scalars["FROM circle_members"] = None
+    async with api as client:
+        response = await client.get("/api/v1/state?circle=9", headers=headers)
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_your_circle"
+
+
+@pytest.mark.asyncio
+async def test_state_returns_the_circle(api, connection):
+    headers = as_session(connection)
+    connection.scalars["FROM circle_members"] = True
+    connection.rows["FROM members m"] = [MEMBER_JSON]
+    async with api as client:
+        response = await client.get("/api/v1/state?circle=1", headers=headers)
     assert response.status_code == 200
     assert [m["id"] for m in response.json()["members"]] == ["sardor"]
 

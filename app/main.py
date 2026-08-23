@@ -195,10 +195,40 @@ async def whoami(session: Session = Depends(require_session)) -> dict:
 
 
 # ---------------------------------------------------------------- data routes
+async def _require_circle(request: Request, session: Session, circle: int | None) -> int:
+    """Resolve which circle a read is about, and prove the caller belongs to it.
+
+    Omitting `circle` means "my first one", so a client that has not caught up still
+    gets a sensible answer instead of an error.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if circle is None:
+        mine = await repository.fetch_circles_for(pool, session.member_id or "")
+        if not mine:
+            raise _error("no_circle", "Siz hech qaysi doirada emassiz", status.HTTP_404_NOT_FOUND)
+        return mine[0].id
+    if not await repository.is_circle_member(pool, circle, session.member_id or ""):
+        raise _error("not_your_circle", "Bu doira sizniki emas", status.HTTP_403_FORBIDDEN)
+    return circle
+
+
+@app.get(f"{API_PREFIX}/circles")
+async def list_circles(request: Request, session: Session = Depends(require_session)) -> dict:
+    """The circles this member belongs to. Drives the switcher in the client."""
+    circles = await repository.fetch_circles_for(
+        request.app.state.pool, session.member_id or ""
+    )
+    return {"circles": [c.model_dump() for c in circles]}
+
+
 @app.get(f"{API_PREFIX}/state")
-async def get_state(request: Request, _: Session = Depends(require_session)) -> dict:
-    """Everyone's profile and everyone's records. Any member may read the group."""
-    state = await repository.fetch_group_state(request.app.state.pool)
+async def get_state(
+    request: Request, circle: int | None = None,
+    session: Session = Depends(require_session),
+) -> dict:
+    """One circle's profiles and records. A circle is only readable from inside it."""
+    circle_id = await _require_circle(request, session, circle)
+    state = await repository.fetch_group_state(request.app.state.pool, circle_id)
     return state.to_wire()
 
 
