@@ -1544,6 +1544,134 @@ git commit -m "feat: add the circle switcher and fetch state per circle"
 
 ---
 
+## Task 13b: The roster follows the circle owner in the client
+
+Task 9 removed `GET /api/v1/admin/roster`, but the client still calls it from five
+places. Left alone, the admin screen shows "Ro'yxatni olib bo'lmadi" and Sardor can no
+longer read out PINs. The roster now belongs to a circle's owner, so the client has to
+ask as the owner rather than as the admin — an admin session has `member_id = None` and
+therefore owns nothing.
+
+This task comes after Task 13 because it needs `circleId`, which Task 13 introduces.
+
+**Files:**
+- Modify: `static/index.html`
+- Modify: `tests/client/login.test.js`
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to the object in `tests/client/login.test.js`:
+
+```js
+  "the roster is asked for per circle, not per admin"(assert) {
+    const source = clientSource();
+    assert.ok(!source.includes('api("/admin/roster")'), "the old endpoint is gone");
+    assert.ok(/\/circles\/"\s*\+/.test(source) || source.includes("/roster"),
+      "expected a circle roster call");
+  },
+
+  "settings show the roster only to the circle's owner"(assert) {
+    const client = loadClient({ expose: ["ownsCircle"] });
+    client.setState({
+      members: [{ id: "sardor", name: "Sardor", city: "Toshkent",
+                  lat: 41.3, lng: 69.2, tz: 5, asr: 2, fa: 18, ia: 18 }],
+      data: { sardor: { days: {}, bonuses: [], tasks: [], books: [], places: [] } },
+      me: "sardor", date: "2026-08-22", token: "tok",
+    });
+    assert.strictEqual(client.ownsCircle([{ id: 1, owner_id: "sardor" }], 1), true);
+    assert.strictEqual(client.ownsCircle([{ id: 1, owner_id: "behruz" }], 1), false);
+    assert.strictEqual(client.ownsCircle([], 1), false);
+  },
+```
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `node tests/client/run.js`
+Expected: both fail.
+
+- [ ] **Step 3: Ask the server as the owner**
+
+In `static/index.html`, replace `A.loadRoster` with:
+
+```js
+ async loadRoster(){
+  /* The roster belongs to a circle's owner now. An admin session owns nothing, so
+     this is reached by logging in as yourself, not with the admin password. */
+  if(!circleId){roster=[];adminErr="Doira tanlanmagan";return}
+  try{const j=await api("/circles/"+encodeURIComponent(circleId)+"/roster");
+   roster=j.members;adminErr=""}
+  catch(e){roster=[];adminErr=e.message||"Ro'yxatni olib bo'lmadi"}},
+```
+
+- [ ] **Step 4: Add the ownership test and load the roster on demand**
+
+In `static/index.html`, add above `function syncScreen(){`:
+
+```js
+/* Whether `me` owns the circle currently being viewed. Only the owner is shown the
+   PINs, because those are what gets read out to a new member. */
+function ownsCircle(list,id){
+ const found=(list||[]).find(c=>c.id===id);
+ return !!found&&found.owner_id===me}
+```
+
+Replace `A.go` with:
+
+```js
+ async go(s){
+  screen=s;pinErr="";loginErr="";adminErr="";
+  if(s==="sync"&&ownsCircle(circles,circleId))await A.loadRoster();
+  render()},
+```
+
+- [ ] **Step 5: Show the roster in Sozlamalar**
+
+In `syncScreen()`, immediately before the line `<div class="label">PIN kodni o'zgartirish</div>`, insert:
+
+```js
+ ${ownsCircle(circles,circleId)?`<div class="label">Doira a'zolari</div>
+  <p class="muted small" style="margin:0 0 9px;line-height:1.6">Siz shu doiraning egasisiz.
+   Yangi a'zoga o'z PIN kodini shu yerdan aytasiz.</p>
+  ${adminErr?`<div class="clay small mb10">${esc(adminErr)}</div>`:""}
+  ${roster.map(m=>`<div class="panel p14 mb10 flex between center">
+    <div><div style="font-family:var(--serif);font-size:17px">${esc(m.name)}</div>
+     <div class="muted small" style="margin-top:3px">${esc(m.city)} · ${esc(m.id)}</div></div>
+    <div style="text-align:right">
+     <div class="brass" style="font-family:var(--serif);font-size:24px;letter-spacing:3px">${esc(m.pin)||"—"}</div>
+     <div class="muted tiny">PIN</div></div></div>`).join("")}`:""}
+```
+
+- [ ] **Step 6: Trim the admin screen**
+
+In `adminScreen()`, replace the `roster.forEach(...)` block — everything from `roster.forEach(m=>{` through the line ending `</div>`;});` — with:
+
+```js
+ h+=`<div class="panel p14 mb10"><p class="muted small" style="margin:0;line-height:1.7">
+   PIN kodlarni ko'rish endi doira egasiga tegishli: o'z loginingiz bilan kiring va
+   <b>Sozlamalar</b> bo'limidan ko'ring. Bu yerdan faqat yangi odam qo'shiladi.</p></div>`;
+```
+
+Also, in `A.boot` and `A.doAdminLogin`, delete the `await A.loadRoster();` calls — the admin screen no longer shows a roster. Delete `A.adminSetPin` and the `A.delMember`/roster buttons that referenced it if they are now unreachable; if `A.delMember` is still called from elsewhere, leave it.
+
+- [ ] **Step 7: Run both suites**
+
+Run: `node tests/client/run.js && ./.venv/bin/python -m pytest -q`
+Expected: all green.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add static/index.html tests/client/login.test.js
+git commit -m "feat: show a circle's PINs to its owner instead of to the admin"
+```
+
+**Known limitation to carry into stage 2:** the owner can now *read* PINs but not *reset*
+them — `POST /members/{id}/pin` still requires being that member or the admin. Resetting
+someone else's PIN therefore still needs the admin password. Stage 2 gives circle owners
+that power when they gain the ability to add members.
+
+---
+
 ## Task 14: Documentation and deploy
 
 **Files:**
