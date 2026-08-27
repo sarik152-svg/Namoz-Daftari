@@ -554,23 +554,28 @@ function rankBy(a,z,kind){
 /* Olimpiada uslubidagi kursi: 2-o'rin chapda, 1-o'rin o'rtada va balandroq,
    3-o'rin o'ngda. Faqat NAMOZ bo'yicha — kitob reytingi Kitob bo'limida turadi. */
 function podium(nom,a,z,done){
- const r=rankBy(a,z,"namoz"),top=r.slice(0,3),rest=r.slice(3);
- const H=[96,72,58],C=["#C9A227","#98A3B8","#C0864F"],MED=["\u{1F947}","\u{1F948}","\u{1F949}"];
+ const r=rankBy(a,z,"namoz"),top=r.slice(0,4),rest=r.slice(4);
+ /* To'rtinchi o'rin medalsiz: u kursida turadi, lekin rangi ham, balandligi ham
+    uchtasinikidan past — ko'z darrov medalliklarni ajratib olsin. */
+ const H=[96,72,58,46],C=["#C9A227","#98A3B8","#C0864F","#7E8CA3"];
+ const MED=["\u{1F947}","\u{1F948}","\u{1F949}","\u0034\uFE0F\u20E3"];
  let h=`<div class="panel p18 mb14" style="border-color:${done?"#4CAF8B55":"#C9A22744"}">
   <div class="flex between center" style="margin-bottom:14px">
    <div><div class="eyebrow">${nom}</div>
     <div class="muted small" style="margin-top:3px">${pretty(a)} — ${pretty(z)}</div></div>
    <span class="chip" style="color:${done?"var(--jade)":"var(--brass)"}">${done?"YAKUNIY":"HOZIRCHA"}</span>
   </div>
-  <div style="display:flex;align-items:flex-end;justify-content:center;gap:7px">`;
- [1,0,2].forEach(i=>{
+  <div style="display:flex;align-items:flex-end;justify-content:center;gap:6px">`;
+ /* Kursi tartibi: 2-o'rin chapda, 1-o'rin o'rtada va balandroq, keyin 3 va 4. */
+ [1,0,2,3].forEach(i=>{
   const x=top[i];if(!x)return;
   h+=`<div style="flex:1;max-width:118px;text-align:center">
    <div style="font-size:${i===0?27:21}px;line-height:1">${MED[i]}</div>
    <div style="font-family:var(--serif);font-size:${i===0?16:14}px;margin-top:3px;color:${colorOf(x.m.id)};
      overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(first(x.m.name))}</div>
    <div style="font-family:var(--serif);font-size:${i===0?25:20}px;line-height:1.15;color:${C[i]}">${fmt(x.ball)}</div>
-   <div class="muted tiny" style="margin-bottom:6px">${x.o.ontime} vaqtida${x.o.jamoat?" · "+x.o.jamoat+" jamoat":""}</div>
+   <div class="muted tiny" style="margin-bottom:6px">${x.o.ontime} vaqtida${
+     x.o.jamoat?" · "+x.o.jamoat+" jamoat":""}</div>
    <div style="height:${H[i]}px;border-radius:11px 11px 0 0;border:1px solid ${C[i]}55;border-bottom:none;
      background:linear-gradient(180deg,${C[i]}33,${C[i]}0d);display:flex;align-items:center;
      justify-content:center;font-family:var(--serif);font-size:27px;color:${C[i]}">${i+1}</div>
@@ -578,7 +583,7 @@ function podium(nom,a,z,done){
  h+=`</div>`;
  rest.forEach((x,i)=>{
   h+=`<div class="flex between center" style="padding:7px 0;border-top:1px solid var(--line)">
-   <span style="font-size:13px"><span class="muted">${i+4}.</span>
+   <span style="font-size:13px"><span class="muted">${i+5}.</span>
     <span style="color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</span></span>
    <span class="muted small">${fmt(x.ball)}</span></div>`});
  return h+`</div>`}

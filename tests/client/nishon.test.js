@@ -96,4 +96,29 @@ module.exports = {
     assert.ok(streak, "expected a tahajjud streak badge");
     assert.ok(streak.v(c.nishonStat(SARDOR)) >= streak.kerak);
   },
+
+  async "the podium seats four, and the list below starts at fifth"(assert) {
+    const people = ["a", "b", "c", "d", "e"].map((id, i) => ({
+      ...SARDOR, id, name: "Kishi" + i,
+    }));
+    const days = (n) => {
+      const out = {};
+      for (let i = 0; i < n; i += 1) {
+        out["2026-08-" + String(10 + i).padStart(2, "0")] = { bomdod: { s: "ontime" } };
+      }
+      return { ...blank(), days: out };
+    };
+    const c = client({
+      members: people,
+      /* Five people, each with a different number of prayers, so the order is known. */
+      data: Object.fromEntries(people.map((p, i) => [p.id, days(5 - i)])),
+      me: "a",
+    });
+    await c.A.go("app");
+    c.A.setTab("stats");
+    const board = c.html.slice(c.html.indexOf("Hafta qahramoni"));
+    assert.ok(board.includes("\u{1F947}") && board.includes("\u{1F949}"), "gold and bronze");
+    assert.ok(board.includes("Kishi3"), "fourth place belongs on the podium now");
+    assert.ok(/<span class="muted">5\.<\/span>/.test(board), "the list below starts at fifth");
+  },
 };
