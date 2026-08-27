@@ -313,6 +313,10 @@ class MemberProfile(BaseModel):
 
     id: str
     is_child: bool = False
+    # Ish rejimi: Peshin, Asr and Shom made up the same day count as prayed on time,
+    # because this member's shift covers all three. Everything else is judged the
+    # same as anyone's, including a prayer left until the next day.
+    work_shift: bool = False
     # The backlog the member says they owe, as it stood when they wrote it down. What
     # is left is always this minus everything counted in their days, so re-stating it
     # never subtracts the same made-up prayers twice. It rides on the profile because
@@ -530,6 +534,14 @@ class ChildFlag(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     is_child: bool
+
+
+class WorkShiftFlag(BaseModel):
+    """Set by the circle owner, never by the member: it lightens their own scoring."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    work_shift: bool
 
 
 class GroupState(BaseModel):

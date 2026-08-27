@@ -219,6 +219,32 @@ async def test_an_absurd_backlog_is_refused(api, connection):
 
 
 @pytest.mark.asyncio
+async def test_the_circle_owner_sets_the_work_shift(api, connection):
+    headers = as_session(connection)
+    connection.scalars["SELECT true AS owns"] = True
+    connection.rows["UPDATE members SET work_shift"] = [{"id": "shahriddin"}]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/shahriddin/work-shift", json={"work_shift": True},
+            headers=headers,
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_nobody_grants_themselves_the_work_shift(api, connection):
+    """It lightens the scoring, so it is the circle owner's call, like is_child."""
+    headers = as_session(connection, member_id="shahriddin")
+    connection.scalars["SELECT true AS owns"] = None
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/shahriddin/work-shift", json={"work_shift": True},
+            headers=headers,
+        )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_password_is_checked(api, connection):
     async with api as client:
         bad = await client.post("/api/v1/auth/admin", json={"password": "wrong"})

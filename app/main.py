@@ -42,6 +42,7 @@ from app.models import (
     LoginRequest,
     MemberData,
     QazoDebt,
+    WorkShiftFlag,
     Session,
     SetPinRequest,
 )
@@ -529,6 +530,36 @@ async def set_qazo_debt(
     ):
         raise _error("no_member", "A'zo topilmadi", status.HTTP_404_NOT_FOUND)
     return {"ok": True, "qazo_debt": body.qazo_debt}
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/work-shift")
+async def set_work_shift(
+    member_id: str, body: WorkShiftFlag, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Ish rejimi: Peshin, Asr and Shom made up the same day count as prayed on time.
+
+    For somebody whose shift covers the middle of the day, the ordinary rule books
+    three penalties every working day for prayers they cannot reach — a record of
+    their job rather than of their practice. Bomdod, Xufton, tahajjud and the make-up
+    notebook stay exactly as strict, and a prayer left until the next day still costs
+    a full point: the concession is for the shift, not for putting it off.
+
+    The circle owner sets it, like is_child, because it lightens the member's own
+    scoring and nobody should be able to grant themselves that quietly.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error(
+                "not_circle_owner", "Buni doira egasi belgilaydi",
+                status.HTTP_403_FORBIDDEN,
+            )
+    if not await repository.set_work_shift(pool, member_id, body.work_shift):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
 
 
 @app.post(f"{API_PREFIX}/members/{{member_id}}/child")

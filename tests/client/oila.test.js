@@ -70,19 +70,21 @@ module.exports = {
     const client = boot(family(state([ADULT, CHILD]), "aziz"), "aziz");
     await client.A.boot();
 
+    client.A.setTab("sunnat");
     assert.ok(
-      !client.html.includes("A.setTab('task')"),
-      "the penalty tab is what frightens a child off the app"
+      !client.html.includes("Ball va vazifa"),
+      "the penalty work is what frightens a child off the app"
     );
-    assert.ok(client.html.includes("A.setTab('nishon')"), "the rest of the app stays");
+    assert.ok(client.html.includes("Kunning sunnati"), "the sunnah itself stays");
   },
 
-  async "an adult still gets the debt tile and the penalty tab"(assert) {
+  async "an adult still gets the debt tile and the penalty work"(assert) {
     const client = boot(family(state([ADULT, CHILD])));
     await client.A.boot();
 
-    assert.ok(client.html.includes("A.setTab('task')"));
     assert.ok(!client.html.includes("Yulduzchalar"));
+    client.A.setTab("sunnat");
+    assert.ok(client.html.includes("Ball va vazifa"));
   },
 
   async "a child cannot cost the family its weekly badge"(assert) {

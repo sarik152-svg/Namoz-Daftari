@@ -70,6 +70,7 @@ the first success, so the typing happens once.
 | PATCH | `/api/v1/circles/{id}` | its owner | Name and weekly goal |
 | DELETE | `/api/v1/circles/{id}` | its owner | Close a family; never the friends circle |
 | POST | `/api/v1/members/{id}/qazo-debt` | own or admin | State your backlog of prayers owed |
+| POST | `/api/v1/members/{id}/work-shift` | circle owner or admin | Ish rejimi on or off |
 | GET | `/api/v1/circles/{id}/roster` | its owner | That circle's members with PINs |
 | POST | `/api/v1/circles/{id}/members` | its owner | Add an existing login, or a new person |
 | DELETE | `/api/v1/circles/{id}/members/{id}` | its owner, or yourself | Take somebody out |
@@ -270,6 +271,35 @@ that badge is the group's agreement about the five daily prayers and does not ro
 
 Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
 an agreement about praying the five daily prayers on time, and a backlog would dissolve it.
+
+## Ish rejimi — a shift that covers the middle of the day
+
+For a member whose job holds them through Peshin, Asr and Shom, those three prayed
+**the same day, after their windows**, count as prayed on time — in the debt ledger, in
+the ranking, in the weekly team goal, on the badges, and on the day card, which labels
+them so the screen and the arithmetic never disagree. Everything else is judged exactly
+as it is for anybody: Bomdod and Xufton stay strict, tahajjud and the make-up notebook
+are unchanged, and a prayer left until the next day still costs a full point. The
+concession is for the shift, not for putting it off.
+
+Without it the app books three quarter-point penalties every working day for prayers
+that member could never reach, which makes the record a description of their job rather
+than of their practice.
+
+The rule lives in exactly one function — `holat(c, prayer, mark)` — and **every** place
+that reads a status goes through it: scoring, ranking, streaks, perfect days, the chart,
+the weekly task, the family analysis and the day card. A second copy of this rule is how
+the two ledgers would drift apart.
+
+The circle owner sets it, like `is_child`. Granting yourself lighter scoring is not
+something anybody should be able to do quietly.
+
+## Vazifa lives under Sunnat
+
+There is no penalty tab. The terms of the agreement and the penalty work sit at the
+bottom of the Sunnat page, and a child is shown neither — the same rule the tab used to
+enforce, now enforced by the section. A phone still holding `tab === "task"` is sent to
+Sunnat rather than left on a blank screen.
 
 ## Marks are write-once
 

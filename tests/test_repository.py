@@ -21,7 +21,7 @@ from app.models import DayRecord, MemberData
 MEMBER_ROW = {
     "id": "sardor", "name": "Sardor", "city": "Toshkent", "is_child": False,
     "lat": 41.3, "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0,
-    "qazo_debt": 9125,
+    "qazo_debt": 9125, "work_shift": True,
 }
 
 
@@ -74,6 +74,20 @@ async def test_the_qazo_backlog_survives_a_reload():
     connection = FakeConnection(rows=state_rows())
     state = await repository.fetch_group_state(FakePool(connection), circle_id=1)
     assert state.members[0].qazo_debt == 9125
+
+
+@pytest.mark.asyncio
+async def test_the_work_shift_flag_reaches_the_profile():
+    connection = FakeConnection(rows=state_rows())
+    state = await repository.fetch_group_state(FakePool(connection), circle_id=1)
+    assert state.members[0].work_shift is True
+
+
+@pytest.mark.asyncio
+async def test_the_work_shift_flag_is_written_to_the_member():
+    connection = FakeConnection(rows={"UPDATE members SET work_shift": [{"id": "shahriddin"}]})
+    await repository.set_work_shift(FakePool(connection), "shahriddin", True)
+    assert connection.args_for("UPDATE members SET work_shift")[1] is True
 
 
 @pytest.mark.asyncio

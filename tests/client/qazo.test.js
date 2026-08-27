@@ -145,7 +145,7 @@ module.exports = {
       } } },
     });
     await c.A.go("app");
-    c.A.setTab("task");
+    c.A.setTab("sunnat");
     const nums = c.html.match(/<b class="clay">([^<]*)<\/b><i>Jamg'arilgan minus<\/i>[\s\S]*?<b class="jade">\u2212([^<]*)<\/b>[\s\S]*?<b class="[^"]*">([^<]*)<\/b><i>(Qolgan qarz|Zaxira)<\/i>/);
     assert.ok(nums, "expected the three debt figures on the page");
     const num = (t) => Number(String(t).replace(",", ".").replace("+", ""));
