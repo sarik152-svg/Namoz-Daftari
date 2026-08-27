@@ -366,6 +366,29 @@ async def edit_circle(
     return circle.model_dump()
 
 
+@app.delete(f"{API_PREFIX}/circles/{{circle_id}}")
+async def remove_circle(
+    circle_id: int, request: Request, session: Session = Depends(require_session),
+) -> dict:
+    """Close a family. Owner only, and never the friends circle.
+
+    A duplicate family opened by mistake had no way out before this: it sat in the
+    switcher forever and used up one of its owner's five circles. Records are not at
+    stake — they belong to the member — so the only real casualty is the circle's own
+    khatm and its call to pray together, which is what the client warns about.
+
+    The friends circle is refused rather than merely hidden from the button: it is the
+    one circle everybody is in, and deleting it would strand the whole group.
+    """
+    circle = await _require_owned_circle(request, session, circle_id)
+    if circle.kind != "family":
+        raise _error(
+            "friends_circle", "Do'stlar doirasini o'chirib bo'lmaydi", 409
+        )
+    stranded = await repository.delete_circle(request.app.state.pool, circle_id)
+    return {"ok": True, "stranded": stranded}
+
+
 @app.get(f"{API_PREFIX}/circles/{{circle_id}}/roster")
 async def circle_roster(
     circle_id: int, request: Request, session: Session = Depends(require_session)

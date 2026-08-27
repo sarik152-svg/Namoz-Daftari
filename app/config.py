@@ -33,6 +33,13 @@ MAX_BONUSES_PER_MEMBER = 2000
 MAX_TASKS_PER_MEMBER = 5000
 MAX_MEMBERS = 50
 
+# --- Qazo daftari ---
+# The cap is a stuck finger, not a judgement about how much anyone can pray: twenty
+# make-up prayers of one kind in a single day is already a fortnight's worth. The
+# backlog is capped at roughly fifty-five years of five daily prayers.
+MAX_QAZO_PER_PRAYER_PER_DAY = 20
+MAX_QAZO_DEBT = 100_000
+
 # --- Doiralar ---
 # A circle is cheap, so the caps only exist to stop a runaway client. Owning five
 # circles already means a friends group plus four families.

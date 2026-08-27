@@ -20,6 +20,8 @@ from app.config import (
     MAX_LOG_ENTRIES_PER_BOOK,
     MAX_NOTES_PER_BOOK,
     MAX_PLACES_PER_MEMBER,
+    MAX_QAZO_DEBT,
+    MAX_QAZO_PER_PRAYER_PER_DAY,
     MAX_TASKS_PER_MEMBER,
     PIN_DIGITS,
 )
@@ -91,6 +93,31 @@ class PrayerMark(BaseModel):
         return value
 
 
+QazoCount = Annotated[int, Field(ge=0, le=MAX_QAZO_PER_PRAYER_PER_DAY)]
+
+
+class QazoDay(BaseModel):
+    """Make-up prayers from years ago, counted on the day they were prayed.
+
+    Nothing to do with `PrayerStatus.qazo`, which is today's prayer said after its
+    window and costs a quarter point. These are prayers owed from long before the
+    notebook existed, and each one *earns* a quarter point. The two are deliberately
+    never shown under the same word in the app.
+
+    Only the five fard prayers appear: a nafl prayer is never owed, so it can never
+    be made up. The day it was missed is not recorded — nobody knows it — so the
+    count hangs off the day it was finally prayed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    bomdod: QazoCount = 0
+    peshin: QazoCount = 0
+    asr: QazoCount = 0
+    shom: QazoCount = 0
+    xufton: QazoCount = 0
+
+
 class DayRecord(BaseModel):
     """One calendar day for one member, in the browser app's flat shape."""
 
@@ -102,6 +129,7 @@ class DayRecord(BaseModel):
     asr: PrayerMark | None = None
     shom: PrayerMark | None = None
     xufton: PrayerMark | None = None
+    qazo: QazoDay | None = None
     quran: bool | None = None
     sunnat: str | None = Field(default=None, max_length=2000)
 
@@ -239,6 +267,10 @@ class MemberData(BaseModel):
     tasks: list[Task] = Field(default_factory=list, max_length=MAX_TASKS_PER_MEMBER)
     books: list[Book] = Field(default_factory=list, max_length=MAX_BOOKS_PER_MEMBER)
     places: list[Place] = Field(default_factory=list, max_length=MAX_PLACES_PER_MEMBER)
+    # The backlog the member says they owe, as it stood when they wrote it down. What
+    # is left is always this minus everything counted in `days`, so re-stating it
+    # never double-subtracts prayers already made up.
+    qazo_debt: int = Field(default=0, ge=0, le=MAX_QAZO_DEBT)
 
     @field_validator("places")
     @classmethod
@@ -269,6 +301,7 @@ class MemberData(BaseModel):
             "tasks": [t.model_dump(mode="json") for t in self.tasks],
             "books": [b.model_dump(mode="json") for b in self.books],
             "places": [p.model_dump(mode="json") for p in self.places],
+            "qazo_debt": self.qazo_debt,
         }
 
 

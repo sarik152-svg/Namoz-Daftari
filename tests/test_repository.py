@@ -67,6 +67,58 @@ async def test_admin_may_overwrite_a_marked_prayer():
 
 
 @pytest.mark.asyncio
+async def test_a_qazo_count_may_grow_but_never_shrink():
+    """Make-up prayers are counted up through the day, so the mark rule is bent one
+    way only: a bigger number is an addition, a smaller one is an erasure."""
+    stored = json.dumps({"qazo": {"bomdod": 5, "peshin": 2}})
+    connection = FakeConnection(scalars={"SELECT entries": stored})
+    await repository.upsert_day(
+        FakePool(connection), "sardor", __import__("datetime").date(2026, 8, 22),
+        DayRecord(qazo={"bomdod": 7, "peshin": 0}),
+    )
+    written = json.loads(connection.args_for("INSERT INTO day_records")[2])
+    assert written["qazo"]["bomdod"] == 7
+    assert written["qazo"]["peshin"] == 2
+
+
+@pytest.mark.asyncio
+async def test_a_day_sent_without_qazo_keeps_the_stored_count():
+    """A phone that has not caught up sends the day back with the key missing."""
+    stored = json.dumps({"qazo": {"asr": 4}})
+    connection = FakeConnection(scalars={"SELECT entries": stored})
+    await repository.upsert_day(
+        FakePool(connection), "sardor", __import__("datetime").date(2026, 8, 22),
+        DayRecord(bomdod={"s": "ontime", "t": "04:05"}),
+    )
+    written = json.loads(connection.args_for("INSERT INTO day_records")[2])
+    assert written["qazo"]["asr"] == 4
+
+
+@pytest.mark.asyncio
+async def test_admin_may_correct_a_qazo_count():
+    stored = json.dumps({"qazo": {"bomdod": 5}})
+    connection = FakeConnection(scalars={"SELECT entries": stored})
+    await repository.upsert_day(
+        FakePool(connection), "sardor", __import__("datetime").date(2026, 8, 22),
+        DayRecord(qazo={"bomdod": 1}), allow_overwrite=True,
+    )
+    written = json.loads(connection.args_for("INSERT INTO day_records")[2])
+    assert written["qazo"]["bomdod"] == 1
+
+
+@pytest.mark.asyncio
+async def test_saving_the_whole_document_cannot_shrink_a_qazo_count():
+    stored = json.dumps({"qazo": {"shom": 6}})
+    connection = FakeConnection(scalars={"SELECT entries": stored})
+    await repository.replace_member_data(
+        FakePool(connection), "sardor",
+        MemberData(days={"2026-08-22": {"qazo": {"shom": 1}}}),
+    )
+    written = json.loads(connection.args_for("INSERT INTO day_records")[2])
+    assert written["qazo"]["shom"] == 6
+
+
+@pytest.mark.asyncio
 async def test_saving_books_cannot_rewrite_a_prayer():
     stored = json.dumps({"bomdod": {"s": "qazo", "t": "07:30"}})
     connection = FakeConnection(scalars={"SELECT entries": stored})

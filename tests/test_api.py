@@ -132,6 +132,55 @@ async def test_writing_to_someone_else_is_refused(api, connection):
 
 
 @pytest.mark.asyncio
+async def test_a_day_accepts_make_up_prayers(api, connection):
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.put(
+            "/api/v1/members/sardor/days/2026-08-22",
+            json={"bomdod": {"s": "ontime", "t": "04:05"},
+                  "qazo": {"bomdod": 3, "xufton": 2}},
+            headers=headers,
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_days_qazo_count_is_capped(api, connection):
+    """A cap no honest day reaches, there to stop a stuck finger, not a person."""
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.put(
+            "/api/v1/members/sardor/days/2026-08-22",
+            json={"qazo": {"bomdod": 21}}, headers=headers,
+        )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_a_nafl_prayer_has_no_make_up(api, connection):
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.put(
+            "/api/v1/members/sardor/days/2026-08-22",
+            json={"qazo": {"tahajjud": 1}}, headers=headers,
+        )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_the_qazo_backlog_travels_with_the_document(api, connection):
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.put(
+            "/api/v1/members/sardor/data",
+            json={"days": {}, "bonuses": [], "tasks": [], "books": [],
+                  "places": [], "qazo_debt": 9125},
+            headers=headers,
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_admin_password_is_checked(api, connection):
     async with api as client:
         bad = await client.post("/api/v1/auth/admin", json={"password": "wrong"})
@@ -236,6 +285,43 @@ async def test_the_owner_may_move_the_weekly_goal(api, connection):
         )
     assert response.status_code == 200
     assert response.json()["week_goal"] == 12
+
+
+@pytest.mark.asyncio
+async def test_only_the_owner_may_delete_a_circle(api, connection):
+    headers = owning(connection, member_id="behruz")
+    async with api as client:
+        response = await client.delete("/api/v1/circles/2", headers=headers)
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_circle_owner"
+    assert not connection.issued("DELETE FROM circles")
+
+
+@pytest.mark.asyncio
+async def test_the_friends_circle_cannot_be_deleted(api, connection):
+    """It is the one circle everybody is in, so deleting it strands the lot."""
+    connection.rows["FROM circles WHERE id"] = [
+        dict(FAMILY, id=1, name="Do'stlar", kind="friends")
+    ]
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.delete("/api/v1/circles/1", headers=headers)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "friends_circle"
+    assert not connection.issued("DELETE FROM circles")
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_family_names_who_is_left_without_one(api, connection):
+    """The names are read before the delete, because afterwards nobody can ask."""
+    headers = owning(connection)
+    connection.rows["NOT EXISTS"] = [{"name": "Nodira"}, {"name": "Aziz"}]
+    async with api as client:
+        response = await client.delete("/api/v1/circles/2", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "stranded": ["Nodira", "Aziz"]}
+    assert connection.issued("DELETE FROM circles")
+    assert connection.args_for("DELETE FROM circles") == (2,)
 
 
 @pytest.mark.asyncio

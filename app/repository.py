@@ -169,6 +169,36 @@ async def update_circle(
     return None if row is None else Circle(**dict(row))
 
 
+async def delete_circle(pool: asyncpg.Pool, circle_id: int) -> list[str]:
+    """Delete a circle and report who is left in no circle at all.
+
+    Nobody's records are touched: prayers, books, PINs and travel all hang off the
+    member, not off the circle, so a person survives their family being closed. What
+    does go with it is what belonged to the circle itself — its membership rows, its
+    call to pray together and its khatm — and those cascade in the schema.
+
+    The stranded names are read inside the same transaction and *before* the delete,
+    because once the circle is gone there is nothing left to ask.
+    """
+    async with pool.acquire() as connection, connection.transaction():
+        rows = await connection.fetch(
+            """
+            SELECT m.name
+              FROM circle_members cm
+              JOIN members m ON m.id = cm.member_id
+             WHERE cm.circle_id = $1
+               AND NOT EXISTS (
+                   SELECT 1 FROM circle_members other
+                    WHERE other.member_id = cm.member_id
+                      AND other.circle_id <> $1)
+             ORDER BY m.name
+            """,
+            circle_id,
+        )
+        await connection.execute("DELETE FROM circles WHERE id = $1", circle_id)
+    return [row["name"] for row in rows]
+
+
 async def add_to_circle(pool: asyncpg.Pool, circle_id: int, member_id: str) -> None:
     """Idempotent: adding somebody twice is the same as adding them once."""
     async with pool.acquire() as connection:
@@ -691,13 +721,19 @@ async def clear_failures(pool: asyncpg.Pool, subject: str) -> None:
 
 
 # ---------------------------------------------------------------- records
-def _keep_existing_marks(incoming: dict, stored: str | None) -> dict:
-    """Prayer marks are write-once; everything else on the day stays editable.
+def _merge_day(incoming: dict, stored: str | None) -> dict:
+    """Reconcile a day the phone sent with the day already on record.
 
-    Locking this in the browser alone would be decoration, since the API is the
-    thing that actually holds the record. A mark already stored therefore wins over
-    whatever the phone sends — including a phone that sends the key back missing,
-    which is what 'clear' looks like on the wire. `quran` stays a toggle.
+    Two rules, both of them about not letting a claim be taken back:
+
+    * **Prayer marks are write-once.** Locking this in the browser alone would be
+      decoration, since the API is the thing that actually holds the record. A mark
+      already stored wins over whatever the phone sends — including a phone that
+      sends the key back missing, which is what 'clear' looks like on the wire.
+    * **Make-up counts only grow.** They are added to through the day, so they cannot
+      be write-once, but a smaller number is an erasure and the larger one wins.
+
+    `quran` and `sunnat` stay ordinary editable fields.
     """
     if not stored:
         return incoming
@@ -706,6 +742,19 @@ def _keep_existing_marks(incoming: dict, stored: str | None) -> dict:
     for key in ALL_PRAYERS:
         if prior.get(key) is not None:
             merged[key] = prior[key]
+    kept = _keep_qazo_growing(incoming.get("qazo"), prior.get("qazo"))
+    if kept is not None:
+        merged["qazo"] = kept
+    return merged
+
+
+def _keep_qazo_growing(incoming: dict | None, prior: dict | None) -> dict | None:
+    """The bigger of the two counts for each prayer. None when neither side has any."""
+    if not prior:
+        return incoming
+    merged = dict(incoming or {})
+    for prayer, count in prior.items():
+        merged[prayer] = max(int(count), int(merged.get(prayer, 0)))
     return merged
 
 
@@ -728,7 +777,7 @@ async def upsert_day(
                 "SELECT entries FROM day_records WHERE member_id = $1 AND day = $2 FOR UPDATE",
                 member_id, day,
             )
-            entries = _keep_existing_marks(entries, stored)
+            entries = _merge_day(entries, stored)
         await connection.execute(_UPSERT_DAY_SQL, member_id, day, json.dumps(entries))
 
 
@@ -750,7 +799,7 @@ async def replace_member_data(
                     "SELECT entries FROM day_records WHERE member_id = $1 AND day = $2 FOR UPDATE",
                     member_id, when,
                 )
-                entries = _keep_existing_marks(entries, stored)
+                entries = _merge_day(entries, stored)
             await connection.execute(
                 _UPSERT_DAY_SQL, member_id, when, json.dumps(entries)
             )
