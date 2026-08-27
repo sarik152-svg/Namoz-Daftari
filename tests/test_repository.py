@@ -21,6 +21,7 @@ from app.models import DayRecord, MemberData
 MEMBER_ROW = {
     "id": "sardor", "name": "Sardor", "city": "Toshkent", "is_child": False,
     "lat": 41.3, "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0,
+    "qazo_debt": 9125,
 }
 
 
@@ -64,6 +65,23 @@ async def test_admin_may_overwrite_a_marked_prayer():
     )
     written = json.loads(connection.args_for("INSERT INTO day_records")[2])
     assert written["bomdod"]["s"] == "ontime"
+
+
+@pytest.mark.asyncio
+async def test_the_qazo_backlog_survives_a_reload():
+    """It had nowhere to live: the model carried it, no table stored it, and every
+    reload handed back a zero — which on screen looked like the save had failed."""
+    connection = FakeConnection(rows=state_rows())
+    state = await repository.fetch_group_state(FakePool(connection), circle_id=1)
+    assert state.members[0].qazo_debt == 9125
+
+
+@pytest.mark.asyncio
+async def test_the_backlog_is_written_to_the_member():
+    connection = FakeConnection(rows={"UPDATE members": [{"id": "sardor"}]})
+    await repository.set_qazo_debt(FakePool(connection), "sardor", 9125)
+    assert connection.issued("UPDATE members")
+    assert connection.args_for("UPDATE members")[1] == 9125
 
 
 @pytest.mark.asyncio

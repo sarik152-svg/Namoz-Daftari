@@ -6,14 +6,21 @@ const SARDOR = {
   id: "sardor", name: "Sardor Valixanov", city: "Toshkent",
   lat: 41.2995, lng: 69.2401, tz: 5, asr: 2, fa: 18, ia: 18,
 };
-const blank = () => ({ days: {}, bonuses: [], tasks: [], books: [], places: [], qazo_debt: 0 });
+const blank = () => ({ days: {}, bonuses: [], tasks: [], books: [], places: [] });
+/* The backlog lives on the member, not in the document: the document is fanned out
+   into five tables on the way in, and a field with no table came back as zero. */
+const owing = (n) => ({ ...SARDOR, qazo_debt: n });
 
 /* 09:00Z is 14:00 in Toshkent — after Peshin, before Asr. */
 function client(at = "2026-08-22T09:00:00Z", patch = {}) {
   const loaded = loadClient({
     at,
-    expose: ["score", "prayerRange", "jamoaHafta", "QAZO_BALL", "NAFL_BALL", "cfgNow"],
-    routes: { "/members/sardor/days/2026-08-22": { ok: true } },
+    expose: ["score", "prayerRange", "jamoaHafta", "QAZO_BALL", "NAFL_BALL", "cfgNow", "qazoPace"],
+    routes: {
+      "/members/sardor/days/2026-08-22": { ok: true },
+      "/members/sardor/qazo-debt": { ok: true, qazo_debt: 9125 },
+      "/members/sardor/data": { ok: true },
+    },
   });
   loaded.setState({
     members: [SARDOR], data: { sardor: blank() },
@@ -147,12 +154,101 @@ module.exports = {
     assert.strictEqual(num(minus) - num(relief), debt);
   },
 
+  /* ---------------------------------------------------------- the circle */
+  async "the ranking page shows who is making up what, without ranking it"(assert) {
+    const BEHRUZ = { ...SARDOR, id: "behruz", name: "Behruz Qurbonov" };
+    const c = client("2026-08-22T09:00:00Z", {
+      members: [SARDOR, BEHRUZ],
+      data: {
+        sardor: { ...blank(), days: { "2026-08-22": { qazo: { bomdod: 12, asr: 5 } } } },
+        behruz: { ...blank(), days: { "2026-08-20": { qazo: { peshin: 4 } } } },
+      },
+    });
+    await c.A.go("app");
+    c.A.setTab("stats");
+    const from = c.html.indexOf("Qazo daftari");
+    assert.ok(from > 0, "expected a make-up section on the ranking page");
+    const block = c.html.slice(from);
+    assert.ok(block.includes("Bomdod 12"), "expected each prayer named with its count");
+    assert.ok(block.includes("Peshin 4"), "expected the other member's too");
+    assert.ok(!/\d+-o'rin/.test(block), "no places: this is not a contest");
+  },
+
   /* ---------------------------------------------------------- backlog */
   async "what is left is the stated backlog minus everything made up"(assert) {
     const c = client("2026-08-22T09:00:00Z", {
-      data: { sardor: { ...blank(), qazo_debt: 100, days: { "2026-08-22": { qazo: { bomdod: 8 } } } } },
+      members: [owing(100)],
+      data: { sardor: { ...blank(), days: { "2026-08-22": { qazo: { bomdod: 8 } } } } },
     });
     await c.A.go("app");
     assert.ok(c.html.includes("92 qoldi"), "expected 100 - 8 to be shown as what is left");
+  },
+
+  async "stating the backlog goes to its own route, not the document"(assert) {
+    const c = client();
+    await c.A.go("app");
+    c.setFields({ q_debt: "9125" });
+    await c.A.setQazoDebt();
+    const sent = c.calls.find(x => x.path === "/members/sardor/qazo-debt");
+    assert.ok(sent, "expected the backlog to be posted on its own");
+    assert.strictEqual(sent.body.qazo_debt, 9125);
+    assert.ok(!c.calls.some(x => x.path === "/members/sardor/data"),
+      "the whole document must not be the carrier");
+  },
+
+  async "a stated backlog survives on the screen it was typed into"(assert) {
+    const c = client();
+    await c.A.go("app");
+    c.setFields({ q_debt: "9125" });
+    await c.A.setQazoDebt();
+    assert.ok(c.html.includes("9125 tadan"), "the backlog must still be shown after saving");
+  },
+
+  /* ---------------------------------------------------------- picker */
+  async "the plus counts up whichever prayer is chosen"(assert) {
+    const c = client();
+    await c.A.go("app");
+    c.A.setQazoPick("asr");
+    c.A.addQazo();
+    c.A.addQazo();
+    await c.A.saveQazo();
+    assert.strictEqual(JSON.stringify(c.__day("qazo")), JSON.stringify({ asr: 2 }));
+  },
+
+  async "switching prayer keeps what the previous one had"(assert) {
+    const c = client();
+    await c.A.go("app");
+    c.A.setQazoPick("shom");
+    c.A.addQazo();
+    c.A.setQazoPick("bomdod");
+    c.A.addQazo();
+    c.A.addQazo();
+    await c.A.saveQazo();
+    const saved = c.__day("qazo");
+    assert.strictEqual(saved.shom, 1);
+    assert.strictEqual(saved.bomdod, 2);
+  },
+
+  /* ---------------------------------------------------------- pace */
+  async "the backlog says how long it will take at this pace"(assert) {
+    /* Ten made up over the two days since the first entry, so five a day, and
+       ninety left: eighteen days at that rate. Averaged over calendar days rather
+       than only the days something was read, the way the book pace already is. */
+    const c = client("2026-08-22T09:00:00Z", {
+      members: [owing(100)],
+      data: { sardor: { ...blank(), days: {
+        "2026-08-21": { qazo: { bomdod: 5 } },
+        "2026-08-22": { qazo: { bomdod: 5 } },
+      } } },
+    });
+    await c.A.go("app");
+    assert.ok(c.html.includes("18 kun"), "expected the finish estimate, got: "
+      + (c.html.match(/Shu tezlikda[^<]*/) || ["nothing"])[0]);
+  },
+
+  async "no estimate is offered before there is a pace to measure"(assert) {
+    const c = client("2026-08-22T09:00:00Z", { members: [owing(100)] });
+    await c.A.go("app");
+    assert.ok(!c.html.includes("Shu tezlikda"), "nothing read yet means nothing to project");
   },
 };

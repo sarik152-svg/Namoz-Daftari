@@ -362,7 +362,7 @@ async function pushDay(id,d){
    syncMsg=e.status===403?"Bu sizning yozuvingiz emas":e.status===429?"Juda ko'p urinish"
      :"saqlanmadi - keyin yuboriladi"}
 }
-const blank=()=>({days:{},tasks:[],bonuses:[],books:[],places:[],qazo_debt:0});
+const blank=()=>({days:{},tasks:[],bonuses:[],books:[],places:[]});
 /* Kitob va zametka id'lari telefonda yasaladi; server ularni
    ^[A-Za-z0-9_-]{1,40}$ shabloni bo'yicha tekshiradi. */
 const uid=()=>Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -939,17 +939,23 @@ const A={
  setRak(n){A.rak=(n===A.rak)?n-1:n;render()},
  addTas(n){A.tas=Math.max(0,Math.min(500,A.tas+n));render()},
  resetTas(){A.tas=0;render()},
- /* ────────── QAZO DAFTARI ────────── */
+
+
+/* ────────── QAZO DAFTARI ────────── */
  /* Sanoq avval faqat ekranda turadi. Har bosishda darhol yozilsa, xato bosilgan
     raqamni qaytarib bo'lmasdi — yozilgan narsa o'zgarmaydi. Vazifadagi tasbeh
     sanog'i ham xuddi shunday ishlaydi. */
- qazo:{},qazoDate:null,qazoMsg:"",
+ qazo:{},qazoDate:null,qazoMsg:"",qazoPick:"bomdod",
+ setQazoPick(k){if(QAZO_VAQT.indexOf(k)<0)return;A.qazoPick=k;A.qazoMsg="";render()},
  qazoLocal(){if(A.qazoDate!==date){A.qazo={};A.qazoDate=date}return A.qazo},
  qazoSaved(k){return ((((data[me]||{}).days||{})[date]||{}).qazo||{})[k]||0},
  qazoShown(k){const l=A.qazoLocal();return l[k]==null?A.qazoSaved(k):l[k]},
- addQazo(k){A.qazoLocal()[k]=Math.min(QAZO_MAX,A.qazoShown(k)+1);A.qazoMsg="";render()},
+ /* Vaqt ko'rsatilmasa, ro'yxatdan tanlangani ishlatiladi. */
+ addQazo(k){const v=k||A.qazoPick;
+  A.qazoLocal()[v]=Math.min(QAZO_MAX,A.qazoShown(v)+1);A.qazoMsg="";render()},
  /* Kamaytirish faqat hali saqlanmagan sanoqqa tegadi. */
- subQazo(k){A.qazoLocal()[k]=Math.max(A.qazoSaved(k),A.qazoShown(k)-1);A.qazoMsg="";render()},
+ subQazo(k){const v=k||A.qazoPick;
+  A.qazoLocal()[v]=Math.max(A.qazoSaved(v),A.qazoShown(v)-1);A.qazoMsg="";render()},
  async saveQazo(){
   const day=Object.assign({},(data[me].days||{})[date]||{});
   const q=Object.assign({},day.qazo||{});let yangi=0;
@@ -967,13 +973,19 @@ const A={
   const u=data[me]||blank();
   const jami=Object.keys(u.days||{}).reduce((n,d)=>n+qazoOf(u.days[d]),0);
   await A.writeQazoDebt(prompt("Qazo qarzingiz \u2014 BOSHLANG'ICH son, qolgani emas."
-   +"\nIlovada belgilangan "+jami+" tasi shundan ayriladi.",String(u.qazo_debt||0)))},
+   +"\nIlovada belgilangan "+jami+" tasi shundan ayriladi.",String((M(me)||{}).qazo_debt||0)))},
+ /* Qarz o'z yo'li bilan yuboriladi. Hujjat har kitob tahririda butunlay qayta
+    yuboriladi, ya'ni yetib ulgurmagan telefon qarzni nolga qaytarib yuborardi. */
  async writeQazoDebt(raw){
   const n=Math.round(Number(raw));
   if(!isFinite(n)||n<0||n>100000){A.qazoMsg="";render();return}
-  data[me]=Object.assign({},data[me],{qazo_debt:n});
-  A.qazoMsg=n?"":"Qazo qarzi 0 qilib qo'yildi";
-  render();await pushData(me);render()},
+  try{
+   await api("/members/"+encodeURIComponent(me)+"/qazo-debt",
+     {method:"POST",body:JSON.stringify({qazo_debt:n})});
+   members=members.map(m=>m.id===me?Object.assign({},m,{qazo_debt:n}):m);
+   LS.set("nd_members",members);A.qazoMsg="";
+  }catch(e){A.qazoMsg="";alert(e.message||"Saqlanmadi")}
+  render()},
  async finishTask(){
   data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([{d:todayFor(myCfg()),rak:25,tas:500}])});
   A.rak=0;A.tas=0;render();await pushData(me);render()},
@@ -1379,6 +1391,26 @@ function jamoatBanner(cfg){
        :"Birga o'qigach, "+esc(p.n)+" qatoridagi \u{1F54C} tugmasini o'zingiz bosing."}</p>
     </div></div></div>`}).join("")}
 
+/* Shu tezlikda qazo qachon tugaydi, kunlarda. Kitob tezligi kabi hisoblanadi:
+   birinchi qazo yozilgan kundan beri o'tgan HAR BIR kunga bo'linadi, faqat qazo
+   o'qilgan kunlarga emas — tashlab qo'yilgan kunlar ham muddatni uzaytiradi. */
+function qazoPace(u,qarz,td){
+ const days=(u&&u.days)||{};
+ const kunlar=Object.keys(days).filter(d=>qazoOf(days[d])>0).sort();
+ if(!kunlar.length)return null;
+ const jami=kunlar.reduce((n,d)=>n+qazoOf(days[d]),0);
+ const qolgan=Math.max(0,qarz-jami);
+ if(!qolgan)return null;
+ const kun=Math.max(1,daysBetween(kunlar[0],td)+1),tezlik=jami/kun;
+ if(tezlik<=0)return null;
+ return Math.ceil(qolgan/tezlik)}
+const qazoMuddat=kun=>{
+ if(kun<=45)return kun+" kun";
+ const oy=Math.round(kun/30.44);
+ if(oy<18)return oy+" oy";
+ const yil=Math.floor(oy/12),qoloy=oy%12;
+ return yil+" yil"+(qoloy?" "+qoloy+" oy":"")};
+
 /* ────────── QAZO DAFTARI ────────── */
 /* Yillar oldin qolib ketgan namozlarni uzish. Bugungi kechikkan namoz emas —
    uni «Qazo» deb ataydigan yagona joy namoz kartasidagi holat, bu esa butunlay
@@ -1386,37 +1418,48 @@ function jamoatBanner(cfg){
 function qazoPanel(day,isT){
  /* Bolada qarz yo'q, demak uzadigan qazo ham yo'q. */
  if(isChild(me))return "";
- const u=data[me]||blank();
+ const u=data[me]||blank(),td=todayFor(myCfg());
+ /* Qarz odamning o'zida turadi, hujjatida emas: hujjat serverda beshta jadvalga
+    yoyib yoziladi va o'z jadvali yo'q maydon har safar nolga qaytib kelardi. */
+ const qarz=(M(me)||{}).qazo_debt||0;
  const jami=Object.keys(u.days||{}).reduce((n,d)=>n+qazoOf(u.days[d]),0);
- const qarz=u.qazo_debt||0,qolgan=Math.max(0,qarz-jami);
+ const qolgan=Math.max(0,qarz-jami);
  const bugun=isT?QAZO_VAQT.reduce((n,k)=>n+A.qazoShown(k),0):qazoOf(day);
  const kutayotgan=isT&&QAZO_VAQT.some(k=>A.qazoShown(k)>A.qazoSaved(k));
- let rows="";
- QAZO_VAQT.forEach(k=>{
-  const bor=isT?A.qazoShown(k):((day.qazo||{})[k]||0);
-  const saqlangan=isT?A.qazoSaved(k):bor;
-  rows+=`<div class="flex between center" style="padding:5px 0">
-   <span style="font-size:13px">${PR(k)}</span>
-   <span class="flex center gap2">
-    ${isT?`<button class="mbtn" style="${bor<=saqlangan?"opacity:.28;cursor:default":""}"${
-      bor<=saqlangan?"":` onclick="A.subQazo('${k}')"`}>\u2212</button>`:""}
-    <b style="font-family:var(--serif);font-size:17px;min-width:24px;text-align:center;color:${
-      bor?"var(--brass)":"var(--mut)"}">${bor}</b>
-    ${isT?`<button class="mbtn" onclick="A.addQazo('${k}')">+</button>`:""}
-   </span></div>`});
+ const pick=A.qazoPick,bor=isT?A.qazoShown(pick):0,saqlangan=isT?A.qazoSaved(pick):0;
+ /* Bugun saqlangani: faqat nol bo'lmaganlari, bitta qatorda. */
+ const yozilgan=QAZO_VAQT.filter(k=>((day.qazo||{})[k]||0)>0)
+   .map(k=>PR(k)+" "+(day.qazo||{})[k]).join(" \u00B7 ");
+ const tanlov=isT?`<select id="q_pick" class="input" onchange="A.setQazoPick(this.value)">${
+   QAZO_VAQT.map(k=>`<option value="${k}"${k===pick?" selected":""}>${PR(k)}</option>`).join("")
+  }</select>
+  <div class="flex center gap3" style="margin-top:12px;justify-content:center">
+   <button class="mbtn" style="${bor<=saqlangan?"opacity:.28;cursor:default":""}"${
+     bor<=saqlangan?"":` onclick="A.subQazo()"`}>\u2212</button>
+   <b style="font-family:var(--serif);font-size:30px;min-width:46px;text-align:center;color:${
+     bor?"var(--brass)":"var(--mut)"}">${bor}</b>
+   <button class="mbtn" onclick="A.addQazo()">+</button></div>
+  <button class="btn-wide ${kutayotgan?"btn-green":"btn"}" style="margin-top:12px;${
+    kutayotgan?"":"opacity:.45;cursor:default"}"${kutayotgan?' onclick="A.saveQazo()"':""}>Saqlash</button>
+  <div class="muted tiny" style="margin-top:7px;line-height:1.55">Qaysi vaqtni o'qiyotgan
+   bo'lsangiz shuni tanlab, nechta o'qigan bo'lsangiz shuncha marta + ni bosing.
+   Saqlangandan keyin kamaytirib bo'lmaydi \u2014 ustiga yana qo'shsangiz bo'ladi.</div>`:"";
  /* Qarz — BOSHLANG'ICH son, qolgani emas. Qolgan har doim shundan o'qilganlar
     ayrilib chiqariladi, aks holda qolgan sonni qayta kiritgan odamning
     o'qiganlari ikki marta ayrilib ketardi. */
+ const kun=qarz>0?qazoPace(u,qarz,td):null;
  const hisob=qarz>0
   ?`<div class="bar" style="margin-top:10px"><div style="width:${
      Math.min(100,Math.round(jami/qarz*100))}%;background:var(--jade)"></div></div>
     <div class="flex between center" style="margin-top:7px">
      <span class="muted small">${qarz} tadan ${jami} tasi o'qildi \u00B7 ${
        qolgan?qolgan+" qoldi":"hammasi uzildi"}</span>
-     <button class="link" style="font-size:11px" onclick="A.editQazoDebt()">o'zgartirish</button></div>`
+     <button class="link" style="font-size:11px" onclick="A.editQazoDebt()">o'zgartirish</button></div>
+    ${kun?`<div class="brass small" style="margin-top:5px">Shu tezlikda \u2248 ${
+      qazoMuddat(kun)}da tugaydi</div>`:""}`
   :`<div style="margin-top:12px">
     <div class="muted small" style="margin-bottom:7px;line-height:1.6">Qazo qarzingiz taxminan
-     qancha? Bir marta yozib qo'ysangiz, ilova qolganini o'zi sanab boradi.</div>
+     qancha? Bir marta yozib qo'ysangiz, ilova qolganini va qachon tugashini o'zi sanab boradi.</div>
     <div class="flex gap2">
      <input id="q_debt" class="input" type="number" min="0" max="100000" placeholder="masalan 9125" style="flex:1">
      <button class="btn" onclick="A.setQazoDebt()">Saqlash</button></div></div>`;
@@ -1425,11 +1468,9 @@ function qazoPanel(day,isT){
    <div><div style="font-family:var(--serif);font-size:16px">Qazo daftari</div>
     <div class="muted small">Yillar oldin qolib ketgan namozlar \u00B7 har biri +${fmt(QAZO_BALL)} ball</div></div>
    <div class="brass small">${bugun?"bugun: "+bugun+" ta":""}</div></div>
-  <div style="margin-top:10px;border-top:1px solid var(--line);padding-top:4px">${rows}</div>
-  ${isT?`<button class="btn-wide ${kutayotgan?"btn-green":"btn"}" style="margin-top:10px;${
-    kutayotgan?"":"opacity:.45;cursor:default"}"${kutayotgan?' onclick="A.saveQazo()"':""}>Saqlash</button>
-   <div class="muted tiny" style="margin-top:7px;line-height:1.55">Saqlangandan keyin kamaytirib
-    bo'lmaydi \u2014 ustiga yana qo'shsangiz bo'ladi.</div>`:""}
+  ${tanlov}
+  ${yozilgan?`<div class="muted tiny" style="margin-top:10px;padding-top:9px;border-top:1px solid var(--line)">
+    ${isT?"Bugun saqlangan":pretty(date)}: ${yozilgan}</div>`:""}
   ${A.qazoMsg?`<div class="jade small" style="margin-top:7px">${esc(A.qazoMsg)}</div>`:""}
   ${hisob}</div>`}
 
@@ -1668,7 +1709,33 @@ function statsTab(){
  h+=`</div>`;
  /* 14 kunlik grafik */
  h+=`<div class="panel p14 mb14"><div class="eyebrow">So'nggi 14 kun · vaqtida o'qilgan farzlar</div>${chartSVG()}</div>`;
+ h+=qazoJamoaView();
  return h}
+
+/* Kim qaysi qazo namozlarini uzayotgani. Ataylab tartiblanmaydi va taqqoslanmaydi:
+   eski qazo — har kimning o'z hisobi, poyga emas. Shuning uchun o'rin ham, foiz ham
+   yo'q, faqat kim nimani uzayotgani ko'rinib turadi. */
+function qazoJamoaView(){
+ const kimdir=members.some(m=>{
+  const u=data[m.id]||blank();
+  return Object.keys(u.days||{}).some(d=>qazoOf(u.days[d])>0)});
+ if(!kimdir)return "";
+ let h=`<div class="panel p14 mb14"><div class="eyebrow">Qazo daftari · jamoa</div>
+  <p class="muted small" style="margin:7px 0 12px;line-height:1.6">Kim qaysi eski qazo
+   namozlarini uzayotgani. Bu poyga emas — o'rin ham, taqqoslash ham yo'q.</p>`;
+ members.forEach(m=>{
+  const u=data[m.id]||blank(),days=u.days||{};
+  const per={};QAZO_VAQT.forEach(k=>per[k]=0);
+  Object.keys(days).forEach(d=>{const q=(days[d]||{}).qazo||{};
+   QAZO_VAQT.forEach(k=>per[k]+=q[k]||0)});
+  const jami=QAZO_VAQT.reduce((n,k)=>n+per[k],0);
+  const satr=QAZO_VAQT.filter(k=>per[k]>0).map(k=>PR(k)+" "+per[k]).join(" \u00B7 ");
+  h+=`<div style="padding:8px 0;border-top:1px solid var(--line)">
+   <div class="flex between center">
+    <span style="font-size:12.5px;color:${colorOf(m.id)}">${esc(first(m.name))}</span>
+    <span class="${jami?"jade":"muted"} small">${jami?jami+" ta":"hali boshlanmagan"}</span></div>
+   ${satr?`<div class="muted tiny" style="margin-top:3px">${satr}</div>`:""}</div>`});
+ return h+`</div>`}
 
 function chartSVG(){
  const W=520,H=150,pad=20,n=14,k=members.length;

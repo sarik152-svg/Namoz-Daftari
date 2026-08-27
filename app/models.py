@@ -267,10 +267,6 @@ class MemberData(BaseModel):
     tasks: list[Task] = Field(default_factory=list, max_length=MAX_TASKS_PER_MEMBER)
     books: list[Book] = Field(default_factory=list, max_length=MAX_BOOKS_PER_MEMBER)
     places: list[Place] = Field(default_factory=list, max_length=MAX_PLACES_PER_MEMBER)
-    # The backlog the member says they owe, as it stood when they wrote it down. What
-    # is left is always this minus everything counted in `days`, so re-stating it
-    # never double-subtracts prayers already made up.
-    qazo_debt: int = Field(default=0, ge=0, le=MAX_QAZO_DEBT)
 
     @field_validator("places")
     @classmethod
@@ -301,7 +297,6 @@ class MemberData(BaseModel):
             "tasks": [t.model_dump(mode="json") for t in self.tasks],
             "books": [b.model_dump(mode="json") for b in self.books],
             "places": [p.model_dump(mode="json") for p in self.places],
-            "qazo_debt": self.qazo_debt,
         }
 
 
@@ -318,6 +313,12 @@ class MemberProfile(BaseModel):
 
     id: str
     is_child: bool = False
+    # The backlog the member says they owe, as it stood when they wrote it down. What
+    # is left is always this minus everything counted in their days, so re-stating it
+    # never subtracts the same made-up prayers twice. It rides on the profile because
+    # that is where it is stored, and because the circle's screen shows what everyone
+    # is working through.
+    qazo_debt: int = Field(default=0, ge=0, le=MAX_QAZO_DEBT)
     name: str = Field(min_length=1, max_length=64)
     city: str = Field(min_length=1, max_length=64)
     lat: Latitude
@@ -514,6 +515,15 @@ class KhatmCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=64)
     started: Date
+
+
+class QazoDebt(BaseModel):
+    """Body for stating your own backlog. A route of its own rather than a field on
+    the document, so a phone pushing a stale document can never reset it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    qazo_debt: int = Field(ge=0, le=MAX_QAZO_DEBT)
 
 
 class ChildFlag(BaseModel):

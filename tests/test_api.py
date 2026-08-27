@@ -168,16 +168,54 @@ async def test_a_nafl_prayer_has_no_make_up(api, connection):
 
 
 @pytest.mark.asyncio
-async def test_the_qazo_backlog_travels_with_the_document(api, connection):
+async def test_a_document_without_a_backlog_is_still_accepted(api, connection):
     headers = as_session(connection)
     async with api as client:
         response = await client.put(
             "/api/v1/members/sardor/data",
             json={"days": {}, "bonuses": [], "tasks": [], "books": [],
-                  "places": [], "qazo_debt": 9125},
+                  "places": []},
             headers=headers,
         )
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_member_states_their_own_backlog(api, connection):
+    headers = as_session(connection)
+    connection.rows["UPDATE members SET qazo_debt"] = [{"id": "sardor"}]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/sardor/qazo-debt", json={"qazo_debt": 9125},
+            headers=headers,
+        )
+    assert response.status_code == 200
+    assert connection.args_for("UPDATE members")[1] == 9125
+
+
+@pytest.mark.asyncio
+async def test_nobody_else_states_your_backlog(api, connection):
+    """It is a claim about your own past, so a whole-document push from a stale
+    phone must not be able to reset it either — hence a route of its own."""
+    headers = as_session(connection, member_id="behruz")
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/sardor/qazo-debt", json={"qazo_debt": 1},
+            headers=headers,
+        )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_an_absurd_backlog_is_refused(api, connection):
+    headers = as_session(connection)
+    connection.rows["UPDATE members SET qazo_debt"] = [{"id": "sardor"}]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/sardor/qazo-debt", json={"qazo_debt": 999999},
+            headers=headers,
+        )
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio

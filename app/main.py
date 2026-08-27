@@ -41,6 +41,7 @@ from app.models import (
     KhatmCreate,
     LoginRequest,
     MemberData,
+    QazoDebt,
     Session,
     SetPinRequest,
 )
@@ -509,6 +510,25 @@ async def _require_family(request: Request, session: Session, circle_id: int):
     if circle is None or circle.kind != "family":
         raise _error("not_a_family", "Bu imkoniyat faqat oilada ishlaydi", 409)
     return circle
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/qazo-debt")
+async def set_qazo_debt(
+    member_id: str, body: QazoDebt, request: Request,
+    session: Session = Depends(require_owner_or_admin),
+) -> dict:
+    """State your own backlog of prayers owed from years past.
+
+    Its own route rather than a field on the document: the document is pushed whole
+    on every book edit and bonus claim, so a phone that had not caught up would send
+    the backlog back as zero and wipe it. Nobody sets anybody else's — it is a claim
+    about your own past.
+    """
+    if not await repository.set_qazo_debt(
+        request.app.state.pool, member_id, body.qazo_debt
+    ):
+        raise _error("no_member", "A'zo topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True, "qazo_debt": body.qazo_debt}
 
 
 @app.post(f"{API_PREFIX}/members/{{member_id}}/child")
