@@ -13,12 +13,15 @@ from datetime import date as Date, datetime, timedelta, timezone
 import asyncpg
 
 from app.config import (
+    DUEL_DAYS,
     PIN_ATTEMPT_LIMIT,
     PIN_ATTEMPT_WINDOW_SECONDS,
     SESSION_TTL_DAYS,
 )
 from app.models import (
     ALL_PRAYERS,
+    Duel,
+    DuelMember,
     Bonus,
     Book,
     Circle,
@@ -366,7 +369,165 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         data=data,
         calls=[JamoatCall(**dict(row)) for row in call_rows],
         khatm=khatm,
+        duels=await fetch_duels(pool, circle_id),
     )
+
+
+# ---------------------------------------------------------------- duel
+_DUEL_COLUMNS = "id, size, created_by, started, ends"
+
+
+def _duels_from(duel_rows, member_rows) -> list[Duel]:
+    """Stitch the two reads together. Kept out of the query so the same shaping is
+    used whether one duel or a circle's worth was fetched."""
+    people: dict[int, list[DuelMember]] = defaultdict(list)
+    for row in member_rows:
+        people[row["duel_id"]].append(
+            DuelMember(
+                member_id=row["member_id"], side=row["side"],
+                confirmed=row["confirmed"],
+            )
+        )
+    return [
+        Duel(**dict(row), members=people.get(row["id"], []))
+        for row in duel_rows
+    ]
+
+
+async def fetch_duels(pool: asyncpg.Pool, circle_id: int, limit: int = 40) -> list[Duel]:
+    """A circle's duels, newest first. Results are not stored, so nothing is
+    summarised here — the client scores them off the records it already holds."""
+    async with pool.acquire() as connection:
+        duel_rows = await connection.fetch(
+            f"""
+            SELECT {_DUEL_COLUMNS} FROM duels
+             WHERE circle_id = $1 ORDER BY id DESC LIMIT $2
+            """,
+            circle_id, limit,
+        )
+        if not duel_rows:
+            return []
+        member_rows = await connection.fetch(
+            """
+            SELECT duel_id, member_id, side, confirmed FROM duel_members
+             WHERE duel_id = ANY($1::bigint[]) ORDER BY side, member_id
+            """,
+            [row["id"] for row in duel_rows],
+        )
+    return _duels_from(duel_rows, member_rows)
+
+
+async def fetch_duel(pool: asyncpg.Pool, duel_id: int) -> Duel | None:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            f"SELECT {_DUEL_COLUMNS} FROM duels WHERE id = $1", duel_id
+        )
+        if row is None:
+            return None
+        member_rows = await connection.fetch(
+            """
+            SELECT duel_id, member_id, side, confirmed FROM duel_members
+             WHERE duel_id = $1 ORDER BY side, member_id
+            """,
+            duel_id,
+        )
+    return _duels_from([row], member_rows)[0]
+
+
+async def circle_of_duel(pool: asyncpg.Pool, duel_id: int) -> int | None:
+    async with pool.acquire() as connection:
+        return await connection.fetchval(
+            "SELECT circle_id AS circle FROM duels WHERE id = $1", duel_id
+        )
+
+
+async def count_duels(pool: asyncpg.Pool, circle_id: int) -> int:
+    """Open and running duels. A finished one costs nothing but a line of history."""
+    async with pool.acquire() as connection:
+        return int(await connection.fetchval(
+            """
+            SELECT count(*) AS live FROM duels
+             WHERE circle_id = $1 AND (ends IS NULL OR ends >= CURRENT_DATE)
+            """,
+            circle_id,
+        ) or 0)
+
+
+async def create_duel(
+    pool: asyncpg.Pool, circle_id: int, size: int, created_by: str,
+    side1: list[str], side2: list[str],
+) -> Duel:
+    """Open a challenge. Whoever sent it has already accepted it by sending it."""
+    async with pool.acquire() as connection, connection.transaction():
+        row = await connection.fetchrow(
+            f"""
+            INSERT INTO duels (circle_id, size, created_by)
+            VALUES ($1, $2, $3) RETURNING {_DUEL_COLUMNS}
+            """,
+            circle_id, size, created_by,
+        )
+        await connection.executemany(
+            """
+            INSERT INTO duel_members (duel_id, member_id, side, confirmed)
+            VALUES ($1, $2, $3, $4)
+            """,
+            [
+                (row["id"], member_id, side, member_id == created_by)
+                for side, people in ((1, side1), (2, side2))
+                for member_id in people
+            ],
+        )
+    return Duel(
+        **dict(row),
+        members=[
+            DuelMember(member_id=m, side=side, confirmed=m == created_by)
+            for side, people in ((1, side1), (2, side2))
+            for m in people
+        ],
+    )
+
+
+async def confirm_duel(pool: asyncpg.Pool, duel_id: int, member_id: str) -> bool:
+    """Accept a challenge, and start the week if that was the last acceptance.
+
+    Both steps are one transaction: two people accepting at the same moment must not
+    be able to leave a duel that everybody has accepted and nobody has started.
+    """
+    async with pool.acquire() as connection, connection.transaction():
+        updated = await connection.fetchval(
+            """
+            UPDATE duel_members SET confirmed = true
+             WHERE duel_id = $1 AND member_id = $2
+             RETURNING true AS ok
+            """,
+            duel_id, member_id,
+        )
+        if not updated:
+            return False
+        waiting = await connection.fetchval(
+            "SELECT count(*) AS waiting FROM duel_members WHERE duel_id = $1 AND NOT confirmed",
+            duel_id,
+        )
+        if not waiting:
+            await connection.execute(
+                """
+                UPDATE duels
+                   SET started = CURRENT_DATE,
+                       ends = CURRENT_DATE + ($2::int - 1)
+                 WHERE id = $1 AND started IS NULL
+                """,
+                duel_id, DUEL_DAYS,
+            )
+    return True
+
+
+async def delete_duel(pool: asyncpg.Pool, duel_id: int) -> bool:
+    """Turn a challenge down, or take it back. Only ever before it starts."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "DELETE FROM duels WHERE id = $1 AND started IS NULL RETURNING id", duel_id
+        )
+    return row is not None
 
 
 async def fetch_roster(pool: asyncpg.Pool, circle_id: int, key: str) -> list[RosterEntry]:

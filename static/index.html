@@ -343,7 +343,7 @@ async function pull(){
  try{
    const j=await api(circleId?"/state?circle="+encodeURIComponent(circleId):"/state");
    members=j.members;data={};
-   calls=j.calls||[];khatm=j.khatm||null;
+   calls=j.calls||[];khatm=j.khatm||null;duels=j.duels||[];
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -392,6 +392,9 @@ let famMsg="",famErr=false,addMode="new",addPin="";
 /* Oila narsalari: chaqiruvlar va ochiq xatm. Ular /state bilan birga keladi,
    shuning uchun ilova ikkinchi so'rov yubormaydi. */
 let calls=[],khatm=null,khatmMsg="";
+/* Duellar ham /state bilan keladi — natija saqlanmaydi, u shu yerdagi yozuvlardan
+   chiqariladi, xuddi nishonlar kabi. */
+let duels=[],duelMsg="",duelErr=false,duelOchiq=false,duelSize=1;
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -597,6 +600,136 @@ function podium(nom,a,z,done){
    <span style="font-size:13px"><span class="muted">${i+5}.</span>
     <span style="color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</span></span>
    <span class="muted small">${fmt(x.ball)}</span></div>`});
+ return h+`</div>`}
+
+/* ══════════════ DUEL ══════════════ */
+/* Ikki kishi yoki ikki juftlik bir hafta ball bo'yicha bellashadi. Natija hech
+   qayerda saqlanmaydi: u reyting o'qiydigan o'sha yozuvlardan chiqariladi, shuning
+   uchun kursi bilan duel hech qachon bir-biriga zid bo'lolmaydi. Saqlangan natija
+   — javobning ikkinchi nusxasi, nusxalar esa vaqt o'tib ajralib ketadi. */
+const duelKishi=id=>(members||[]).find(x=>x.id===id)||null;
+const duelTomon=(d,n)=>((d&&d.members)||[]).filter(m=>m.side===n)
+  .map(m=>duelKishi(m.member_id)).filter(Boolean);
+const duelBoshlangan=d=>!!(d&&d.started&&d.ends);
+const duelTugagan=(d,td)=>duelBoshlangan(d)&&d.ends<td;
+const duelKetmoqda=(d,td)=>duelBoshlangan(d)&&d.ends>=td;
+const duelKutmoqda=d=>!!d&&!d.started;
+const duelIchidami=(d,id)=>((d&&d.members)||[]).some(m=>m.member_id===id);
+const duelTasdiqlanmagan=(d,id)=>((d&&d.members)||[])
+  .some(m=>m.member_id===id&&!m.confirmed);
+
+function duelHisob(d){
+ const t1=duelTomon(d,1),t2=duelTomon(d,2);
+ const yig=list=>Math.round(list.reduce((n,m)=>
+   n+prayerRange(data[m.id]||blank(),m,d.started,d.ends).ball,0)*100)/100;
+ const b1=duelBoshlangan(d)?yig(t1):0,b2=duelBoshlangan(d)?yig(t2):0;
+ /* Teng bo'lsa hech kim yutmaydi — bu durang, g'alaba emas. */
+ return{tomon1:t1,tomon2:t2,ball1:b1,ball2:b2,golib:b1>b2?1:b2>b1?2:0}}
+
+/* Kim necha marta yutgani. Faqat tugagan duellar sanaladi: ketayotganining
+   hisobi hali o'zgaradi, tasdiqlanmagani esa umuman boshlanmagan. */
+function duelYutuq(list){
+ const td=todayFor(myCfg()),y={};
+ (list||[]).forEach(d=>{
+  if(!duelTugagan(d,td))return;
+  const r=duelHisob(d);
+  if(!r.golib)return;
+  (r.golib===1?r.tomon1:r.tomon2).forEach(m=>y[m.id]=(y[m.id]||0)+1)});
+ return y}
+
+/* Duel paneli — kursi bilan taqqoslash orasida turadi. */
+function duelView(){
+ const td=todayFor(myCfg()),ismi=id=>{const m=duelKishi(id);return m?first(m.name):id};
+ const yutuq=duelYutuq(duels);
+ const menga=(duels||[]).filter(d=>duelKutmoqda(d)&&duelTasdiqlanmagan(d,me));
+ const kutmoqda=(duels||[]).filter(d=>duelKutmoqda(d)&&!duelTasdiqlanmagan(d,me));
+ const ketmoqda=(duels||[]).filter(d=>duelKetmoqda(d,td));
+ const tugagan=(duels||[]).filter(d=>duelTugagan(d,td)).slice(0,3);
+ const boshqalar=(members||[]).filter(m=>m.id!==me);
+ const tanlov=(id,tashla)=>`<select id="${id}" class="input">${
+   (members||[]).filter(m=>!tashla||m.id!==me)
+    .map(m=>`<option value="${esc(m.id)}"${m.id===tashla?" selected":""}>${esc(first(m.name))}</option>`)
+    .join("")}</select>`;
+ /* Bir tarafning qatori: ismlar, bali va g'olib bo'lsa belgisi. */
+ const taraf=(list,ball,golib,ok)=>`<div class="flex between center" style="padding:5px 0">
+   <span style="font-size:13px;${golib?"":"opacity:.7"}">${
+     list.map(m=>`<span style="color:${colorOf(m.id)}">${esc(first(m.name))}</span>`).join(" + ")
+     ||"<span class=\"muted\">?</span>"}${golib?" \u{1F3C6}":""}</span>
+   <span class="${golib?"jade":"muted"}" style="font-family:var(--serif);font-size:16px">${
+     ok?fmt(ball):"\u2014"}</span></div>`;
+ const qator=(d,ok)=>{const r=duelHisob(d);return `
+   ${taraf(r.tomon1,r.ball1,ok&&r.golib===1,ok)}
+   <div class="muted tiny" style="text-align:center;letter-spacing:.1em">${d.size}x${d.size}</div>
+   ${taraf(r.tomon2,r.ball2,ok&&r.golib===2,ok)}
+   ${ok&&!r.golib?`<div class="muted tiny" style="text-align:center;margin-top:4px">durang \u2014 hech kim yutmadi</div>`:""}`};
+
+ let h=`<div class="panel p14 mb14"><div class="flex between center">
+   <div><div class="eyebrow">Duel</div>
+    <div class="muted small" style="margin-top:3px">Bir hafta, ball bo'yicha bellashuv</div></div>
+   ${duelOchiq?`<button class="btn" onclick="A.duelForm(false)">Yopish</button>`
+    :`<button class="btn btn-gold" style="font-size:11px" onclick="A.duelForm(true)">+ Vizov tashlash</button>`}
+  </div>`;
+
+ if(duelOchiq){
+  const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
+  h+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="flex gap2 mb10">
+    <button class="btn" style="flex:1;${duelSize===1?on:""}" onclick="A.setDuelSize(1)">1x1</button>
+    <button class="btn" style="flex:1;${duelSize===2?on:""}" onclick="A.setDuelSize(2)">2x2</button></div>
+   <div class="label" style="margin-top:0">Sizning tarafingiz</div>
+   ${tanlov("d_mine1",me)}
+   ${duelSize===2?`<div style="margin-top:7px">${tanlov("d_mine2")}</div>`:""}
+   <div class="label">Qarshi taraf</div>
+   ${tanlov("d_theirs1")}
+   ${duelSize===2?`<div style="margin-top:7px">${tanlov("d_theirs2")}</div>`:""}
+   <button class="btn btn-green btn-wide" style="margin-top:12px" onclick="A.createDuel()">Vizov tashlash</button>
+   <div class="muted tiny" style="margin-top:7px;line-height:1.55">Hamma tasdiqlagan kundan
+    boshlab 7 kun yuriladi. Tasdiqlamaguncha boshlanmaydi.</div>
+  </div>`}
+
+ if(duelMsg)h+=`<div class="${duelErr?"clay":"jade"} small" style="margin-top:9px">${esc(duelMsg)}</div>`;
+
+ menga.forEach(d=>{
+  h+=`<div class="panel p14" style="margin-top:11px;border-color:#C9A22766">
+   <div class="brass small" style="margin-bottom:6px">Sizga vizov \u00B7 ${esc(ismi(d.created_by))}dan</div>
+   ${qator(d,false)}
+   <div class="flex gap2" style="margin-top:10px">
+    <button class="btn btn-green" style="flex:1;font-size:12px" onclick="A.confirmDuel(${d.id})">Tasdiqlash</button>
+    <button class="btn" style="flex:1;font-size:12px" onclick="A.dropDuel(${d.id})">Rad etish</button></div></div>`});
+
+ kutmoqda.forEach(d=>{
+  const qolgan=(d.members||[]).filter(m=>!m.confirmed).map(m=>ismi(m.member_id)).join(", ");
+  h+=`<div class="panel p14" style="margin-top:11px">
+   <div class="muted small" style="margin-bottom:6px">Tasdiq kutilmoqda \u00B7 ${esc(qolgan)}</div>
+   ${qator(d,false)}
+   ${duelIchidami(d,me)?`<button class="btn btn-wide" style="margin-top:9px;font-size:11px"
+     onclick="A.dropDuel(${d.id})">Bekor qilish</button>`:""}</div>`});
+
+ ketmoqda.forEach(d=>{
+  const qoldi=Math.max(0,daysBetween(td,d.ends));
+  h+=`<div class="panel p14" style="margin-top:11px;border-color:#4CAF8B44">
+   <div class="jade small" style="margin-bottom:6px">Ketmoqda \u00B7 ${
+     qoldi?qoldi+" kun qoldi":"oxirgi kun"}</div>
+   ${qator(d,true)}</div>`});
+
+ tugagan.forEach(d=>{
+  h+=`<div class="panel p14" style="margin-top:11px">
+   <div class="muted small" style="margin-bottom:6px">Tugadi \u00B7 ${pretty(d.started)} — ${pretty(d.ends)}</div>
+   ${qator(d,true)}</div>`});
+
+ if(!menga.length&&!kutmoqda.length&&!ketmoqda.length&&!tugagan.length&&!duelOchiq){
+  h+=`<p class="muted small" style="margin:11px 0 0;line-height:1.6">Hozircha duel yo'q.
+   Kim bo'lsa ham vizov tashlashi mumkin \u2014 1x1 yoki 2x2.</p>`}
+
+ const bor=Object.keys(yutuq);
+ if(bor.length){
+  h+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
+   <div class="eyebrow" style="margin-bottom:7px">G'alabalar</div>`;
+  (members||[]).filter(m=>yutuq[m.id]).forEach(m=>{
+   h+=`<div class="flex between center" style="padding:4px 0">
+    <span style="font-size:12.5px;color:${colorOf(m.id)}">${esc(first(m.name))}</span>
+    <span class="brass small">${yutuq[m.id]} marta</span></div>`});
+  h+=`</div>`}
  return h+`</div>`}
 
 /* ══════════════ NISHONLAR ══════════════ */
@@ -907,6 +1040,38 @@ const A={
      {method:"DELETE"});
    await A.loadRoster();await pull();render()}
   catch(e){alert(e.message||"Chiqarib bo'lmadi")}},
+ /* ────────── DUEL ────────── */
+ duelForm(on){duelOchiq=!!on;duelMsg="";duelErr=false;render()},
+ setDuelSize(n){duelSize=n===2?2:1;duelMsg="";render()},
+ async createDuel(){
+  const val=id=>{const el=document.getElementById(id);return ((el&&el.value)||"").trim()};
+  const n=duelSize;
+  const meniki=[val("d_mine1")].concat(n===2?[val("d_mine2")]:[]).filter(Boolean);
+  const ular=[val("d_theirs1")].concat(n===2?[val("d_theirs2")]:[]).filter(Boolean);
+  const ayt=(t)=>{duelMsg=t;duelErr=true;render()};
+  if(meniki.length!==n||ular.length!==n)return ayt("Ikkala tarafni ham to'liq tanlang");
+  if(new Set(meniki.concat(ular)).size!==n*2)return ayt("Bir odam ikki joyda tura olmaydi");
+  if(meniki.indexOf(me)<0&&ular.indexOf(me)<0)return ayt("O'zingiz ham qatnashishingiz kerak");
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/duels",
+     {method:"POST",body:JSON.stringify({size:n,side1:meniki,side2:ular})});
+   duelOchiq=false;duelMsg="Vizov yuborildi \u2014 tasdiqlashsa boshlanadi";duelErr=false;
+   await pull();
+  }catch(e){duelMsg=e.message||"Yuborib bo'lmadi";duelErr=true}
+  render()},
+ async confirmDuel(id){
+  try{
+   await api("/duels/"+encodeURIComponent(id)+"/confirm",{method:"POST"});
+   duelMsg="";duelErr=false;await pull();
+  }catch(e){duelMsg=e.message||"Tasdiqlab bo'lmadi";duelErr=true}
+  render()},
+ async dropDuel(id){
+  if(!confirm("Duel bekor qilinsinmi?"))return;
+  try{
+   await api("/duels/"+encodeURIComponent(id),{method:"DELETE"});
+   duelMsg="";duelErr=false;await pull();
+  }catch(e){duelMsg=e.message||"Bekor qilib bo'lmadi";duelErr=true}
+  render()},
  async callJamoat(pk,ds){
   /* Chaqiruv boshqa hech kimning yozuviga tegmaydi — u shunchaki "birga o'qiymiz"
      degan xabar. Har kim baribir o'z namozini o'zi belgilaydi. */
@@ -1788,6 +1953,8 @@ function statsTab(){
    <button class="btn" style="flex:1;${!oy?on:""}" onclick="A.setStatPeriod('hafta')">Bu hafta</button>
    <button class="btn" style="flex:1;${oy?on:""}" onclick="A.setStatPeriod('oy')">Bu oy</button></div>`;
  ch+=podium(oy?"Oy qahramoni":"Hafta qahramoni",rng[0],rng[1],periodDone(rng[1],cfg));
+ /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
+ ch+=duelView();
  const ranked=members.slice().sort((a,b)=>{
   const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
@@ -1832,8 +1999,6 @@ function statsTab(){
    <div class="bar"><div style="width:${(ready?1:prog)*100}%;background:${ready?"var(--brass)":"var(--jade)"}"></div></div>
   </div>`});
  h+=`</div>`;
- /* 14 kunlik grafik */
- h+=`<div class="panel p14 mb14"><div class="eyebrow">So'nggi 14 kun · vaqtida o'qilgan farzlar</div>${chartSVG()}</div>`;
  h+=qazoJamoaView();
  return h}
 
@@ -1885,27 +2050,6 @@ function haftaTopshiriqView(wk){
     <span class="${ok?"jade":"brass"}">${bor} / ${kerak}</span></div>
    <div class="bar"><div style="width:${pct}%;background:${ok?"var(--jade)":"var(--brass)"}"></div></div>
   </div></div>`}
-
-function chartSVG(){
- const W=520,H=150,pad=20,n=14,k=members.length;
- const gw=(W-pad*2)/n,bw=Math.max(3,(gw-4)/Math.max(1,k));
- let bars="",labels="";
- for(let i=0;i<n;i++){
-  const ds=shift(todayFor(myCfg()),-(n-1-i)),x0=pad+i*gw;
-  members.forEach((m,j)=>{
-   const day=(data[m.id]&&data[m.id].days&&data[m.id].days[ds])||{};
-   const mc=cfgNow(m);
-   const v=PRAYERS.filter(p=>p.fard&&holat(mc,p.k,day[p.k])==="ontime").length;
-   const hh=(H-38)*(v/5),x=x0+2+j*bw;
-   bars+=`<rect x="${x.toFixed(1)}" y="${(H-24-hh).toFixed(1)}" width="${(bw-1).toFixed(1)}" height="${Math.max(hh,1).toFixed(1)}"
-     rx="2" fill="${colorOf(m.id)}" opacity="${v?1:.25}"></rect>`});
-  if(i%2===0)labels+=`<text x="${(x0+gw/2).toFixed(1)}" y="${H-8}" fill="#8895AE" font-size="9" text-anchor="middle">${ds.slice(8)}</text>`}
- let grid="";[0,.5,1].forEach(f=>{const y=H-24-(H-38)*f;
-  grid+=`<line x1="${pad}" y1="${y}" x2="${W-pad}" y2="${y}" stroke="#26314A" stroke-dasharray="2 4"></line>`});
- const leg=members.map(m=>`<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px">
-   <span class="dot" style="background:${colorOf(m.id)}"></span><span class="muted tiny">${esc(first(m.name))}</span></span>`).join("");
- return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:10px">${grid}${bars}${labels}</svg>
-  <div style="margin-top:6px">${leg}</div>`}
 
 /* ────────── SUNNAT ────────── */
 function sunnatTab(){

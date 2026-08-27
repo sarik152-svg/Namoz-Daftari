@@ -530,6 +530,59 @@ class QazoDebt(BaseModel):
     qazo_debt: int = Field(ge=0, le=MAX_QAZO_DEBT)
 
 
+# ---------------------------------------------------------------- duel
+class DuelMember(BaseModel):
+    """One participant: which side they are on, and whether they have accepted."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: str
+    side: Literal[1, 2]
+    confirmed: bool = False
+
+    _check_id = field_validator("member_id")(_validate_member_id)
+
+
+class Duel(BaseModel):
+    """Two people, or two pairs, over one week of prayer points.
+
+    The result is not here and never will be: it is worked out from the same records
+    the ranking reads, so it cannot disagree with them. `started` is NULL until
+    everybody has accepted, which is the whole state machine — no start means
+    waiting, a start means running or finished depending on `ends`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    size: Literal[1, 2]
+    created_by: str
+    started: Date | None = None
+    ends: Date | None = None
+    members: list[DuelMember] = Field(default_factory=list, max_length=4)
+
+
+class DuelCreate(BaseModel):
+    """Who is challenging whom. The caller must be one of them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    size: Literal[1, 2]
+    side1: list[str] = Field(min_length=1, max_length=2)
+    side2: list[str] = Field(min_length=1, max_length=2)
+
+    @model_validator(mode="after")
+    def _sides_line_up(self) -> "DuelCreate":
+        if len(self.side1) != self.size or len(self.side2) != self.size:
+            raise ValueError(f"each side needs exactly {self.size}")
+        everyone = self.side1 + self.side2
+        for member_id in everyone:
+            _validate_member_id(member_id)
+        if len(set(everyone)) != len(everyone):
+            raise ValueError("nobody can be on both sides, or on one side twice")
+        return self
+
+
 class ChildFlag(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -556,6 +609,7 @@ class GroupState(BaseModel):
     data: dict[str, MemberData]
     calls: list[JamoatCall] = Field(default_factory=list)
     khatm: Khatm | None = None
+    duels: list[Duel] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -563,4 +617,5 @@ class GroupState(BaseModel):
             "data": {member_id: d.to_wire() for member_id, d in self.data.items()},
             "calls": [c.model_dump(mode="json") for c in self.calls],
             "khatm": None if self.khatm is None else self.khatm.model_dump(mode="json"),
+            "duels": [d.model_dump(mode="json") for d in self.duels],
         }

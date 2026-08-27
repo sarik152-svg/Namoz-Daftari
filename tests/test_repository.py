@@ -279,3 +279,39 @@ async def test_removing_a_member_leaves_their_records_alone():
 async def test_owning_a_circle_containing_someone_is_read_from_the_join():
     connection = FakeConnection(scalars={"JOIN circle_members": True})
     assert await repository.owns_circle_containing(FakePool(connection), "sardor", "zuhra")
+
+
+@pytest.mark.asyncio
+async def test_a_duel_waits_for_the_last_acceptance():
+    """Three have said yes, one has not: the week must not begin."""
+    connection = FakeConnection(scalars={"RETURNING true AS ok": True, "AS waiting": 1})
+    assert await repository.confirm_duel(FakePool(connection), 7, "behruz") is True
+    assert not connection.issued("UPDATE duels")
+
+
+@pytest.mark.asyncio
+async def test_the_last_acceptance_starts_the_week():
+    connection = FakeConnection(scalars={"RETURNING true AS ok": True, "AS waiting": 0})
+    await repository.confirm_duel(FakePool(connection), 7, "behruz")
+    assert connection.issued("UPDATE duels")
+    assert connection.issued("started IS NULL"), "starting twice would move the goalposts"
+
+
+@pytest.mark.asyncio
+async def test_accepting_a_duel_you_are_not_in_changes_nothing():
+    connection = FakeConnection(scalars={"RETURNING true AS ok": None})
+    assert await repository.confirm_duel(FakePool(connection), 7, "stranger") is False
+    assert not connection.issued("UPDATE duels")
+
+
+@pytest.mark.asyncio
+async def test_the_sender_of_a_challenge_has_already_accepted_it():
+    connection = FakeConnection(rows={"INSERT INTO duels": [
+        {"id": 3, "size": 2, "created_by": "sardor", "started": None, "ends": None}
+    ]})
+    duel = await repository.create_duel(
+        FakePool(connection), 1, 2, "sardor", ["sardor", "behruz"], ["hikmat", "aziz"],
+    )
+    said_yes = {m.member_id for m in duel.members if m.confirmed}
+    assert said_yes == {"sardor"}
+    assert {m.member_id for m in duel.members} == {"sardor", "behruz", "hikmat", "aziz"}

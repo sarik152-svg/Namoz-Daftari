@@ -245,6 +245,66 @@ async def test_nobody_grants_themselves_the_work_shift(api, connection):
 
 
 @pytest.mark.asyncio
+async def test_you_cannot_start_a_duel_you_are_not_in(api, connection):
+    headers = as_session(connection)
+    connection.scalars["FROM circle_members"] = True
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/1/duels", headers=headers,
+            json={"size": 1, "side1": ["behruz"], "side2": ["hikmat"]},
+        )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_in_duel"
+
+
+@pytest.mark.asyncio
+async def test_a_duel_is_refused_against_somebody_outside_the_circle(api, connection):
+    headers = as_session(connection)
+    """is_circle_member answers for the caller and then for the stranger alike, so
+    the fake says no to everyone; the caller's own check is the membership gate."""
+    connection.scalars["FROM circle_members"] = None
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/1/duels", headers=headers,
+            json={"size": 1, "side1": ["sardor"], "side2": ["nobody"]},
+        )
+    assert response.status_code in (403, 404)
+
+
+@pytest.mark.asyncio
+async def test_a_running_duel_cannot_be_called_off(api, connection):
+    headers = as_session(connection)
+    connection.rows["SELECT id, size"] = [
+        {"id": 5, "size": 1, "created_by": "sardor",
+         "started": Date(2026, 8, 20), "ends": Date(2026, 8, 26)}
+    ]
+    connection.rows["FROM duel_members"] = [
+        {"duel_id": 5, "member_id": "sardor", "side": 1, "confirmed": True},
+        {"duel_id": 5, "member_id": "behruz", "side": 2, "confirmed": True},
+    ]
+    connection.rows["DELETE FROM duels WHERE id"] = []
+    async with api as client:
+        response = await client.delete("/api/v1/duels/5", headers=headers)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "duel_running"
+
+
+@pytest.mark.asyncio
+async def test_a_stranger_cannot_call_off_somebody_elses_duel(api, connection):
+    headers = as_session(connection, member_id="stranger")
+    connection.rows["SELECT id, size"] = [
+        {"id": 5, "size": 1, "created_by": "sardor", "started": None, "ends": None}
+    ]
+    connection.rows["FROM duel_members"] = [
+        {"duel_id": 5, "member_id": "sardor", "side": 1, "confirmed": True},
+        {"duel_id": 5, "member_id": "behruz", "side": 2, "confirmed": False},
+    ]
+    async with api as client:
+        response = await client.delete("/api/v1/duels/5", headers=headers)
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_password_is_checked(api, connection):
     async with api as client:
         bad = await client.post("/api/v1/auth/admin", json={"password": "wrong"})

@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from app import repository
 from app.config import (
     ADMIN_SUBJECT,
+    MAX_DUELS_PER_CIRCLE,
     MAX_CIRCLE_MEMBERS,
     MAX_CIRCLES_OWNED,
     MAX_MEMBERS,
@@ -37,6 +38,7 @@ from app.models import (
     CircleMemberAdd,
     CircleUpdate,
     DayRecord,
+    DuelCreate,
     JamoatCallCreate,
     KhatmCreate,
     LoginRequest,
@@ -583,6 +585,78 @@ async def set_child(
             )
     if not await repository.set_child(pool, member_id, body.is_child):
         raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- duel
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/duels", status_code=201)
+async def open_duel(
+    circle_id: int, body: DuelCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Challenge somebody, or a pair, to a week of prayer points.
+
+    Sending the challenge counts as accepting it, so only the others are asked. The
+    week does not begin until the last of them says yes: a contest somebody was
+    entered into without agreeing is not a contest.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    await _require_circle(request, session, circle_id)
+    me = session.member_id
+    everyone = body.side1 + body.side2
+    if me is None or me not in everyone:
+        raise _error("not_in_duel", "O'zingiz ham qatnashishingiz kerak", 403)
+    for member_id in everyone:
+        if not await repository.is_circle_member(pool, circle_id, member_id):
+            raise _error(
+                "not_in_circle", f"'{member_id}' bu doirada emas",
+                status.HTTP_404_NOT_FOUND,
+            )
+    if await repository.count_duels(pool, circle_id) >= MAX_DUELS_PER_CIRCLE:
+        raise _error(
+            "too_many_duels", f"{MAX_DUELS_PER_CIRCLE} tadan ortiq duel bo'lmaydi", 409
+        )
+    duel = await repository.create_duel(
+        pool, circle_id, body.size, me, body.side1, body.side2
+    )
+    return duel.model_dump(mode="json")
+
+
+@app.post(f"{API_PREFIX}/duels/{{duel_id}}/confirm")
+async def confirm_duel(
+    duel_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Accept a challenge. The last acceptance starts the week."""
+    pool: asyncpg.Pool = request.app.state.pool
+    if not await repository.confirm_duel(pool, duel_id, session.member_id or ""):
+        raise _error(
+            "not_your_duel", "Bu duel sizniki emas", status.HTTP_403_FORBIDDEN
+        )
+    duel = await repository.fetch_duel(pool, duel_id)
+    if duel is None:
+        raise _error("no_duel", "Duel topilmadi", status.HTTP_404_NOT_FOUND)
+    return duel.model_dump(mode="json")
+
+
+@app.delete(f"{API_PREFIX}/duels/{{duel_id}}")
+async def drop_duel(
+    duel_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Turn a challenge down, or take your own back — only before it starts.
+
+    Any participant may do it: refusing is how you say no, and once the week is
+    running neither side can walk away from the scoreboard.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    duel = await repository.fetch_duel(pool, duel_id)
+    if duel is None:
+        raise _error("no_duel", "Duel topilmadi", status.HTTP_404_NOT_FOUND)
+    if not any(m.member_id == session.member_id for m in duel.members):
+        raise _error(
+            "not_your_duel", "Bu duel sizniki emas", status.HTTP_403_FORBIDDEN
+        )
+    if not await repository.delete_duel(pool, duel_id):
+        raise _error("duel_running", "Boshlangan duelni bekor qilib bo'lmaydi", 409)
     return {"ok": True}
 
 

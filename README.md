@@ -71,6 +71,9 @@ the first success, so the typing happens once.
 | DELETE | `/api/v1/circles/{id}` | its owner | Close a family; never the friends circle |
 | POST | `/api/v1/members/{id}/qazo-debt` | own or admin | State your backlog of prayers owed |
 | POST | `/api/v1/members/{id}/work-shift` | circle owner or admin | Ish rejimi on or off |
+| POST | `/api/v1/circles/{id}/duels` | member of it | Challenge somebody, 1x1 or 2x2 |
+| POST | `/api/v1/duels/{id}/confirm` | a participant | Accept; the last one starts the week |
+| DELETE | `/api/v1/duels/{id}` | a participant | Refuse or withdraw, before it starts |
 | GET | `/api/v1/circles/{id}/roster` | its owner | That circle's members with PINs |
 | POST | `/api/v1/circles/{id}/members` | its owner | Add an existing login, or a new person |
 | DELETE | `/api/v1/circles/{id}/members/{id}` | its owner, or yourself | Take somebody out |
@@ -272,6 +275,23 @@ that badge is the group's agreement about the five daily prayers and does not ro
 Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
 an agreement about praying the five daily prayers on time, and a backlog would dissolve it.
 
+## Duel
+
+Two people, or two pairs, over one week of prayer points — the same `ball` the ranking
+uses, summed per side. A draw is a draw: equal points is a win for nobody.
+
+**No result is ever stored.** `duels` and `duel_members` record who is on which side and
+when the week ran; the score is worked out in the browser from the records the ranking
+already reads. A stored result would be a second copy of an answer the records can always
+give, and copies drift — the same reasoning that keeps badges derived.
+
+`started IS NULL` is the whole state machine: no row means no challenge, a null start
+means waiting on somebody, and a date means running or finished depending on `ends`. The
+week runs `DUEL_DAYS` from the moment the **last** person accepts rather than aligning to
+the calendar week, because a challenge sent on Wednesday would otherwise be four days long
+or spend four days waiting. Sending a challenge counts as accepting it; any participant
+may refuse a challenge that has not started, and nobody can walk away from one that has.
+
 ## Ish rejimi — a shift that covers the middle of the day
 
 For a member whose job holds them through Peshin, Asr and Shom, those three prayed
@@ -294,7 +314,7 @@ the two ledgers would drift apart.
 The circle owner sets it, like `is_child`. Granting yourself lighter scoring is not
 something anybody should be able to do quietly.
 
-## Vazifa lives under Sunnat
+## Vazifa lives under Sunnat, and there is no 14-day chart
 
 There is no penalty tab. The terms of the agreement and the penalty work sit at the
 bottom of the Sunnat page, and a child is shown neither — the same rule the tab used to

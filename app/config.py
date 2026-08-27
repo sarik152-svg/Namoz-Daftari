@@ -40,6 +40,15 @@ MAX_MEMBERS = 50
 MAX_QAZO_PER_PRAYER_PER_DAY = 20
 MAX_QAZO_DEBT = 100_000
 
+# --- Duel ---
+# A duel runs a full week from the moment the last person accepts, rather than
+# aligning to the calendar week: a challenge sent on Wednesday would otherwise
+# either be four days long or spend four days waiting to begin.
+DUEL_DAYS = 7
+# Open and running duels a circle may hold at once. The cap is about the screen,
+# not about fairness: a page of twenty scoreboards is nobody's ranking page.
+MAX_DUELS_PER_CIRCLE = 12
+
 # --- Doiralar ---
 # A circle is cheap, so the caps only exist to stop a runaway client. Owning five
 # circles already means a friends group plus four families.
