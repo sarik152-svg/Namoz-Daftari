@@ -69,6 +69,7 @@ the first success, so the typing happens once.
 | POST | `/api/v1/circles` | session | Start a family; the caller owns it |
 | PATCH | `/api/v1/circles/{id}` | its owner | Name and weekly goal |
 | DELETE | `/api/v1/circles/{id}` | its owner | Close a family; never the friends circle |
+| POST | `/api/v1/members/{id}/qazo-debt` | own or admin | State your backlog of prayers owed |
 | GET | `/api/v1/circles/{id}/roster` | its owner | That circle's members with PINs |
 | POST | `/api/v1/circles/{id}/members` | its owner | Add an existing login, or a new person |
 | DELETE | `/api/v1/circles/{id}/members/{id}` | its owner, or yourself | Take somebody out |
@@ -249,9 +250,23 @@ and in `replace_member_data` alike. In the browser the counter is local until Sa
 pressed, the way the tasbih counter on the task page already works, so a mis-tap costs
 nothing before it is committed and nothing after it can be taken back.
 
-`qazo_debt` on the member document is the backlog they say they owe, **as it stood when
-they wrote it down**. What is left is always that minus everything counted in `days`, so
-re-stating it never subtracts the same made-up prayers twice.
+`qazo_debt` is the backlog they say they owe, **as it stood when they wrote it down**.
+What is left is always that minus everything counted in `days`, so re-stating it never
+subtracts the same made-up prayers twice.
+
+It lives **on the member row, with a route of its own**, and the first cut of this
+feature got that wrong in a way worth remembering: it was added as a field on
+`MemberData`, which is not stored as a document. `replace_member_data` fans that payload
+out into `day_records`, `bonuses`, `tasks`, `books` and `places`, so a field with no
+table was accepted by the API, dropped on the floor, and handed back as zero by the next
+`/state` — which on screen was indistinguishable from the save button not working. The
+member row is also the safer home: the whole document is pushed on every book edit and
+bonus claim, so a phone that had not caught up would have reset the backlog each time.
+
+**The weekly team task** rotates: `haftaTopshiriq` picks from `HAFTALIK` by counting
+weeks from a fixed Monday, so it is derived rather than stored and every phone shows the
+same one. It sits *beside* the standing "hammamiz uchun" badge rather than replacing it —
+that badge is the group's agreement about the five daily prayers and does not rotate.
 
 Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
 an agreement about praying the five daily prayers on time, and a backlog would dissolve it.

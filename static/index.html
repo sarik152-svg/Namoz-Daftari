@@ -582,6 +582,48 @@ function perfectStreak(days,c){
  for(let i=0;i<400;i++){if(toliq(cur)){n++;cur=shift(cur,-1)}else break}
  return n}
 
+/* ────────── HAFTALIK JAMOA TOPSHIRIG'I ────────── */
+/* "Hammamiz uchun" nishoni har hafta o'zgarmaydi — u ahd. Uning yonida esa har
+   hafta boshqa topshiriq turadi, shunda kurashadigan yangi narsa bo'ladi. Qaysi
+   topshiriq ekani haftaning o'zidan chiqariladi, hech qayerda saqlanmaydi: nishon
+   ham shunday ishlaydi, va shu tufayli hammaning ekranida bir xil chiqadi. */
+function haftaJamoa(a,z){
+ const kattalar=members.filter(m=>!m.is_child);
+ const w={n:kattalar.length,ontime:0,tahajjud:0,jamoat:0,eski:0,
+   quran:0,quranKishi:0,mukammal:0,bomdod:0};
+ kattalar.forEach(m=>{
+  const u=data[m.id]||blank(),o=prayerRange(u,m,a,z);
+  w.ontime+=o.ontime;w.tahajjud+=o.tahajjud;w.jamoat+=o.jamoat;w.eski+=o.eski;
+  let qk=0;
+  for(let d=a,i=0;i<40&&d<=z;i++,d=shift(d,1)){
+   const day=((u.days||{})[d])||{};
+   if(day.quran){qk++;w.quran++}
+   if(day.bomdod&&day.bomdod.s==="ontime")w.bomdod++;
+   if(PRAYERS.filter(p=>p.fard&&day[p.k]&&day[p.k].s==="ontime").length===5)w.mukammal++}
+  if(qk>=5)w.quranKishi++});
+ return w}
+
+const HAFTALIK=[
+ {n:"Tun jamoasi",ic:"\u{1F319}",kerak:n=>2*n,v:w=>w.tahajjud,
+  d:n=>`Bu hafta birgalikda ${2*n} ta tahajjud o'qiymiz`},
+ {n:"Qazo haftasi",ic:"\u{1F4FF}",kerak:n=>20*n,v:w=>w.eski,
+  d:n=>`Bu hafta birgalikda ${20*n} ta eski qazoni uzamiz`},
+ {n:"Jamoat haftasi",ic:"\u{1F54C}",kerak:n=>10*n,v:w=>w.jamoat,
+  d:n=>`Bu hafta birgalikda ${10*n} ta namozni jamoat bilan o'qiymiz`},
+ {n:"Qur'on haftasi",ic:"\u{1F4D6}",kerak:n=>n,v:w=>w.quranKishi,
+  d:n=>`Har birimiz bu hafta kamida 5 kun Qur'on o'qiymiz`},
+ {n:"Mukammal kunlar",ic:"\u2728",kerak:n=>3*n,v:w=>w.mukammal,
+  d:n=>`Bu hafta birgalikda ${3*n} ta mukammal kun yig'amiz`},
+ {n:"Tong jamoasi",ic:"\u{1F305}",kerak:n=>5*n,v:w=>w.bomdod,
+  d:n=>`Bu hafta birgalikda ${5*n} ta bomdodni vaqtida o'qiymiz`}
+];
+/* 2026-01-05 — dushanba. Haftalar shundan sanaladi, ya'ni topshiriq navbati
+   kalendarning o'zidan chiqadi va hech kimning telefonida boshqacha bo'lmaydi. */
+const HAFTA_EPOX="2026-01-05";
+function haftaTopshiriq(a,z){
+ const hafta=Math.floor(daysBetween(HAFTA_EPOX,a)/7);
+ return HAFTALIK[((hafta%HAFTALIK.length)+HAFTALIK.length)%HAFTALIK.length]}
+
 function nishonStat(m){
  const u=data[m.id]||blank(),c=cfgNow(m),days=u.days||{};
  const s=score(u,c,!!(m&&m.is_child)),k=bookScore(u,c);
@@ -592,7 +634,11 @@ function nishonStat(m){
   if(v===5){mukammalKun++;if(new Date(d+"T12:00:00").getDay()===5)jumaMukammal++}
   if(day.quran)quranKun++});
  return{s:s,k:k,mukammalKun:mukammalKun,quranKun:quranKun,jumaMukammal:jumaMukammal,
-  bomdodStreak:streakOf(days,"bomdod",c),mukammalStreak:perfectStreak(days,c)}}
+  bomdodStreak:streakOf(days,"bomdod",c),mukammalStreak:perfectStreak(days,c),
+  tahajjudStreak:streakOf(days,"tahajjud",c),
+  kunlar:Object.keys(days).length,shaharlar:((u.places)||[]).length,
+  /* Qarz odamning profilida turadi, hujjatida emas. */
+  qazoQarz:(m&&m.qazo_debt)||0}}
 
 const NISHONLAR=[
  {n:"Ilk qadam",ic:"\u{1F331}",d:"Birinchi namozni vaqtida belgilash",kerak:1,v:t=>t.s.ontime},
@@ -617,7 +663,28 @@ const NISHONLAR=[
  {n:"Mutafakkir",ic:"\u{1F9E0}",d:"25 ta zametka yozish",kerak:25,v:t=>t.k.notes},
  {n:"Ming bet",ic:"\u{1F4D6}",d:"Jami 1000 bet o'qish",kerak:1000,v:t=>t.k.bet},
  {n:"Besh ming bet",ic:"\u{1F4D5}",d:"Jami 5000 bet o'qish",kerak:5000,v:t=>t.k.bet},
- {n:"Uzluksiz o'qish",ic:"\u{1F525}",d:"7 kun ketma-ket kitob normasi",kerak:7,v:t=>t.k.streak}
+ {n:"Uzluksiz o'qish",ic:"\u{1F525}",d:"7 kun ketma-ket kitob normasi",kerak:7,v:t=>t.k.streak},
+ /* ---- eski qazolar ---- */
+ {n:"Qazo boshlandi",ic:"\u{1F4FF}",d:"Birinchi eski qazoni uzish",kerak:1,v:t=>t.s.eski},
+ {n:"Yuz qazo",ic:"\u{1F9FE}",d:"100 ta eski qazo o'qilgan",kerak:100,v:t=>t.s.eski},
+ {n:"Besh yuz qazo",ic:"\u{1F5DD}\uFE0F",d:"500 ta eski qazo o'qilgan",kerak:500,v:t=>t.s.eski},
+ {n:"Ming qazo",ic:"\u{1F54A}",d:"1000 ta eski qazo o'qilgan",kerak:1000,v:t=>t.s.eski},
+ {n:"Yarmi uzildi",ic:"\u{1F3AF}",d:"Qazo qarzining yarmi uzilgan",kerak:1,
+  v:t=>t.qazoQarz&&t.s.eski>=t.qazoQarz/2?1:0},
+ {n:"Qazosiz",ic:"\u{1F3C1}",d:"Butun qazo qarzini uzib bo'lish",kerak:1,
+  v:t=>t.qazoQarz&&t.s.eski>=t.qazoQarz?1:0},
+ /* ---- uzoq yo'l ---- */
+ {n:"Tun odati",ic:"\u{1F312}",d:"7 kun ketma-ket tahajjud",kerak:7,v:t=>t.tahajjudStreak},
+ {n:"Tun sodiqi",ic:"\u{1F311}",d:"30 kun ketma-ket tahajjud",kerak:30,v:t=>t.tahajjudStreak},
+ {n:"Uch yuz tun",ic:"\u{1F320}",d:"300 ta tahajjud",kerak:300,v:t=>t.s.tahajjud},
+ {n:"O'ttiz mukammal",ic:"\u{1F48E}",d:"30 kun ketma-ket besh vaqt vaqtida",kerak:30,v:t=>t.mukammalStreak},
+ {n:"Chorak yil",ic:"\u{1F451}",d:"90 kun ketma-ket besh vaqt vaqtida",kerak:90,v:t=>t.mukammalStreak},
+ {n:"Yuz mukammal",ic:"\u{1F31E}",d:"100 ta mukammal kun",kerak:100,v:t=>t.mukammalKun},
+ {n:"Jamoat yuzligi",ic:"\u{1F54D}",d:"100 ta namoz jamoat bilan",kerak:100,v:t=>t.s.jamoat},
+ {n:"Yuz kun daftar",ic:"\u{1F4D2}",d:"100 kun daftar yuritilgan",kerak:100,v:t=>t.kunlar},
+ {n:"Yil daftari",ic:"\u{1F4C6}",d:"365 kun daftar yuritilgan",kerak:365,v:t=>t.kunlar},
+ {n:"Safarda ham",ic:"\u{1F30D}",d:"Ikki xil shaharda namoz belgilash",kerak:2,v:t=>t.shaharlar},
+ {n:"Qur'on yuz kun",ic:"\u{1F4DC}",d:"100 kun Qur'on o'qilgan",kerak:100,v:t=>t.quranKun}
 ];
 
 /* ══════════════ HAFTALIK JAMOA NISHONI ══════════════ */
@@ -1737,6 +1804,30 @@ function qazoJamoaView(){
    ${satr?`<div class="muted tiny" style="margin-top:3px">${satr}</div>`:""}</div>`});
  return h+`</div>`}
 
+/* Har haftaning o'z topshirig'i. "Hammamiz uchun" ahdi joyida qoladi — bu uning
+   o'rniga emas, yoniga qo'shiladi, va keyingi hafta boshqasi keladi. */
+function haftaTopshiriqView(wk){
+ const t=haftaTopshiriq(wk[0],wk[1]),w=haftaJamoa(wk[0],wk[1]);
+ if(!w.n)return "";
+ const kerak=t.kerak(w.n),bor=t.v(w),ok=bor>=kerak;
+ const pct=kerak>0?Math.min(100,Math.round(bor/kerak*100)):0;
+ return `<div class="panel p18 mb14" style="border-color:${ok?"#4CAF8B66":"#C9A22744"}">
+  <div class="flex center gap3">
+   <div style="flex:1;min-width:0">
+    <div class="eyebrow">Shu haftaning topshirig'i</div>
+    <div style="font-family:var(--serif);font-size:19px;margin-top:4px" class="${ok?"jade":""}">${
+      ok?t.n+" \u2014 bajarildi":t.n}</div>
+    <p class="muted small" style="margin:5px 0 0;line-height:1.65">${t.d(w.n)}.
+     Kelasi haftaga boshqa topshiriq chiqadi.</p></div>
+   <div style="font-size:36px;${ok?"":"opacity:.22;filter:grayscale(1)"}">${t.ic}</div>
+  </div>
+  <div style="margin-top:14px">
+   <div class="flex between tiny" style="margin-bottom:4px">
+    <span class="muted">jamoa bo'yicha</span>
+    <span class="${ok?"jade":"brass"}">${bor} / ${kerak}</span></div>
+   <div class="bar"><div style="width:${pct}%;background:${ok?"var(--jade)":"var(--brass)"}"></div></div>
+  </div></div>`}
+
 function chartSVG(){
  const W=520,H=150,pad=20,n=14,k=members.length;
  const gw=(W-pad*2)/n,bw=Math.max(3,(gw-4)/Math.max(1,k));
@@ -2097,6 +2188,7 @@ function nishonTab(){
     <span class="brass">${"\u2B50"} ${b.stars}</span></div>`});
   h+=`</div>`}
  h+=`</div><div class="muted tiny">${pretty(wk[0])} — ${pretty(wk[1])} · jami olingan: ${tarix} hafta</div></div>`;
+ h+=haftaTopshiriqView(wk);
 
  h+=`<div class="flex gap2 mb14" style="flex-wrap:wrap">`;
  members.forEach(m=>{

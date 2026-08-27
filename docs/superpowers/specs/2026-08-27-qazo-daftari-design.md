@@ -1,7 +1,14 @@
 # Qazo daftari, tahajjud tuzatishi va oilani o'chirish — loyiha hujjati
 
 **Sana:** 2026-08-27
-**Holat:** kelishildi va uchalasi ham bajarildi (2026-08-27). Deploy kutilmoqda.
+**Holat:** bajarildi va deploy qilindi (2026-08-27).
+
+> **Tuzatish (2026-08-27, deploydan keyin).** Bu hujjatdagi "migratsiya kerak emas" degan
+> gap `qazo_debt` uchun **noto'g'ri edi**. `MemberData` hujjat sifatida saqlanmaydi — u
+> serverda beshta jadvalga yoyiladi, ya'ni o'z jadvali yo'q maydon qabul qilinib, yozilmay
+> qolib, keyingi o'qishda nol bo'lib qaytardi. Ekranda bu "saqlanmayapti" bo'lib ko'rindi.
+> Endi `qazo_debt` `members` jadvalida (007_qazo.sql) va o'z yo'li bilan yoziladi.
+> Kun ichidagi qazo sanog'i haqidagi gap to'g'ri edi — u `day_records.entries` ichida.
 
 Uchta alohida ish bitta hujjatda: ikkitasi kichik, biri yangi bo'lim. Uchalasi bitta
 deploy bilan chiqadi.
