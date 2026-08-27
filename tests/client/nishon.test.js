@@ -119,6 +119,9 @@ module.exports = {
     const board = c.html.slice(c.html.indexOf("Hafta qahramoni"));
     assert.ok(board.includes("\u{1F947}") && board.includes("\u{1F949}"), "gold and bronze");
     assert.ok(board.includes("Kishi3"), "fourth place belongs on the podium now");
+    assert.ok(!board.includes("\u0034\uFE0F\u20E3"), "the keycap emoji is not a medal");
+    assert.ok(/border-radius:50%[\s\S]{0,220}>4<\/span>/.test(board),
+      "fourth place wears a medal like the rest, with a 4 on it");
     assert.ok(/<span class="muted">5\.<\/span>/.test(board), "the list below starts at fifth");
   },
 };

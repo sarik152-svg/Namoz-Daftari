@@ -74,7 +74,10 @@ textarea{line-height:1.6;resize:vertical}
 <div id="app"></div>
 <script>
 /* ══════════════ SOZLAMALAR ══════════════ */
-const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#C97BC0","#E0885A","#58BFC9","#9BC95E","#D96C8B"];
+/* Rang a'zoning ro'yxatdagi o'rniga qarab beriladi. Pushti ikki rang bu yerdan
+   olib tashlandi — ular hech kimga to'g'ri kelmadi va tanlash imkoni yo'q, ya'ni
+   navbat kimga tushsa o'shaniki bo'lardi. Qolganlari bir-biridan yetarlicha uzoq. */
+const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#E0885A","#58BFC9","#9BC95E","#C0864F","#A88FE0"];
 const P_QAZO=0.25,P_MISS=1,TASK_AT=4,STREAK_STEP=10,BONUS_MIN=2,BONUS_MAX=5;
 /* Kitob qoidalari. Ball namoz balidan ALOHIDA yuritiladi — ikkalasi bir
    hisobga qo'shilsa, o'qimagan kun namoz qarzini oshirib yuborardi. */
@@ -557,8 +560,16 @@ function podium(nom,a,z,done){
  const r=rankBy(a,z,"namoz"),top=r.slice(0,4),rest=r.slice(4);
  /* To'rtinchi o'rin medalsiz: u kursida turadi, lekin rangi ham, balandligi ham
     uchtasinikidan past — ko'z darrov medalliklarni ajratib olsin. */
- const H=[96,72,58,46],C=["#C9A227","#98A3B8","#C0864F","#7E8CA3"];
- const MED=["\u{1F947}","\u{1F948}","\u{1F949}","\u0034\uFE0F\u20E3"];
+ /* To'rtinchi rang — bronzadan keyingisi: quyuqroq, o'chgan bronza. Medali ham
+    xuddi shundaqa, ustida faqat 4 raqami turadi. */
+ const H=[96,72,58,46],C=["#C9A227","#98A3B8","#C0864F","#8A7A63"];
+ const MED=["\u{1F947}","\u{1F948}","\u{1F949}",null];
+ /* Uch medal — emoji, to'rtinchisi chizib beriladi: emoji to'plamida bronzadan
+    keyingi medal yo'q, "4" yozilgani esa bor-yo'g'i raqam bo'lib qolardi. */
+ const medal=(i,katta)=>MED[i]||`<span style="display:inline-flex;align-items:center;
+   justify-content:center;width:${katta?26:21}px;height:${katta?26:21}px;border-radius:50%;
+   background:linear-gradient(145deg,#A08B6E,#6E6153);border:1px solid #B49A78;
+   color:#F2E9DA;font-family:var(--serif);font-size:${katta?15:12}px;line-height:1">4</span>`;
  let h=`<div class="panel p18 mb14" style="border-color:${done?"#4CAF8B55":"#C9A22744"}">
   <div class="flex between center" style="margin-bottom:14px">
    <div><div class="eyebrow">${nom}</div>
@@ -570,7 +581,7 @@ function podium(nom,a,z,done){
  [1,0,2,3].forEach(i=>{
   const x=top[i];if(!x)return;
   h+=`<div style="flex:1;max-width:118px;text-align:center">
-   <div style="font-size:${i===0?27:21}px;line-height:1">${MED[i]}</div>
+   <div style="font-size:${i===0?27:21}px;line-height:1">${medal(i,i===0)}</div>
    <div style="font-family:var(--serif);font-size:${i===0?16:14}px;margin-top:3px;color:${colorOf(x.m.id)};
      overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(first(x.m.name))}</div>
    <div style="font-family:var(--serif);font-size:${i===0?25:20}px;line-height:1.15;color:${C[i]}">${fmt(x.ball)}</div>
