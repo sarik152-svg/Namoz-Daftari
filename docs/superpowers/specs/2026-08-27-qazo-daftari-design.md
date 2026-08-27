@@ -1,7 +1,7 @@
 # Qazo daftari, tahajjud tuzatishi va oilani o'chirish — loyiha hujjati
 
 **Sana:** 2026-08-27
-**Holat:** kelishildi (Sardor, 2026-08-27). Bajarilmagan.
+**Holat:** kelishildi va uchalasi ham bajarildi (2026-08-27). Deploy kutilmoqda.
 
 Uchta alohida ish bitta hujjatda: ikkitasi kichik, biri yangi bo'lim. Uchalasi bitta
 deploy bilan chiqadi.

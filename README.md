@@ -68,6 +68,7 @@ the first success, so the typing happens once.
 | DELETE | `/api/v1/members/{id}` | own or admin | Remove a member |
 | POST | `/api/v1/circles` | session | Start a family; the caller owns it |
 | PATCH | `/api/v1/circles/{id}` | its owner | Name and weekly goal |
+| DELETE | `/api/v1/circles/{id}` | its owner | Close a family; never the friends circle |
 | GET | `/api/v1/circles/{id}/roster` | its owner | That circle's members with PINs |
 | POST | `/api/v1/circles/{id}/members` | its owner | Add an existing login, or a new person |
 | DELETE | `/api/v1/circles/{id}/members/{id}` | its owner, or yourself | Take somebody out |
@@ -229,6 +230,31 @@ where it still counts as prayed rather than late. Each one instead takes `NAFL_B
 (0.25) off the prayer debt. The one thing the old code did wrong was letting the strict
 window grading apply to it, which turned a night prayer logged in the morning into a
 qazo with a minus beside it.
+
+## Qazo daftari — prayers made up from years ago
+
+Wholly separate from `PrayerStatus.qazo`, which is today's prayer said after its window
+and costs a quarter point. These are prayers owed from long before the app existed, and
+each one **earns** `QAZO_BALL` (0.25) — off the debt, and on the weekly and monthly
+podium. The two are never shown under the same word in the app, and the ranging code
+keeps them in differently named counters (`qazo` against `eski`) for the same reason.
+
+A day carries `qazo: {bomdod: 3, peshin: 2, ...}` — five fard prayers only, since a nafl
+prayer is never owed. The count hangs off the day they were **prayed**, because nobody
+knows which day they were missed.
+
+Counting up through the day cannot be write-once, so the rule bends exactly one way:
+**a bigger number wins**. A smaller one is an erasure and is discarded, in `upsert_day`
+and in `replace_member_data` alike. In the browser the counter is local until Saqlash is
+pressed, the way the tasbih counter on the task page already works, so a mis-tap costs
+nothing before it is committed and nothing after it can be taken back.
+
+`qazo_debt` on the member document is the backlog they say they owe, **as it stood when
+they wrote it down**. What is left is always that minus everything counted in `days`, so
+re-stating it never subtracts the same made-up prayers twice.
+
+Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
+an agreement about praying the five daily prayers on time, and a backlog would dissolve it.
 
 ## Marks are write-once
 

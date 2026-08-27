@@ -28,6 +28,54 @@ function boot(routes) {
 }
 
 module.exports = {
+  async "an owner can close a family opened by mistake"(assert) {
+    /* Two families with the same name is how this arrived: opened twice, and with
+       no way to undo it the spare one sat in the switcher forever. */
+    let listed = 0;
+    const client = boot({
+      "/auth/me": { member_id: "sardor", is_admin: false },
+      "/circles": () => {
+        listed += 1;
+        const oilalar = listed > 1 ? [] : [
+          { id: 2, name: "Ismailovlar", kind: "family", owner_id: "sardor", week_goal: 20 },
+        ];
+        return { circles: [
+          { id: 1, name: "Do'stlar", kind: "friends", owner_id: "sardor", week_goal: 25 },
+          ...oilalar,
+        ] };
+      },
+      "/state?circle=1": state(SARDOR),
+      "/state?circle=2": state(SARDOR, AYOL),
+      "/circles/1/roster": { members: [] },
+      "/circles/2/roster": { members: [] },
+      "/circles/2": { ok: true, stranded: ["Zuhra Ismoilova"] },
+    });
+    await client.A.boot();
+    await client.A.go("sync");
+    assert.ok(client.html.includes("A.deleteFamily(2)"), "expected a way to close it");
+
+    await client.A.deleteFamily(2);
+    const sent = client.calls.find(x => x.method === "DELETE" && x.path === "/circles/2");
+    assert.ok(sent, "expected the family to be deleted on the server");
+    assert.ok(listed > 1, "the circle list must be re-read afterwards");
+    assert.ok(!client.html.includes("A.deleteFamily(2)"), "the closed family must be gone");
+    assert.ok(client.html.includes("Zuhra"), "whoever is left circle-less must be named");
+  },
+
+  async "the friends circle carries no close button"(assert) {
+    const client = boot({
+      "/auth/me": { member_id: "sardor", is_admin: false },
+      "/circles": { circles: [
+        { id: 1, name: "Do'stlar", kind: "friends", owner_id: "sardor", week_goal: 25 },
+      ] },
+      "/state?circle=1": state(SARDOR),
+      "/circles/1/roster": { members: [] },
+    });
+    await client.A.boot();
+    await client.A.go("sync");
+    assert.ok(!client.html.includes("A.deleteFamily("), "friends is everybody's circle");
+  },
+
   async "a member in no circle gets a way out, not a blank page"(assert) {
     const client = boot({
       "/auth/me": { member_id: "sardor", is_admin: false },
