@@ -276,6 +276,19 @@ that badge is the group's agreement about the five daily prayers and does not ro
 Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
 an agreement about praying the five daily prayers on time, and a backlog would dissolve it.
 
+## Ball qayerdan — the score, shown in its parts
+
+Under the podium, one table: every member as a column, every kind of mark as a row,
+each cell showing how many and what they were worth, with the total underneath. It
+exists because "where did 23.75 come from" is not answerable from a single number, and
+the parts are exactly where the surprises live — an unmarked prayer on a closed day
+costs a full point, and the night prayer is worth 1.5.
+
+`ballTarkib` must agree with `prayerRange` for every member, including the ones with a
+concession: a caught-up prayer is a minus for most people, a plus under ayollar rejimi,
+and on time under ish rejimi. A test sums the rows and asserts the total equals the
+score, because a breakdown that disagrees with the number above it is worse than none.
+
 ## Debt is a punishment, and nothing pays it off
 
 `o.debt` is the current calendar month's penalties and **nothing else**. Praying on

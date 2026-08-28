@@ -745,6 +745,53 @@ function umumiyView(){
   </div>`});
  return h+`</div>`}
 
+/* Ball qayerdan yig'ilgani. Qatorlar prayerRange bilan bir xil qoidada bo'lishi
+   shart: tarkib yig'indisi tepadagi ball bilan teng chiqmasa, u tushuntirish emas,
+   yana bitta chalkashlik bo'ladi. Test aynan shu tenglikni ushlab turadi. */
+const TARKIB=[
+ {n:"Vaqtida",k:"ontime",izoh:"har biri +1"},
+ {n:"Jamoat bilan",k:"jamoat",izoh:"qo'shimcha"},
+ {n:"Tahajjud",k:"tahajjud",izoh:"har biri"},
+ {n:"Qazo (kun ichida)",k:"qazo",izoh:"har biri"},
+ {n:"O'qilmagan / belgilanmagan",k:"bad",izoh:"har biri"},
+ {n:"Uzilgan eski qazo",k:"eski",izoh:"har biri"}
+];
+function ballTarkib(m,o,k){
+ const c=cfgNow(m);
+ if(k==="ontime")return o.ontime;
+ if(k==="jamoat")return o.jamoat*JAMOAT_BALL;
+ if(k==="tahajjud")return o.tahajjud*NAFL_BALL;
+ if(k==="qazo")return o.qazo*(ayolRejimi(c)?AYOL_BALL:-P_QAZO);
+ if(k==="bad")return o.bad*-P_MISS;
+ if(k==="eski")return o.eski*QAZO_BALL;
+ return 0}
+
+function ballTarkibView(a,z){
+ const kishi=(members||[]).map(m=>({m:m,o:prayerRange(data[m.id]||blank(),m,a,z)}));
+ if(!kishi.length)return "";
+ /* Bo'sh qatorlar chiqarilmaydi — jadval qanchalik qisqa bo'lsa, shuncha o'qiladi. */
+ const qatorlar=TARKIB.filter(r=>kishi.some(x=>x.o[r.k]));
+ if(!qatorlar.length)return "";
+ const kat=`padding:6px 8px;text-align:right;white-space:nowrap`;
+ let h=`<div class="panel p14 mb14"><div class="eyebrow">Ball qayerdan</div>
+  <p class="muted small" style="margin:6px 0 10px;line-height:1.6">${pretty(a)} — ${pretty(z)}.
+   Har katakda: nechta, va u qancha ball bergani.</p>
+  <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;min-width:100%">
+   <tr><th style="${kat};text-align:left"></th>${
+     kishi.map(x=>`<th style="${kat};color:${colorOf(x.m.id)};font-weight:400;font-family:var(--serif);font-size:13px">${
+       esc(first(x.m.name))}</th>`).join("")}</tr>`;
+ qatorlar.forEach(r=>{
+  h+=`<tr style="border-top:1px solid var(--line)">
+   <td style="${kat};text-align:left;color:var(--mut)">${r.n}</td>${
+    kishi.map(x=>{const n=x.o[r.k],b=ballTarkib(x.m,x.o,r.k);
+     return `<td style="${kat}">${n?`${n}<div class="${b<0?"clay":"jade"} tiny">${
+       b>0?"+":""}${fmt(b)}</div>`:`<span class="muted">—</span>`}</td>`}).join("")}</tr>`});
+ h+=`<tr style="border-top:1px solid var(--brass)">
+   <td style="${kat};text-align:left">Jami</td>${
+    kishi.map(x=>`<td style="${kat};font-family:var(--serif);font-size:16px;color:${
+      x.o.ball<0?"var(--clay)":"var(--brass)"}">${fmt(x.o.ball)}</td>`).join("")}</tr>`;
+ return h+`</table></div></div>`}
+
 /* ══════════════ DUEL ══════════════ */
 /* Ikki kishi yoki ikki juftlik bir hafta ball bo'yicha bellashadi. Natija hech
    qayerda saqlanmaydi: u reyting o'qiydigan o'sha yozuvlardan chiqariladi, shuning
@@ -2124,6 +2171,7 @@ function statsTab(){
  ch+=podium(yil?"Yil qahramoni":oy?"Oy qahramoni":"Hafta qahramoni",
    rng[0],rng[1],periodDone(rng[1],cfg));
  /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
+ ch+=ballTarkibView(rng[0],rng[1]);
  ch+=duelView();
  if(yil)ch+=umumiyView();
  const ranked=members.slice().sort((a,b)=>{
