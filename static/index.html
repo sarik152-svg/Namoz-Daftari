@@ -763,13 +763,16 @@ function umumiyView(){
 /* Ball qayerdan yig'ilgani. Qatorlar prayerRange bilan bir xil qoidada bo'lishi
    shart: tarkib yig'indisi tepadagi ball bilan teng chiqmasa, u tushuntirish emas,
    yana bitta chalkashlik bo'ladi. Test aynan shu tenglikni ushlab turadi. */
+/* Nomlar qisqa: jadval telefonga sig'ishi kerak, aks holda oxirgi odamni ko'rish
+   uchun o'ngga surish kerak bo'ladi. "Kechikkan" — shu kun ichida qazo qilingani,
+   "Eski qazo" — Qazo daftaridan uzilgani; ikkalasi butunlay boshqa narsa. */
 const TARKIB=[
- {n:"Vaqtida",k:"ontime",izoh:"har biri +1"},
- {n:"Jamoat bilan",k:"jamoat",izoh:"qo'shimcha"},
- {n:"Tahajjud",k:"tahajjud",izoh:"har biri"},
- {n:"Qazo (kun ichida)",k:"qazo",izoh:"har biri"},
- {n:"O'qilmagan / belgilanmagan",k:"bad",izoh:"har biri"},
- {n:"Uzilgan eski qazo",k:"eski",izoh:"har biri"}
+ {n:"Vaqtida",k:"ontime"},
+ {n:"Jamoat",k:"jamoat"},
+ {n:"Tahajjud",k:"tahajjud"},
+ {n:"Kechikkan",k:"qazo"},
+ {n:"O'qilmagan",k:"bad"},
+ {n:"Eski qazo",k:"eski"}
 ];
 function ballTarkib(m,o,k){
  const c=cfgNow(m);
@@ -784,28 +787,40 @@ function ballTarkib(m,o,k){
 function ballTarkibView(a,z){
  const kishi=(members||[]).map(m=>({m:m,o:prayerRange(data[m.id]||blank(),m,a,z)}));
  if(!kishi.length)return "";
+ let h=`<div class="panel p14 mb14">
+  <div class="flex between center">
+   <div><div class="eyebrow">Ball qayerdan</div>
+    <div class="muted small" style="margin-top:3px">${pretty(a)} — ${pretty(z)}</div></div>
+   <button class="btn" style="font-size:11px" onclick="A.tarkibOch(${A.tarkibOchiq?"false":"true"})">${
+     A.tarkibOchiq?"Yopish":"Podrobniy"}</button></div>`;
+ if(!A.tarkibOchiq)return h+`</div>`;
  /* Bo'sh qatorlar chiqarilmaydi — jadval qanchalik qisqa bo'lsa, shuncha o'qiladi. */
  const qatorlar=TARKIB.filter(r=>kishi.some(x=>x.o[r.k]));
- if(!qatorlar.length)return "";
- const kat=`padding:6px 8px;text-align:right;white-space:nowrap`;
- let h=`<div class="panel p14 mb14"><div class="eyebrow">Ball qayerdan</div>
-  <p class="muted small" style="margin:6px 0 10px;line-height:1.6">${pretty(a)} — ${pretty(z)}.
-   Har katakda: nechta, va u qancha ball bergani.</p>
-  <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;min-width:100%">
+ if(!qatorlar.length)return h+`<p class="muted small" style="margin:10px 0 0">Bu oraliqda hali yozuv yo'q.</p></div>`;
+ /* Ustunlar teng bo'linadi va jadval ekranga sig'adi: ilgari oxirgi odamni ko'rish
+    uchun o'ngga surish kerak edi. */
+ const kat=`padding:5px 2px;text-align:right;white-space:nowrap`;
+ h+=`<div style="overflow-x:auto;margin-top:12px">
+  <table style="border-collapse:collapse;font-size:12px;width:100%;table-layout:fixed">
+   <colgroup><col style="width:84px">${kishi.map(()=>`<col>`).join("")}</colgroup>
    <tr><th style="${kat};text-align:left"></th>${
-     kishi.map(x=>`<th style="${kat};color:${colorOf(x.m.id)};font-weight:400;font-family:var(--serif);font-size:13px">${
+     kishi.map(x=>`<th style="${kat};color:${colorOf(x.m.id)};font-weight:400;
+       font-family:var(--serif);font-size:12px;white-space:normal;word-break:break-word">${
        esc(first(x.m.name))}</th>`).join("")}</tr>`;
  qatorlar.forEach(r=>{
   h+=`<tr style="border-top:1px solid var(--line)">
-   <td style="${kat};text-align:left;color:var(--mut)">${r.n}</td>${
+   <td style="${kat};text-align:left;color:var(--mut);font-size:11px">${r.n}</td>${
     kishi.map(x=>{const n=x.o[r.k],b=ballTarkib(x.m,x.o,r.k);
      return `<td style="${kat}">${n?`${n}<div class="${b<0?"clay":"jade"} tiny">${
        b>0?"+":""}${fmt(b)}</div>`:`<span class="muted">—</span>`}</td>`}).join("")}</tr>`});
  h+=`<tr style="border-top:1px solid var(--brass)">
-   <td style="${kat};text-align:left">Jami</td>${
-    kishi.map(x=>`<td style="${kat};font-family:var(--serif);font-size:16px;color:${
+   <td style="${kat};text-align:left;font-size:11px">Jami</td>${
+    kishi.map(x=>`<td style="${kat};font-family:var(--serif);font-size:15px;color:${
       x.o.ball<0?"var(--clay)":"var(--brass)"}">${fmt(x.o.ball)}</td>`).join("")}</tr>`;
- return h+`</table></div></div>`}
+ return h+`</table></div>
+  <p class="muted tiny" style="margin:9px 0 0;line-height:1.6">Kechikkan — o'sha kun
+   ichida qazo qilingani. Eski qazo — Qazo daftaridan uzilgani. O'qilmagan qatoriga
+   ilovada belgilanmay qolgan namoz ham kiradi.</p></div>`}
 
 /* ══════════════ DUEL ══════════════ */
 /* Ikki kishi yoki ikki juftlik bir hafta ball bo'yicha bellashadi. Natija hech
@@ -1129,6 +1144,9 @@ const A={
  setAddMode(m){addMode=m;render()},
  setTab(t){tab=t;window.scrollTo(0,0);render()},
  statPeriod:"hafta",
+ /* Tarkib yopiq turadi: kundalik ko'rinishda kerak emas, kerak bo'lganda ochiladi. */
+ tarkibOchiq:false,
+ tarkibOch(on){A.tarkibOchiq=!!on;render()},
  setStatPeriod(v){A.statPeriod=v;render()},
  nishonKim:null,
  setNishonKim(id){A.nishonKim=id;window.scrollTo(0,0);render()},

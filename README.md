@@ -296,8 +296,12 @@ only the label and the colour.
 
 ## Ball qayerdan — the score, shown in its parts
 
-Under the podium, one table: every member as a column, every kind of mark as a row,
-each cell showing how many and what they were worth, with the total underneath. It
+Under the podium, folded away behind a **Podrobniy** button: one table, every member as
+a column, every kind of mark as a row, each cell showing how many and what they were
+worth, with the total underneath. It is closed by default because it answers a question
+that is only asked occasionally, and its columns are equal-width with short labels
+(`Kechikkan`, not `Qazo (kun ichida)`) so five people fit on a phone without scrolling
+sideways — having to swipe to see the last member defeats a comparison table. It
 exists because "where did 23.75 come from" is not answerable from a single number, and
 the parts are exactly where the surprises live — an unmarked prayer on a closed day
 costs a full point, and the night prayer is worth 1.5.

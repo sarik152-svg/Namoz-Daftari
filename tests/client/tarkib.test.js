@@ -126,4 +126,26 @@ module.exports = {
     assert.ok(shown.includes("+1"), "and praying on time is worth one");
     assert.ok(shown.includes("-0,25"), "a late prayer still costs a quarter");
   },
+
+  /* ------------------------------------------------ folded away by default */
+  async "the breakdown stays folded until it is asked for"(assert) {
+    const c = client();
+    await c.A.go("app");
+    c.A.setTab("stats");
+    assert.ok(c.html.includes("Ball qayerdan"), "the heading is always there");
+    assert.ok(c.html.includes("A.tarkibOch(true)"), "with a way to open it");
+    assert.ok(!c.html.includes("Tahajjud</td>"), "but no table until then");
+  },
+
+  async "opening it shows every column without scrolling sideways"(assert) {
+    const c = client();
+    await c.A.go("app");
+    c.A.setTab("stats");
+    c.A.tarkibOch(true);
+    const at = c.html.indexOf("Ball qayerdan");
+    const block = c.html.slice(at, at + 4000);
+    assert.ok(block.includes("Sardor") && block.includes("Hikmatilla"), "both columns");
+    assert.ok(block.includes("table-layout:fixed"), "the table must fit, not scroll");
+    assert.ok(!block.includes("belgilanmagan"), "the long label was asked to go");
+  },
 };
