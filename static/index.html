@@ -517,6 +517,11 @@ function monthRange(ds){
  const d=new Date(ds+"T12:00:00"),y=d.getFullYear(),m=d.getMonth();
  const pad=n=>String(n).padStart(2,"0");
  return[y+"-"+pad(m+1)+"-01",y+"-"+pad(m+1)+"-"+pad(new Date(y,m+1,0).getDate())];}
+function yearRange(ds){const y=ds.slice(0,4);return[y+"-01-01",y+"-12-31"]}
+function oyOraliq(y,m){
+ const pad=n=>String(n).padStart(2,"0");
+ return[y+"-"+pad(m+1)+"-01",y+"-"+pad(m+1)+"-"+pad(new Date(y,m+1,0).getDate())]}
+
 function periodDone(z,c){
  const td=todayFor(c);
  if(td>z)return true;
@@ -536,7 +541,9 @@ function prayerRange(u,m,a,z){
     yerda eng oson qilinadigan xato. */
  const o={ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,eski:0,ball:0};
  if(!boshi)return o;
- for(let d=a<boshi?boshi:a,i=0;i<40&&d<=z;i++,d=shift(d,1)){
+ /* Chegara bir yilga yetishi kerak: ilgari 40 kun edi va yil bo'yicha hisob
+    jimgina fevralda to'xtab qolardi. */
+ for(let d=a<boshi?boshi:a,i=0;i<400&&d<=z;i++,d=shift(d,1)){
   if(d>td)break;
   const day=days[d]||{},closed=d<td;
   PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
@@ -608,6 +615,94 @@ function podium(nom,a,z,done){
    <span style="font-size:13px"><span class="muted">${i+5}.</span>
     <span style="color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</span></span>
    <span class="muted small">${fmt(x.ball)}</span></div>`});
+ return h+`</div>`}
+
+/* ══════════════ YIL ══════════════ */
+/* Oy g'olibi — o'sha oy TUGAGANDA birinchi o'ringa chiqqan odam. Hech qayerda
+   saqlanmaydi, har safar yozuvlardan qayta hisoblanadi.
+   Bitta muhim shart: o'sha oyda umuman yozuvi bo'lmagan odam hisobga kirmaydi.
+   Ball a'zoning birinchi yozuvidan boshlanadi, ya'ni oyni butunlay o'tkazib
+   yuborgan odamning bali 0 bo'lib chiqadi va u kelib namoz o'qib, ba'zilarini
+   qoldirgan odamni yengib qo'yardi. */
+function oyGolibi(y,m){
+ const cfg=myCfg(),oraliq=oyOraliq(y,m);
+ if(!periodDone(oraliq[1],cfg))return null;
+ const jonli=rankBy(oraliq[0],oraliq[1],"namoz").filter(x=>
+   (x.o.ontime+x.o.qazo+x.o.bad+x.o.tahajjud+x.o.eski)>0);
+ if(!jonli.length)return null;
+ /* Teng bo'lsa g'olib yo'q — duelda ham shunday. */
+ if(jonli.length>1&&jonli[0].ball===jonli[1].ball)return null;
+ return{m:jonli[0].m,ball:jonli[0].ball}}
+
+/* Yilning o'n ikki oyi va har birining g'olibi, hamda kim necha marta olgani. */
+function oyQahramonlari(y){
+ const rows=[],count={};
+ for(let m=0;m<12;m++){
+  const g=oyGolibi(y,m);
+  rows.push({oy:m,golib:g?g.m:null,ball:g?g.ball:0});
+  if(g)count[g.m.id]=(count[g.m.id]||0)+1}
+ return{rows:rows,count:count}}
+
+/* Yil sahifasining boshi: kim necha marta oyni birinchi o'rinda tugatgani, va
+   tagida o'n ikki oyning ketma-ketligi. Sardor uchun eng muhim raqam shu, shuning
+   uchun u eng tepada va eng katta shrift bilan turadi. */
+function oyQahramonView(td){
+ const cfg=myCfg(),y=+td.slice(0,4),t=oyQahramonlari(y);
+ const bor=(members||[]).filter(m=>t.count[m.id])
+   .sort((a,b)=>t.count[b.id]-t.count[a.id]);
+ let h=`<div class="panel p18 mb14" style="border-color:#C9A22766">
+  <div class="eyebrow">Oy qahramonlari \u00B7 ${y}</div>
+  <p class="muted small" style="margin:6px 0 4px;line-height:1.6">Oy tugaganda birinchi
+   o'rinda tugatgan odam. Yildagi eng katta hisob shu.</p>`;
+ if(bor.length){
+  bor.forEach((m,i)=>{
+   h+=`<div class="flex between center" style="padding:10px 0;border-top:1px solid var(--line)">
+    <span class="flex center gap2">
+     <span style="font-size:${i===0?24:17}px">${i===0?"\u{1F3C6}":"\u{1F396}\uFE0F"}</span>
+     <span style="font-family:var(--serif);font-size:${i===0?22:17}px;color:${colorOf(m.id)}">${
+       esc(first(m.name))}</span></span>
+    <span style="font-family:var(--serif);font-size:${i===0?32:23}px;color:var(--brass)">${
+      t.count[m.id]}<span class="muted" style="font-size:12px"> marta</span></span></div>`});
+ }else{
+  h+=`<p class="muted small" style="margin-top:12px">Hali birorta oy tugamagan.</p>`}
+ h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+  <div class="eyebrow" style="margin-bottom:8px">Oylar bo'yicha</div>`;
+ /* Daftar boshlangunga qadar bo'lgan oylar — bo'sh chiziqcha. "G'olib yo'q" deb
+    yozish o'sha oyda kimdir urinib ko'rgandek eshitiladi, holbuki ilova hali
+    yo'q edi. */
+ let eng=null;
+ (members||[]).forEach(m=>{const ks=Object.keys((data[m.id]||{}).days||{}).sort();
+  if(ks.length&&(!eng||ks[0]<eng))eng=ks[0]});
+ t.rows.forEach(r=>{
+  const oraliq=oyOraliq(y,r.oy);
+  const holat=(oraliq[0]>td||!eng||oraliq[1]<eng)?"\u2014"
+    :!periodDone(oraliq[1],cfg)?"davom etmoqda":"g'olib yo'q";
+  h+=`<div class="flex between center" style="padding:5px 0;font-size:12.5px">
+   <span class="muted" style="text-transform:capitalize">${OY[r.oy]}</span>
+   ${r.golib
+     ?`<span style="color:${colorOf(r.golib.id)}">${esc(first(r.golib.name))}
+        <span class="muted tiny">${fmt(r.ball)}</span></span>`
+     :`<span class="muted tiny">${holat}</span>`}</div>`});
+ return h+`</div></div>`}
+
+/* Oy almashgani bilan nolga tushmaydigan raqamlar. Kursi har oy qaytadan
+   boshlanadi, bular esa birinchi kundan beri yig'ilib boradi. */
+function umumiyView(){
+ const yutuq=duelYutuq(duels);
+ let h=`<div class="panel p14 mb14"><div class="eyebrow">Umumiy hisob</div>
+  <p class="muted small" style="margin:6px 0 2px;line-height:1.6">Bular oy almashgani
+   bilan nolga tushmaydi \u2014 birinchi kundan beri yig'ilib boradi.</p>`;
+ (members||[]).forEach(m=>{
+  const t=nishonStat(m);
+  const nishon=NISHONLAR.filter(x=>x.v(t)>=x.kerak).length;
+  h+=`<div style="padding:9px 0;border-top:1px solid var(--line)">
+   <div style="font-size:13px;color:${colorOf(m.id)};margin-bottom:5px">${esc(first(m.name))}</div>
+   <div class="row"><span>Vaqtida o'qilgan namoz</span><span class="jade">${t.s.ontime}</span></div>
+   <div class="row"><span>Tahajjud</span><span class="brass">${t.s.tahajjud}</span></div>
+   ${t.s.eski?`<div class="row"><span>Uzilgan qazo</span><span class="jade">${t.s.eski}</span></div>`:""}
+   <div class="row"><span>Nishonlar</span><span class="brass">${nishon} / ${NISHONLAR.length}</span></div>
+   <div class="row"><span>Duel g'alabalari</span><span class="brass">${yutuq[m.id]||0}</span></div>
+  </div>`});
  return h+`</div>`}
 
 /* ══════════════ DUEL ══════════════ */
@@ -1975,17 +2070,23 @@ function oilaTahlilView(){
  return h}
 
 function statsTab(){
- const cfg=myCfg(),td=todayFor(cfg),oy=A.statPeriod==="oy";
- const rng=oy?monthRange(td):weekRange(td);
+ const cfg=myCfg(),td=todayFor(cfg);
+ const yil=A.statPeriod==="yil",oy=A.statPeriod==="oy";
+ const rng=yil?yearRange(td):oy?monthRange(td):weekRange(td);
  const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
  let ch=`<div class="eyebrow">Reyting</div>
   <h2 style="font-size:24px;margin:6px 0 12px">Kim qayerda</h2>
   <div class="flex gap2 mb14">
-   <button class="btn" style="flex:1;${!oy?on:""}" onclick="A.setStatPeriod('hafta')">Bu hafta</button>
-   <button class="btn" style="flex:1;${oy?on:""}" onclick="A.setStatPeriod('oy')">Bu oy</button></div>`;
- ch+=podium(oy?"Oy qahramoni":"Hafta qahramoni",rng[0],rng[1],periodDone(rng[1],cfg));
+   <button class="btn" style="flex:1;${!oy&&!yil?on:""}" onclick="A.setStatPeriod('hafta')">Bu hafta</button>
+   <button class="btn" style="flex:1;${oy?on:""}" onclick="A.setStatPeriod('oy')">Bu oy</button>
+   <button class="btn" style="flex:1;${yil?on:""}" onclick="A.setStatPeriod('yil')">Bu yil</button></div>`;
+ /* Yilda eng tepada oy qahramonlari turadi — yil bo'yicha ball emas. */
+ if(yil)ch+=oyQahramonView(td);
+ ch+=podium(yil?"Yil qahramoni":oy?"Oy qahramoni":"Hafta qahramoni",
+   rng[0],rng[1],periodDone(rng[1],cfg));
  /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
  ch+=duelView();
+ if(yil)ch+=umumiyView();
  const ranked=members.slice().sort((a,b)=>{
   const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;

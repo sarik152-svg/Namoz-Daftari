@@ -276,6 +276,30 @@ that badge is the group's agreement about the five daily prayers and does not ro
 Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
 an agreement about praying the five daily prayers on time, and a backlog would dissolve it.
 
+## The year page, and what a new month resets
+
+The ranking is scoped by period — week, month, year — and **every figure in it is
+computed at render time**. Nothing about a period is stored, so a new month does not
+"close" anything: the window simply moves, and the podium starts from zero. Everything
+else is cumulative and untouched by the calendar — the debt, the badges, the streaks,
+the Qazo daftari, the book figures, the duel wins, and the Taqqoslash cards, which have
+always been lifetime rather than period figures.
+
+The year view exists because the monthly result used to vanish on the 1st with nothing
+left of it. `oyQahramonlari` walks the twelve months and recomputes each finished
+month's winner, so the history is derived rather than archived, like the weekly team
+badge tally. Two rules matter there:
+
+* A month is only judged once `periodDone` says it is over, and a tie has no winner.
+* **Somebody who logged nothing that month cannot win it.** Scoring starts at a
+  member's first record, so a month they sat out comes back as a flat zero — which
+  would otherwise beat somebody who was there and missed a few prayers. The champion
+  calculation filters to members with actual activity in the month; the ordinary podium
+  does not, because over a week everyone present is logging.
+
+`prayerRange` was capped at forty iterations, which was ample for a week or a month and
+silently truncated a year in mid-February. It is four hundred now.
+
 ## Duel
 
 Two people, or two pairs, over one week of prayer points — the same `ball` the ranking
