@@ -86,9 +86,11 @@ module.exports = {
     c.A.setStatPeriod("yil");
     const h = c.html;
     assert.ok(h.includes("Oy qahramonlari"), "expected the months-won card");
-    assert.ok(h.indexOf("Oy qahramonlari") < h.indexOf("Umumiy"),
-      "the months won come before the lifetime totals");
+    assert.ok(h.indexOf("Oy qahramonlari") < h.indexOf("Yil qahramoni"),
+      "the months won lead the page");
     assert.ok(h.includes("iyun"), "expected the month-by-month table");
-    assert.ok(h.includes("Duel g'alabalari"), "duel wins belong in the totals");
+    /* The lifetime dashboard is gone: the year's own breakdown says the same
+       thing, and the duel panel already tallies its wins. */
+    assert.ok(!h.includes("Umumiy hisob"), "no second dashboard");
   },
 };

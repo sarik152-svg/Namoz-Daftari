@@ -740,26 +740,6 @@ function oyQahramonView(td){
      :`<span class="muted tiny">${holat}</span>`}</div>`});
  return h+`</div></div>`}
 
-/* Oy almashgani bilan nolga tushmaydigan raqamlar. Kursi har oy qaytadan
-   boshlanadi, bular esa birinchi kundan beri yig'ilib boradi. */
-function umumiyView(){
- const yutuq=duelYutuq(duels);
- let h=`<div class="panel p14 mb14"><div class="eyebrow">Umumiy hisob</div>
-  <p class="muted small" style="margin:6px 0 2px;line-height:1.6">Bular oy almashgani
-   bilan nolga tushmaydi \u2014 birinchi kundan beri yig'ilib boradi.</p>`;
- (members||[]).forEach(m=>{
-  const t=nishonStat(m);
-  const nishon=NISHONLAR.filter(x=>x.v(t)>=x.kerak).length;
-  h+=`<div style="padding:9px 0;border-top:1px solid var(--line)">
-   <div style="font-size:13px;color:${colorOf(m.id)};margin-bottom:5px">${esc(first(m.name))}</div>
-   <div class="row"><span>Vaqtida o'qilgan namoz</span><span class="jade">${t.s.ontime}</span></div>
-   <div class="row"><span>Tahajjud</span><span class="brass">${t.s.tahajjud}</span></div>
-   ${t.s.eski?`<div class="row"><span>Uzilgan qazo</span><span class="jade">${t.s.eski}</span></div>`:""}
-   <div class="row"><span>Nishonlar</span><span class="brass">${nishon} / ${NISHONLAR.length}</span></div>
-   <div class="row"><span>Duel g'alabalari</span><span class="brass">${yutuq[m.id]||0}</span></div>
-  </div>`});
- return h+`</div>`}
-
 /* Ball qayerdan yig'ilgani. Qatorlar prayerRange bilan bir xil qoidada bo'lishi
    shart: tarkib yig'indisi tepadagi ball bilan teng chiqmasa, u tushuntirish emas,
    yana bitta chalkashlik bo'ladi. Test aynan shu tenglikni ushlab turadi. */
@@ -792,7 +772,7 @@ function ballTarkibView(a,z){
    <div><div class="eyebrow">Ball qayerdan</div>
     <div class="muted small" style="margin-top:3px">${pretty(a)} — ${pretty(z)}</div></div>
    <button class="btn" style="font-size:11px" onclick="A.tarkibOch(${A.tarkibOchiq?"false":"true"})">${
-     A.tarkibOchiq?"Yopish":"Podrobniy"}</button></div>`;
+     A.tarkibOchiq?"Yopish":"Batafsil"}</button></div>`;
  if(!A.tarkibOchiq)return h+`</div>`;
  /* Bo'sh qatorlar chiqarilmaydi — jadval qanchalik qisqa bo'lsa, shuncha o'qiladi. */
  const qatorlar=TARKIB.filter(r=>kishi.some(x=>x.o[r.k]));
@@ -2199,7 +2179,6 @@ function statsTab(){
  /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
  ch+=ballTarkibView(rng[0],rng[1]);
  ch+=duelView();
- if(yil)ch+=umumiyView();
  const ranked=members.slice().sort((a,b)=>{
   const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;

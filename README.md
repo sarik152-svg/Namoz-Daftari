@@ -296,7 +296,7 @@ only the label and the colour.
 
 ## Ball qayerdan — the score, shown in its parts
 
-Under the podium, folded away behind a **Podrobniy** button: one table, every member as
+Under the podium, folded away behind a **Batafsil** button: one table, every member as
 a column, every kind of mark as a row, each cell showing how many and what they were
 worth, with the total underneath. It is closed by default because it answers a question
 that is only asked occasionally, and its columns are equal-width with short labels
