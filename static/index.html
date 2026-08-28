@@ -82,7 +82,7 @@ const P_QAZO=0.25,P_MISS=1,TASK_AT=4,STREAK_STEP=10,BONUS_MIN=2,BONUS_MAX=5;
 /* Kitob qoidalari. Ball namoz balidan ALOHIDA yuritiladi — ikkalasi bir
    hisobga qo'shilsa, o'qimagan kun namoz qarzini oshirib yuborardi. */
 /* Tahajjud nafl: hech qachon minus bermaydi, aksincha qarzni kamaytiradi. */
-const NAFL_BALL=0.25;
+const NAFL_BALL=1.5;
 /* Jamoat bilan o'qilgan farz namoz yolg'iz o'qilganidan ustun: reytingda 1 emas,
    1,5 ball. Faqat VAQTIDA o'qilganiga beriladi. */
 const JAMOAT_BALL=0.5;
@@ -99,6 +99,13 @@ const QAZO_VAQT=["bomdod","peshin","asr","shom","xufton"];
    kunga qolgan namoz esa baribir −1: yengillik smenaga, kechiktirishga emas.
    Qoida shu yagona joyda turadi va holat o'qiladigan hamma yerdan shu chaqiriladi. */
 const ISH_VAQT=["peshin","asr","shom"];
+/* Ayollar rejimi. Vaqtida o'qilgani hammanikidek, kun yopilib ketgani ham
+   hammanikidek −1. Faqat oradagi holat o'zgaradi: shu kun ichida kechikib
+   o'qilgani jarima emas, +0,25 ball. Ish rejimidan yengilroq — u bunday namozni
+   vaqtida deb sanaydi, bu esa uni o'z holicha qoldirib, faqat qarz bo'lishdan
+   to'xtatadi. */
+const AYOL_BALL=0.25;
+const ayolRejimi=c=>!!(c&&c.woman_mode);
 /* `c` — a'zoning o'zi yoki cfgNow/cfgAt qaytargan nusxasi; ikkalasida ham bayroq bor. */
 const holat=(c,pk,r)=>!r?null
  :(r.s==="qazo"&&c&&c.work_shift&&ISH_VAQT.indexOf(pk)>=0)?"ontime":r.s;
@@ -419,7 +426,7 @@ const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.le
 /* ══════════════ HISOB ══════════════ */
 function score(u,c,child){
  const days=(u&&u.days)||{},ds=Object.keys(days).sort();
- const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,quran:0,per:{},bonusSum:0,debt:0,eski:0,tasks:((u&&u.tasks)||[]).length};
+ const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,quran:0,per:{},bonusSum:0,debt:0,eski:0,ayol:0,tasks:((u&&u.tasks)||[]).length};
  PRAYERS.forEach(p=>o.per[p.k]={ontime:0,qazo:0,bad:0,delaySum:0,delayN:0});
  ((u&&u.bonuses)||[]).forEach(b=>o.bonusSum+=b.amt);
  /* Kechagi xufton bomdodgacha hali ochiq turadi, shuning uchun kun yopilgan
@@ -433,14 +440,15 @@ function score(u,c,child){
     if(!p.fard){if(st==="ontime"){o.tahajjud++;o.per[p.k].ontime++}return}
     if(!r){if(shut){o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}return}
     if(st==="ontime"){o.ontime++;o.per[p.k].ontime++;if(r.j)o.jamoat++}
-    else if(st==="qazo"){o.penalty+=P_QAZO;o.qazo++;o.per[p.k].qazo++}
+    else if(st==="qazo"){o.qazo++;o.per[p.k].qazo++;
+     if(ayolRejimi(c))o.ayol++;else o.penalty+=P_QAZO}
     else{o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}});
    o.eski+=qazoOf(day);
    if(day.quran)o.quran++}}
  /* Tahajjud nafl — jarima yozmaydi, aksincha har biri qarzni kamaytiradi. Uzilgan
     eski qazo ham shunday: o'qilmagan namoz o'qilgan bo'lsa, qarz kamayadi. */
  o.debt=o.penalty-o.bonusSum-o.tasks*TASK_AT-o.tahajjud*NAFL_BALL-o.jamoat*JAMOAT_BALL
-   -o.eski*QAZO_BALL;
+   -o.eski*QAZO_BALL-o.ayol*AYOL_BALL;
  /* Bolada qarz ham, jarima ham yo'q — faqat yulduzcha. Kattalar tizimi bolani
     ilovadan qo'rqitib yuboradi, undan ko'ra o'qiganini sanab turgani ma'qul. */
  o.stars=o.ontime+o.tahajjud;
@@ -536,7 +544,7 @@ function prayerRange(u,m,a,z){
    if(!p.fard){if(st==="ontime"){o.tahajjud++;o.ball+=NAFL_BALL}return}
    if(!r){if(shut){o.bad++;o.ball-=P_MISS}return}
    if(st==="ontime"){o.ontime++;o.ball+=1;if(r.j){o.jamoat++;o.ball+=JAMOAT_BALL}}
-   else if(st==="qazo"){o.qazo++;o.ball-=P_QAZO}
+   else if(st==="qazo"){o.qazo++;o.ball+=ayolRejimi(c)?AYOL_BALL:-P_QAZO}
    else{o.bad++;o.ball-=P_MISS}});
   o.eski+=qazoOf(day);o.ball+=qazoOf(day)*QAZO_BALL}
  return o}
@@ -1080,6 +1088,16 @@ const A={
      {method:"POST",body:JSON.stringify({day:ds,prayer:pk})});
    await pull();render()}
   catch(e){alert(e.message||"Chaqirib bo'lmadi")}},
+ async setWomanMode(id,on){
+  const m=(members||[]).find(x=>x.id===id)||{};
+  if(!confirm((on?"Ayollar rejimi yoqilsinmi? ":"Ayollar rejimi o'chirilsinmi? ")+(m.name||id)
+    +(on?" uchun shu kun ichida kechikib o'qilgan namoz minus emas, +"+fmt(AYOL_BALL)
+        +" ball bo'ladi. Vaqtida o'qilgani va keyingi kunga qolgani hammanikidek qoladi.":"")))return;
+  try{
+   await api("/members/"+encodeURIComponent(id)+"/woman-mode",
+     {method:"POST",body:JSON.stringify({woman_mode:on})});
+   await A.loadRoster();await pull();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
  async setWorkShift(id,on){
   /* Yengillik odamning o'ziga emas, doira egasiga tegishli: o'z bahosini
      yengillashtirishni hech kim jimgina qila olmasligi kerak. */
@@ -1606,14 +1624,22 @@ function syncScreen(){
       ?"border-color:var(--brass);color:var(--brass)":""}"
       onclick="A.setChild('${esc(m.id)}',${m.is_child?"false":"true"})">${m.is_child
       ?"\u2B50 Bolalar rejimi yoqilgan — o'chirish":"Bolalar rejimini yoqish"}</button>
-    ${(()=>{const ish=!!((members||[]).find(x=>x.id===m.id)||{}).work_shift;
+    ${(()=>{const prof=(members||[]).find(x=>x.id===m.id)||{};
+      const ish=!!prof.work_shift,ayol=!!prof.woman_mode;
       return `<button class="btn btn-wide" style="margin-top:7px;font-size:11px;${ish
         ?"border-color:var(--jade);color:var(--jade)":""}"
         onclick="A.setWorkShift('${esc(m.id)}',${ish?"false":"true"})">${ish
-        ?"\u{1F4BC} Ish rejimi yoqilgan — o'chirish":"Ish rejimini yoqish"}</button>`})()}</div>`).join("")}
+        ?"\u{1F4BC} Ish rejimi yoqilgan — o'chirish":"Ish rejimini yoqish"}</button>
+      <button class="btn btn-wide" style="margin-top:7px;font-size:11px;${ayol
+        ?"border-color:var(--jade);color:var(--jade)":""}"
+        onclick="A.setWomanMode('${esc(m.id)}',${ayol?"false":"true"})">${ayol
+        ?"\u{1F338} Ayollar rejimi yoqilgan — o'chirish":"Ayollar rejimini yoqish"}</button>`})()}</div>`).join("")}
   <p class="muted small" style="margin:0 0 12px;line-height:1.6">Bolalar rejimida qarz ham,
    jarima vazifasi ham yozilmaydi — bola yulduzcha yig'adi. Haftalik jamoa nishonini ham
    to'smaydi, ya'ni bola normaga yetmagani uchun oila nishondan quruq qolmaydi.</p>
+  <p class="muted small" style="margin:0 0 12px;line-height:1.6">Ayollar rejimida shu kun
+   ichida kechikib o'qilgan namoz minus bo'lmaydi, aksincha +${fmt(AYOL_BALL)} ball beradi.
+   Vaqtida o'qilgani hammanikidek, keyingi kunga qolib ketgani ham hammanikidek −1.</p>
   <p class="muted small" style="margin:0 0 12px;line-height:1.6">Ish rejimi kunduzi ishda
    bo'ladigan odam uchun: peshin, asr va shom shu kun ichida qazo qilib o'qilsa ham
    vaqtida hisoblanadi. Bomdod, xufton, tahajjud va eski qazolar hammaniki kabi, keyingi
@@ -1770,6 +1796,7 @@ function todayTab(){
   if(!r)return;
   const st=holat(cfg,p.k,r);
   if(!p.fard){if(st==="ontime")dayBall+=NAFL_BALL;return}
+  if(st==="qazo"&&ayolRejimi(cfg)){dayBall+=AYOL_BALL;return}
   if(STATUS[st])dayBall+=STATUS[st].ball+(r.j&&st==="ontime"?JAMOAT_BALL:0)});
  let nx=null;
  if(isT){const list=PRAYERS.map(p=>({p:p,t:sc[p.k]})).sort((a,b)=>a.t-b.t);
@@ -1808,6 +1835,8 @@ function todayTab(){
      hisobda bir xil, ekranda boshqacha bo'lsa odam ikkalasiga ham ishonmaydi. */
   const st=holat(cfg,p.k,r),S0=r?STATUS[st]:null;
   const yengil=!!r&&st!==r.s;
+  /* Ayollar rejimida kechikkan namoz holatini o'zgartirmaydi — faqat bali. */
+  const ayolQazo=st==="qazo"&&ayolRejimi(cfg);
   const state=isT?winState(p.k,tgt,cfg):null;
   /* Nafl uchun oyna faqat tavsiya — belgilash hech qachon to'silmaydi. */
   const open=state==="open",notYet=p.fard&&state==="early",shifted=tgt!==date;
@@ -1848,9 +1877,11 @@ function todayTab(){
    h+=`<div class="flex between center" style="margin-top:8px">
      <div style="font-size:12px;color:${!p.fard?"var(--jade)":S0.color}">${
        !p.fard?"O'qildi":S0.label}${yengil?" <span class='chip'>ISH REJIMI</span>":""}${
+       ayolQazo?" <span class='chip'>AYOLLAR REJIMI</span>":""}${
        r.j?" \u{1F54C} jamoat":""} ·
-       <span class="${!p.fard||S0.ball===0||(r.j&&st==="ontime")?"jade":"clay"}">${
+       <span class="${!p.fard||ayolQazo||S0.ball===0||(r.j&&st==="ontime")?"jade":"clay"}">${
          !p.fard?"+"+fmt(NAFL_BALL)+" ball"
+         :ayolQazo?"+"+fmt(AYOL_BALL)+" ball"
          :r.j&&st==="ontime"?"+"+fmt(JAMOAT_BALL)+" ball"
          :S0.ball===0?"0 ball":fmt(S0.ball)+" ball"}</span>
        ${dl!=null&&dl>=0&&st==="ontime"&&!yengil?" · +"+dl+" daq":""}</div>
@@ -2077,6 +2108,8 @@ function taskTab(){
   <div><span class="jade">Jamoat bilan vaqtida o'qilsa</span> — +${fmt(JAMOAT_BALL)} ball (reytingda 1 emas, 1,5)</div>
   <div><span class="jade">Tahajjud (nafl)</span> — minus yo'q, har biri +${fmt(NAFL_BALL)} ball</div>
   <div><span class="jade">Eski qazo uzilsa</span> — har biri +${fmt(QAZO_BALL)} ball (Bugun sahifasidagi Qazo daftari)</div>
+  <div><span class="jade">Ayollar rejimi</span> — shu kun ichida kechikib o'qilsa minus emas, +${fmt(AYOL_BALL)} ball</div>
+  <div><span class="jade">Ish rejimi</span> — peshin, asr, shom shu kun ichida o'qilsa vaqtida hisoblanadi</div>
   <div><span class="brass">Har ${STREAK_STEP} kunlik strike</span> — qarzning yarmi o'chadi</div>
   <div><span style="color:var(--text)">Har ${TASK_AT} ball qarz</span> — 25 rakat nafl va 500 tasbeh</div>
  </div></div>
@@ -2086,7 +2119,8 @@ function taskTab(){
         yonidagi uchta raqam bir-biriga to'g'ri kelmaydi. Jamoat bali ilgari
         tushib qolgan edi, endi eski qazo ham qo'shildi. */""}
   <div class="panel stat"><b class="jade">−${fmt(s.bonusSum+s.tasks*TASK_AT
-    +s.tahajjud*NAFL_BALL+s.jamoat*JAMOAT_BALL+s.eski*QAZO_BALL)}</b><i>Qarzni kamaytirgani</i></div>
+    +s.tahajjud*NAFL_BALL+s.jamoat*JAMOAT_BALL+s.eski*QAZO_BALL
+    +s.ayol*AYOL_BALL)}</b><i>Qarzni kamaytirgani</i></div>
   <div class="panel stat"><b class="${s.debt>0?"brass":"jade"}">${s.debt>0?fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Qolgan qarz":"Zaxira"}</i></div>
  </div>`;
  if(pending>0){

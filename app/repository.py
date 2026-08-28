@@ -42,7 +42,7 @@ from app.security import decrypt_pin, encrypt_pin, generate_pin, new_session_tok
 
 logger = logging.getLogger("namoz.repo")
 
-_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, qazo_debt"
+_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt"
 _SEED_FIELD_COUNT = 9
 
 # asyncpg binds parameters by their Postgres type, so a DATE column needs a real
@@ -212,6 +212,16 @@ async def set_work_shift(pool: asyncpg.Pool, member_id: str, work_shift: bool) -
     return row is not None
 
 
+async def set_woman_mode(pool: asyncpg.Pool, member_id: str, woman_mode: bool) -> bool:
+    """Turn the women's concession on or off. False when there is no such member."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "UPDATE members SET woman_mode = $2, updated_at = now() WHERE id = $1 RETURNING id",
+            member_id, woman_mode,
+        )
+    return row is not None
+
+
 async def set_qazo_debt(pool: asyncpg.Pool, member_id: str, qazo_debt: int) -> bool:
     """State how many prayers this member owes. False when there is no such member."""
     async with pool.acquire() as connection:
@@ -261,7 +271,7 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         member_rows = await connection.fetch(
             """
             SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa,
-                   m.ia, m.is_child, m.work_shift, m.qazo_debt
+                   m.ia, m.is_child, m.work_shift, m.woman_mode, m.qazo_debt
               FROM members m
               JOIN circle_members cm ON cm.member_id = m.id
              WHERE cm.circle_id = $1

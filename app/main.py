@@ -44,6 +44,7 @@ from app.models import (
     LoginRequest,
     MemberData,
     QazoDebt,
+    WomanModeFlag,
     WorkShiftFlag,
     Session,
     SetPinRequest,
@@ -560,6 +561,34 @@ async def set_work_shift(
                 status.HTTP_403_FORBIDDEN,
             )
     if not await repository.set_work_shift(pool, member_id, body.work_shift):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/woman-mode")
+async def set_woman_mode(
+    member_id: str, body: WomanModeFlag, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Ayollar rejimi: a prayer caught up the same day earns instead of costing.
+
+    Praying on time scores as it does for anybody, and letting the day close with the
+    prayer unsaid costs the same full point as it does for anybody. Only the middle
+    case moves: the quarter-point penalty becomes a quarter point earned. Lighter
+    than ish rejimi, which treats those prayers as though they were on time.
+
+    The circle owner sets it, like is_child and work_shift.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error(
+                "not_circle_owner", "Buni doira egasi belgilaydi",
+                status.HTTP_403_FORBIDDEN,
+            )
+    if not await repository.set_woman_mode(pool, member_id, body.woman_mode):
         raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
     return {"ok": True}
 

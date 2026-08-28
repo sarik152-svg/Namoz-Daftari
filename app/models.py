@@ -317,6 +317,9 @@ class MemberProfile(BaseModel):
     # because this member's shift covers all three. Everything else is judged the
     # same as anyone's, including a prayer left until the next day.
     work_shift: bool = False
+    # Ayollar rejimi: a prayer caught up the same day earns a quarter point instead
+    # of costing one. On time and left-until-tomorrow are both judged as anyone's.
+    woman_mode: bool = False
     # The backlog the member says they owe, as it stood when they wrote it down. What
     # is left is always this minus everything counted in their days, so re-stating it
     # never subtracts the same made-up prayers twice. It rides on the profile because
@@ -595,6 +598,14 @@ class WorkShiftFlag(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     work_shift: bool
+
+
+class WomanModeFlag(BaseModel):
+    """Also the circle owner's to set, for the same reason."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    woman_mode: bool
 
 
 class GroupState(BaseModel):

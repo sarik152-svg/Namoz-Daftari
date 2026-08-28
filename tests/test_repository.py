@@ -21,7 +21,7 @@ from app.models import DayRecord, MemberData
 MEMBER_ROW = {
     "id": "sardor", "name": "Sardor", "city": "Toshkent", "is_child": False,
     "lat": 41.3, "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0,
-    "qazo_debt": 9125, "work_shift": True,
+    "qazo_debt": 9125, "work_shift": True, "woman_mode": False,
 }
 
 

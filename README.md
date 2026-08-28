@@ -71,6 +71,7 @@ the first success, so the typing happens once.
 | DELETE | `/api/v1/circles/{id}` | its owner | Close a family; never the friends circle |
 | POST | `/api/v1/members/{id}/qazo-debt` | own or admin | State your backlog of prayers owed |
 | POST | `/api/v1/members/{id}/work-shift` | circle owner or admin | Ish rejimi on or off |
+| POST | `/api/v1/members/{id}/woman-mode` | circle owner or admin | Ayollar rejimi on or off |
 | POST | `/api/v1/circles/{id}/duels` | member of it | Challenge somebody, 1x1 or 2x2 |
 | POST | `/api/v1/duels/{id}/confirm` | a participant | Accept; the last one starts the week |
 | DELETE | `/api/v1/duels/{id}` | a participant | Refuse or withdraw, before it starts |
@@ -232,7 +233,7 @@ Now:
 Tahajjud is nafl, so it never costs anything: it cannot be marked missed, its window is
 advisory rather than enforced, and it can be logged at any hour — including a past day,
 where it still counts as prayed rather than late. Each one instead takes `NAFL_BALL`
-(0.25) off the prayer debt. The one thing the old code did wrong was letting the strict
+(1.5) off the prayer debt — it was 0.25 until Sardor raised it on 2026-08-28. The one thing the old code did wrong was letting the strict
 window grading apply to it, which turned a night prayer logged in the morning into a
 qazo with a minus beside it.
 
@@ -291,6 +292,18 @@ week runs `DUEL_DAYS` from the moment the **last** person accepts rather than al
 the calendar week, because a challenge sent on Wednesday would otherwise be four days long
 or spend four days waiting. Sending a challenge counts as accepting it; any participant
 may refuse a challenge that has not started, and nobody can walk away from one that has.
+
+## Ayollar rejimi
+
+A prayer caught up **the same day**, after its window, earns `AYOL_BALL` (0.25) instead
+of costing 0.25. Praying on time scores as it does for anybody; letting the day close
+with the prayer unsaid costs the same full point as it does for anybody.
+
+It is deliberately weaker than ish rejimi, and works differently: ish rejimi changes the
+prayer's **status** (those three count as on time, so they reach the weekly goal, perfect
+days and streaks), while this one leaves the status alone and changes only its **value**.
+A caught-up prayer stays a caught-up prayer — it just stops being a debt. That is why the
+concession lives in the scoring rather than in `holat`.
 
 ## Ish rejimi — a shift that covers the middle of the day
 
@@ -395,7 +408,7 @@ Scores, kept separate because they are separate ledgers:
 
 | | Prayer | Book |
 |---|---|---|
-| | on time +1, qazo −0.25, missed −1, tahajjud +0.25 | every `BET_NORMA` pages +1, note +0.5, book finished +5 |
+| | on time +1, qazo −0.25, missed −1, tahajjud +1.5 | every `BET_NORMA` pages +1, note +0.5, book finished +5 |
 
 The week runs Monday to Sunday and is **final once Sunday's Xufton has come in** — the
 week's last prayer time, which is what the owner asked for. Until then the block is
