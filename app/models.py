@@ -150,13 +150,28 @@ class Bonus(BaseModel):
 
 
 class Task(BaseModel):
-    """A completed penance task (rakats + tasbih)."""
+    """A completed penance task (rakats + tasbih).
+
+    `lvl` is which of the three steps it settles and `oy` the month it settles, in
+    YYYY-MM. Both are needed because the debt is counted a month at a time while a
+    task left undone follows the member into the next month — without the month, a
+    task done in September could not be told apart from one owed for August.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     d: Date
     rak: int = Field(ge=0, le=1000)
     tas: int = Field(ge=0, le=100_000)
+    lvl: int = Field(default=0, ge=0, le=3)
+    oy: str = Field(default="", max_length=7)
+
+    @field_validator("oy")
+    @classmethod
+    def _check_month(cls, value: str) -> str:
+        if value and not re.match(r"^\d{4}-(0[1-9]|1[0-2])$", value):
+            raise ValueError("oy must be YYYY-MM")
+        return value
 
 
 # ---------------------------------------------------------------- kitob daftari

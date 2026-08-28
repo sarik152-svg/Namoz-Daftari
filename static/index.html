@@ -78,7 +78,13 @@ textarea{line-height:1.6;resize:vertical}
    olib tashlandi — ular hech kimga to'g'ri kelmadi va tanlash imkoni yo'q, ya'ni
    navbat kimga tushsa o'shaniki bo'lardi. Qolganlari bir-biridan yetarlicha uzoq. */
 const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#E0885A","#58BFC9","#9BC95E","#C0864F","#A88FE0"];
-const P_QAZO=0.25,P_MISS=1,TASK_AT=4,STREAK_STEP=10,BONUS_MIN=2,BONUS_MAX=5;
+const P_QAZO=0.25,P_MISS=1,STREAK_STEP=10;
+/* Qarz — o'qilmagan namoz uchun jazo, boshqa hech nima emas. Uni hech narsa
+   kamaytirmaydi: na tahajjud, na jamoat, na uzilgan qazo, na bajarilgan vazifa.
+   Vazifa qarzni to'lamaydi — u jazoning o'zi. Qarz esa har oy boshida noldan
+   boshlanadi, bajarilmagan vazifa esa keyingi oyga ham o'tib boradi. */
+const JAZO=[{ball:5,rak:12,tas:500},{ball:7,rak:20,tas:1000},{ball:10,rak:26,tas:2000}];
+const jazoDaraja=qarz=>{let n=0;JAZO.forEach((j,i)=>{if(qarz>=j.ball)n=i+1});return n};
 /* Kitob qoidalari. Ball namoz balidan ALOHIDA yuritiladi — ikkalasi bir
    hisobga qo'shilsa, o'qimagan kun namoz qarzini oshirib yuborardi. */
 /* Tahajjud nafl: hech qachon minus bermaydi, aksincha qarzni kamaytiradi. */
@@ -426,7 +432,11 @@ const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.le
 /* ══════════════ HISOB ══════════════ */
 function score(u,c,child){
  const days=(u&&u.days)||{},ds=Object.keys(days).sort();
- const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,quran:0,per:{},bonusSum:0,debt:0,eski:0,ayol:0,tasks:((u&&u.tasks)||[]).length};
+ const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,quran:0,per:{},bonusSum:0,debt:0,eski:0,ayol:0,oylar:{},tasks:((u&&u.tasks)||[]).length};
+ /* Jazo oyma-oy yig'iladi: qarz har oy boshida noldan boshlanadi, lekin o'sha oyda
+    tushgan vazifa bajarilmasa keyingi oyga o'tib ketadi — shuning uchun har oyning
+    jazosi alohida eslab qolinadi. */
+ const jaza=(kun,n)=>{o.penalty+=n;o.oylar[kun.slice(0,7)]+=n};
  PRAYERS.forEach(p=>o.per[p.k]={ontime:0,qazo:0,bad:0,delaySum:0,delayN:0});
  ((u&&u.bonuses)||[]).forEach(b=>o.bonusSum+=b.amt);
  /* Kechagi xufton bomdodgacha hali ochiq turadi, shuning uchun kun yopilgan
@@ -435,24 +445,28 @@ function score(u,c,child){
  if(ds.length){const td=c?todayFor(c):today();let d=ds[0];
   for(let i=0;i<800&&d<=td;i++,d=shift(d,1)){
    const day=days[d]||{},closed=d<td;
+   if(o.oylar[d.slice(0,7)]==null)o.oylar[d.slice(0,7)]=0;
    PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
     const st=holat(c,p.k,r);
     if(!p.fard){if(st==="ontime"){o.tahajjud++;o.per[p.k].ontime++}return}
-    if(!r){if(shut){o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}return}
+    if(!r){if(shut){jaza(d,P_MISS);o.bad++;o.per[p.k].bad++}return}
     if(st==="ontime"){o.ontime++;o.per[p.k].ontime++;if(r.j)o.jamoat++}
     else if(st==="qazo"){o.qazo++;o.per[p.k].qazo++;
-     if(ayolRejimi(c))o.ayol++;else o.penalty+=P_QAZO}
-    else{o.penalty+=P_MISS;o.bad++;o.per[p.k].bad++}});
+     if(ayolRejimi(c))o.ayol++;else jaza(d,P_QAZO)}
+    else{jaza(d,P_MISS);o.bad++;o.per[p.k].bad++}});
    o.eski+=qazoOf(day);
    if(day.quran)o.quran++}}
- /* Tahajjud nafl — jarima yozmaydi, aksincha har biri qarzni kamaytiradi. Uzilgan
-    eski qazo ham shunday: o'qilmagan namoz o'qilgan bo'lsa, qarz kamayadi. */
- o.debt=o.penalty-o.bonusSum-o.tasks*TASK_AT-o.tahajjud*NAFL_BALL-o.jamoat*JAMOAT_BALL
-   -o.eski*QAZO_BALL-o.ayol*AYOL_BALL;
+ /* Qarz — SHU OYNING jazosi, boshqa hech nima. Ilgari uni tahajjud, jamoat,
+    uzilgan qazo, mukofot va bajarilgan vazifa kamaytirardi; endi kamaytirmaydi.
+    Qarz o'qilmagan namoz uchun jazo, savob esa reytingda o'z joyida sanaladi. */
+ o.debt=o.oylar[(c?todayFor(c):today()).slice(0,7)]||0;
+ /* Toza oy — yozuv bo'lgan va bitta ham jazo tushmagan, tugagan oy. */
+ const shuOy=(c?todayFor(c):today()).slice(0,7);
+ o.tozaOy=Object.keys(o.oylar).filter(k=>k<shuOy&&o.oylar[k]===0).length;
  /* Bolada qarz ham, jarima ham yo'q — faqat yulduzcha. Kattalar tizimi bolani
     ilovadan qo'rqitib yuboradi, undan ko'ra o'qiganini sanab turgani ma'qul. */
  o.stars=o.ontime+o.tahajjud;
- if(child){o.penalty=0;o.debt=0;o.tasks=0}
+ if(child){o.penalty=0;o.debt=0;o.tasks=0;o.oylar={}}
  return o}
 function streakOf(days,pk,c){let cur=c?todayFor(c):today(),n=0;
  const oq=d=>holat(c,pk,(days[d]||{})[pk])==="ontime";
@@ -602,6 +616,7 @@ function podium(nom,a,z,done){
    <div style="font-size:${i===0?27:21}px;line-height:1">${medal(i,i===0)}</div>
    <div style="font-family:var(--serif);font-size:${i===0?16:14}px;margin-top:3px;color:${colorOf(x.m.id)};
      overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(first(x.m.name))}</div>
+   ${vazifaBelgi(x.m)?`<div style="margin-top:2px">${vazifaBelgi(x.m)}</div>`:""}
    <div style="font-family:var(--serif);font-size:${i===0?25:20}px;line-height:1.15;color:${C[i]}">${fmt(x.ball)}</div>
    <div class="muted tiny" style="margin-bottom:6px">${x.o.ontime} vaqtida${
      x.o.jamoat?" · "+x.o.jamoat+" jamoat":""}</div>
@@ -613,9 +628,34 @@ function podium(nom,a,z,done){
  rest.forEach((x,i)=>{
   h+=`<div class="flex between center" style="padding:7px 0;border-top:1px solid var(--line)">
    <span style="font-size:13px"><span class="muted">${i+5}.</span>
-    <span style="color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</span></span>
+    <span style="color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</span> ${vazifaBelgi(x.m)}</span>
    <span class="muted small">${fmt(x.ball)}</span></div>`});
  return h+`</div>`}
+
+/* Bajarilmagan vazifa. Qarz har oy nolga tushadi, jazo esa tushmaydi: o'sha oyda
+   tushgan vazifa bajarilmasa, keyingi oyda ham osilib turaveradi va butun doiraga
+   ko'rinadi. Eng eskisi qaytariladi — avval eski qarzni yopish kerak. */
+function vazifaQarzi(u,m){
+ if(!u||(m&&m.is_child))return null;
+ const s=score(u,cfgNow(m),false);
+ const bajarilgan={};
+ ((u.tasks)||[]).forEach(t=>{
+  const oy=t.oy||String(t.d||"").slice(0,7);
+  if(!oy)return;
+  bajarilgan[oy]=Math.max(bajarilgan[oy]||0,t.lvl||1)});
+ const oylar=Object.keys(s.oylar).sort();
+ for(let i=0;i<oylar.length;i++){
+  const oy=oylar[i],kerak=jazoDaraja(s.oylar[oy]);
+  if(kerak>(bajarilgan[oy]||0))
+   return{oy:oy,daraja:kerak,bajarilgan:bajarilgan[oy]||0,qarz:s.oylar[oy],
+     jazo:JAZO[kerak-1]}}
+ return null}
+
+/* Doiradagi hamma ko'radigan belgi. Ataylab ko'zga tashlanadi: vazifa tushgan odam
+   uni bajarmaguncha ismining yonida turadi. */
+function vazifaBelgi(m){
+ return vazifaQarzi(data[m.id],m)
+  ?`<span class="chip" style="border-color:#C9584B88;color:var(--clay)">\u26A0 VAZIFA</span>`:""}
 
 /* ══════════════ YIL ══════════════ */
 /* Oy g'olibi — o'sha oy TUGAGANDA birinchi o'ringa chiqqan odam. Hech qayerda
@@ -925,7 +965,8 @@ const NISHONLAR=[
  {n:"Tun mehmoni",ic:"\u{1F319}",d:"10 ta tahajjud",kerak:10,v:t=>t.s.tahajjud},
  {n:"Tun posboni",ic:"\u{1F318}",d:"40 ta tahajjud",kerak:40,v:t=>t.s.tahajjud},
  {n:"Kunlik vird",ic:"\u{1F4FF}",d:"30 kun Qur'on o'qilgan",kerak:30,v:t=>t.quranKun},
- {n:"Qarzsiz",ic:"\u{1F54A}\uFE0F",d:"Namoz qarzini nolga tushirish",kerak:1,v:t=>t.s.debt<=0?1:0},
+ {n:"Toza oy",ic:"\u{1F54A}\uFE0F",d:"Bir oyni bitta ham qarzsiz yopish",kerak:1,v:t=>t.s.tozaOy},
+ {n:"Uch toza oy",ic:"\u{1F396}\uFE0F",d:"Uch oyni bitta ham qarzsiz yopish",kerak:3,v:t=>t.s.tozaOy},
  {n:"Ilk kitob",ic:"\u{1F4D7}",d:"Birinchi kitobni tugatish",kerak:1,v:t=>t.k.done},
  {n:"Kutubxona",ic:"\u{1F4DA}",d:"5 ta kitob tugatish",kerak:5,v:t=>t.k.done},
  {n:"Birinchi fikr",ic:"\u270D\uFE0F",d:"Birinchi zametka yozish",kerak:1,v:t=>t.k.notes},
@@ -1320,11 +1361,6 @@ const A={
   const day=Object.assign({},(data[me].days||{})[date]||{});day[f]=v;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
   render();await pushDay(me,date)},
- async claim(pk,lvl){
-  const s=score(data[me],myCfg(),isChild(me));
-  const amt=Math.min(BONUS_MAX,Math.max(BONUS_MIN,Math.round(s.debt/2*100)/100));
-  data[me]=Object.assign({},data[me],{bonuses:((data[me].bonuses)||[]).concat([{p:pk,lvl:lvl,amt:amt,d:todayFor(myCfg())}])});
-  render();await pushData(me);render()},
  rak:0,tas:0,
  setRak(n){A.rak=(n===A.rak)?n-1:n;render()},
  addTas(n){A.tas=Math.max(0,Math.min(500,A.tas+n));render()},
@@ -1377,7 +1413,10 @@ const A={
   }catch(e){A.qazoMsg="";alert(e.message||"Saqlanmadi")}
   render()},
  async finishTask(){
-  data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([{d:todayFor(myCfg()),rak:25,tas:500}])});
+  const owed=vazifaQarzi(data[me],M(me));
+  if(!owed)return;
+  data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([
+    {d:todayFor(myCfg()),rak:owed.jazo.rak,tas:owed.jazo.tas,lvl:owed.daraja,oy:owed.oy}])});
   A.rak=0;A.tas=0;render();await pushData(me);render()},
  /* ────────── KITOB ────────── */
  bookView:"mine",bookOpenId:null,bookErr:"",
@@ -1911,7 +1950,7 @@ function todayTab(){
     dayBall===0?"0":(dayBall>0?"+":"")+fmt(dayBall)}</b><i>Shu kun bali</i></div>
   ${isChild(me)
    ?`<div class="panel stat"><b class="brass">\u2B50 ${s.stars}</b><i>Yulduzchalar</i></div>`
-   :`<div class="panel stat"><b class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Umumiy qarz":"Zaxira ball"}</i></div>`}
+   :`<div class="panel stat"><b class="${s.debt>0?"clay":"jade"}">${fmt(s.debt)}</b><i>Shu oydagi qarz</i></div>`}
  </div>`;
  if(nx){const mm=Math.round((nx.t-nowDec)*60);
   h+=`<div class="panel p14 mb14 flex between center">
@@ -2097,7 +2136,7 @@ function statsTab(){
   h+=`<div class="panel p14" style="border-color:${m.id===me?"#C9A22766":"var(--line)"}">
    <div class="flex center gap2" style="margin-bottom:8px">
     <div class="hd" style="height:26px;background:${colorOf(m.id)}"></div>
-    <div><div style="font-family:var(--serif);font-size:16px">${esc(first(m.name))}</div>
+    <div><div style="font-family:var(--serif);font-size:16px">${esc(first(m.name))} ${vazifaBelgi(m)}</div>
     <div class="muted tiny">${esc(m.city)} · ${i+1}-o'rin</div></div></div>
    <div style="font-family:var(--serif);font-size:31px;line-height:1;color:${pct>=80?"var(--jade)":pct>=50?"var(--brass)":"var(--clay)"}">
      ${pct}<span class="muted" style="font-size:14px">%</span></div>
@@ -2110,25 +2149,24 @@ function statsTab(){
    <div class="row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px">
      ${m.is_child
       ?`<span>Yulduzcha</span><span class="brass">\u2B50 ${s.stars}</span>`
-      :`<span>${s.debt>0?"Qarz":"Zaxira"}</span>
-        <span class="${s.debt>0?"clay":"jade"}">${s.debt>0?"−"+fmt(s.debt):"+"+fmt(-s.debt)}</span>`}</div>
+      :`<span>Shu oy qarzi</span>
+        <span class="${s.debt>0?"clay":"jade"}">${fmt(s.debt)}</span>`}</div>
   </div>`});
  h+=`</div>`;
  h+=oilaTahlilView();
  /* strike */
- h+=`<div class="panel p14 mb14" style="border-color:#C9A22744"><div class="eyebrow">Strike — har ${STREAK_STEP} kun mukofot</div>
-  <p class="muted small" style="margin:6px 0 12px">Bir namozni ${STREAK_STEP} kun ketma-ket vaqtida o'qisangiz,
-   qarzingizning yarmi o'chadi (${BONUS_MIN}–${BONUS_MAX} ball).</p>`;
+ /* Strike endi mukofot bermaydi — qarzni hech narsa kamaytirmaydi. Ketma-ket
+    kunlar shunchaki ko'rsatiladi: nishonlar shundan o'sadi. */
+ h+=`<div class="panel p14 mb14" style="border-color:#C9A22744"><div class="eyebrow">Ketma-ket kunlar</div>
+  <p class="muted small" style="margin:6px 0 12px">Bir namozni uzluksiz vaqtida o'qigan kunlaringiz.
+   Nishonlar shu qatorlardan o'sadi.</p>`;
  PRAYERS.forEach(p=>{
-  const st=streakOf(data[me].days||{},p.k,myCfg()),lvl=Math.floor(st/STREAK_STEP),cl=claimed(data[me],p.k);
-  const ready=lvl>cl,prog=(st%STREAK_STEP)/STREAK_STEP;
+  const st=streakOf(data[me].days||{},p.k,myCfg());
+  const prog=Math.min(1,(st%STREAK_STEP)/STREAK_STEP)||(st?1:0);
   h+=`<div style="margin-bottom:11px">
    <div class="flex between center" style="font-size:12px;margin-bottom:5px">
-    <span>${p.n} <span class="muted">· ${st} kun</span></span>
-    ${ready?`<button class="btn btn-gold" style="padding:4px 10px;font-size:11px" onclick="A.claim('${p.k}',${lvl})">🎁 Mukofotni olish</button>`
-     :`<span class="muted small">${cl>0?cl+" mukofot · ":""}${STREAK_STEP-(st%STREAK_STEP)} kun qoldi</span>`}
-   </div>
-   <div class="bar"><div style="width:${(ready?1:prog)*100}%;background:${ready?"var(--brass)":"var(--jade)"}"></div></div>
+    <span>${p.n}</span><span class="${st?"brass":"muted"} small">${st} kun</span></div>
+   <div class="bar"><div style="width:${prog*100}%;background:var(--jade)"></div></div>
   </div>`});
  h+=`</div>`;
  h+=qazoJamoaView();
@@ -2200,68 +2238,70 @@ function sunnatTab(){
 
 /* ────────── VAZIFA ────────── */
 function taskTab(){
- const s=score(data[me],myCfg(),isChild(me)),pending=Math.max(0,Math.floor(s.debt/TASK_AT));
+ const cfg=myCfg(),s=score(data[me],cfg,isChild(me)),owed=vazifaQarzi(data[me],M(me));
  let h=`<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
  <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
-  <div><span class="jade">Vaqtida o'qilsa</span> — 0 ball</div>
-  <div><span class="brass">Vaqti o'tib, o'sha kun ichida qazo qilinsa</span> — −0,25</div>
-  <div><span class="clay">Kun yopilib, keyingi kunga qolsa yoki o'qilmasa</span> — −1</div>
-  <div><span class="jade">Jamoat bilan vaqtida o'qilsa</span> — +${fmt(JAMOAT_BALL)} ball (reytingda 1 emas, 1,5)</div>
-  <div><span class="jade">Tahajjud (nafl)</span> — minus yo'q, har biri +${fmt(NAFL_BALL)} ball</div>
-  <div><span class="jade">Eski qazo uzilsa</span> — har biri +${fmt(QAZO_BALL)} ball (Bugun sahifasidagi Qazo daftari)</div>
-  <div><span class="jade">Ayollar rejimi</span> — shu kun ichida kechikib o'qilsa minus emas, +${fmt(AYOL_BALL)} ball</div>
-  <div><span class="jade">Ish rejimi</span> — peshin, asr, shom shu kun ichida o'qilsa vaqtida hisoblanadi</div>
-  <div><span class="brass">Har ${STREAK_STEP} kunlik strike</span> — qarzning yarmi o'chadi</div>
-  <div><span style="color:var(--text)">Har ${TASK_AT} ball qarz</span> — 25 rakat nafl va 500 tasbeh</div>
- </div></div>
- <div class="grid3 mb14">
-  <div class="panel stat"><b class="clay">${fmt(s.penalty)}</b><i>Jamg'arilgan minus</i></div>
-  ${/* Qarzni kamaytiradigan HAMMA narsa shu yerda turishi kerak — aks holda
-        yonidagi uchta raqam bir-biriga to'g'ri kelmaydi. Jamoat bali ilgari
-        tushib qolgan edi, endi eski qazo ham qo'shildi. */""}
-  <div class="panel stat"><b class="jade">−${fmt(s.bonusSum+s.tasks*TASK_AT
-    +s.tahajjud*NAFL_BALL+s.jamoat*JAMOAT_BALL+s.eski*QAZO_BALL
-    +s.ayol*AYOL_BALL)}</b><i>Qarzni kamaytirgani</i></div>
-  <div class="panel stat"><b class="${s.debt>0?"brass":"jade"}">${s.debt>0?fmt(s.debt):"+"+fmt(-s.debt)}</b><i>${s.debt>0?"Qolgan qarz":"Zaxira"}</i></div>
+  <div><span class="jade">Vaqtida o'qilsa</span> — qarz yozilmaydi</div>
+  <div><span class="brass">Vaqti o'tib, o'sha kun ichida qazo qilinsa</span> — ${fmt(P_QAZO)} qarz</div>
+  <div><span class="clay">Kun yopilib, keyingi kunga qolsa yoki o'qilmasa</span> — ${fmt(P_MISS)} qarz</div>
+  <div><span class="jade">Ayollar rejimi</span> — kun ichida qazo qilinsa qarz yozilmaydi</div>
+  <div><span class="jade">Ish rejimi</span> — peshin, asr, shom kun ichida o'qilsa qarz yozilmaydi</div>
+ </div>
+ <p class="muted small" style="margin:11px 0 0;line-height:1.65">Qarzni hech narsa
+  kamaytirmaydi — na tahajjud, na jamoat, na uzilgan qazo, na bajarilgan vazifa.
+  Qarz o'qilmagan namoz uchun jazo; savob esa reytingda o'z joyida sanaladi.
+  Qarz har oy boshida noldan boshlanadi, bajarilmagan vazifa esa qolib ketmaydi.</p></div>
+ <div class="panel p14 mb14"><div class="eyebrow">Jazo pog'onalari</div>
+  <div class="muted" style="font-size:12px;line-height:1.9;margin-top:7px">${
+   JAZO.map(j=>`<div><span class="clay">${fmt(j.ball)} ball qarz</span> — ${j.rak} rakat nafl va ${j.tas} tasbeh</div>`).join("")}
+  </div></div>
+ <div class="grid2 mb14">
+  <div class="panel stat"><b class="${s.debt>0?"clay":"jade"}">${fmt(s.debt)}</b><i>Shu oydagi qarz</i></div>
+  <div class="panel stat"><b class="jade">${s.tozaOy}</b><i>Toza oy</i></div>
  </div>`;
- if(pending>0){
-  let sw="";for(let i=0;i<25;i++)sw+=`<button class="sw ${i<A.rak?"on":""}" onclick="A.setRak(${i+1})"></button>`;
-  h+=`<div class="panel p18" style="border-color:#C9A22766">
-   <div class="brass" style="font-family:var(--serif);font-size:20px">Faol vazifa</div>
-   <p class="muted" style="font-size:12px;margin:4px 0 16px">Qarz ${fmt(s.debt)} ball. ${pending} ta vazifa ochiq — har biri 4 ballni yopadi.</p>
+ if(owed){
+  const j=owed.jazo,shuOy=owed.oy===todayFor(cfg).slice(0,7);
+  let sw="";for(let i=0;i<j.rak;i++)sw+=`<button class="sw ${i<A.rak?"on":""}" onclick="A.setRak(${i+1})"></button>`;
+  h+=`<div class="panel p18" style="border-color:#C9584B88">
+   <div class="flex between center">
+    <div class="clay" style="font-family:var(--serif);font-size:20px">Vazifa tushdi</div>
+    <span class="chip" style="border-color:#C9584B88;color:var(--clay)">\u26A0 ${owed.daraja}-pog'ona</span></div>
+   <p class="muted" style="font-size:12px;margin:6px 0 16px;line-height:1.65">${
+     shuOy?"Shu oy":pretty(owed.oy+"-01").split(",")[0].replace(/^1 /,"")} uchun qarz ${fmt(owed.qarz)} ball.
+    ${j.rak} rakat nafl va ${j.tas} tasbeh. Bajarmaguncha butun doira ismingiz yonida
+    belgini ko'rib turadi.</p>
    <div style="margin-bottom:18px">
-    <div class="flex between" style="font-size:12px;margin-bottom:8px"><span>Nafl namoz</span><span class="brass">${A.rak} / 25 rakat</span></div>
+    <div class="flex between" style="font-size:12px;margin-bottom:8px"><span>Nafl namoz</span><span class="brass">${A.rak} / ${j.rak} rakat</span></div>
     <div style="display:flex;flex-wrap:wrap;gap:4px">${sw}</div></div>
-   <div class="flex between" style="font-size:12px;margin-bottom:8px"><span>Tasbeh</span><span class="brass">${A.tas} / 500</span></div>
-   <div class="bar" style="height:6px;margin-bottom:12px"><div style="width:${Math.min(100,A.tas/5)}%;background:var(--brass)"></div></div>
+   <div class="flex between" style="font-size:12px;margin-bottom:8px"><span>Tasbeh</span><span class="brass">${A.tas} / ${j.tas}</span></div>
+   <div class="bar" style="height:6px;margin-bottom:12px"><div style="width:${Math.min(100,A.tas/j.tas*100)}%;background:var(--brass)"></div></div>
    <div class="flex gap2">
     <button onclick="A.addTas(1)" style="flex:1;padding:16px 0;border-radius:12px;background:var(--panel2);
       border:1px solid #C9A22755;color:var(--brass);font-family:var(--serif);font-size:18px;cursor:pointer">Subhanalloh +1</button>
     <button class="btn" style="padding:16px 14px" onclick="A.addTas(33)">+33</button>
+    <button class="btn" style="padding:16px 14px" onclick="A.addTas(100)">+100</button>
     <button class="btn" style="padding:16px 14px" onclick="A.resetTas()">↺</button></div>
-   <button class="btn-wide ${A.rak>=25&&A.tas>=500?"btn-green":"btn"}" style="margin-top:18px;border:none;
-     ${A.rak>=25&&A.tas>=500?"":"background:var(--panel2);color:var(--mut)"}"
-     ${A.rak>=25&&A.tas>=500?'onclick="A.finishTask()"':""}>Vazifani yopish (−4 ball)</button>
+   <button class="btn-wide ${A.rak>=j.rak&&A.tas>=j.tas?"btn-green":"btn"}" style="margin-top:18px;border:none;
+     ${A.rak>=j.rak&&A.tas>=j.tas?"":"background:var(--panel2);color:var(--mut)"}"
+     ${A.rak>=j.rak&&A.tas>=j.tas?'onclick="A.finishTask()"':""}>\u2713 Bajardim</button>
   </div>`;
  }else{
+  const keyingi=JAZO.find(j=>j.ball>s.debt);
   h+=`<div class="panel" style="padding:26px;text-align:center">
    <div style="font-size:26px">🏅</div>
    <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Vazifa yo'q</div>
-   <p class="muted" style="font-size:13px;margin-top:6px">${s.debt>0?"Yana "+fmt(TASK_AT-s.debt)+" ball qarz yig'ilsa vazifa ochiladi.":"Qarzingiz yo'q. Strike'ni uzmang."}</p></div>`}
+   <p class="muted" style="font-size:13px;margin-top:6px">${keyingi
+     ?"Yana "+fmt(keyingi.ball-s.debt)+" ball qarz yig'ilsa "+keyingi.rak+" rakat va "+keyingi.tas+" tasbeh tushadi."
+     :"Qarzingiz yo'q."}</p></div>`}
  h+=`<div class="panel p14 mt14"><div class="eyebrow">Jamoa holati</div><div class="mt12">`;
  members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],cfgNow(m),!!m.is_child);
   h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
-   <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))}</div>
-   <div class="row"><span>Minus / mukofot / nafl / qazo</span><span class="muted">${fmt(o.penalty)} · −${fmt(o.bonusSum)} · ${o.tahajjud} · ${o.eski}</span></div>
+   <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))} ${vazifaBelgi(m)}</div>
+   <div class="row"><span>Shu oy qarz / nafl / uzilgan qazo</span><span class="muted">${fmt(o.debt)} · ${o.tahajjud} · ${o.eski}</span></div>
    <div class="row">${m.is_child
      ?`<span>Yulduzcha</span><span class="brass">\u2B50 ${o.stars}</span>`
-     :`<span>${o.debt>0?"Qarz":"Zaxira"}</span><span class="${o.debt>0?"clay":"jade"}">${o.debt>0?"−"+fmt(o.debt):"+"+fmt(-o.debt)}</span>`}</div></div>`});
+     :`<span>Shu oy qarzi</span><span class="${o.debt>0?"clay":"jade"}">${fmt(o.debt)}</span>`}</div></div>`});
  h+=`</div></div>`;
- const bs=(data[me].bonuses)||[];
- if(bs.length){h+=`<div class="panel p14 mt14"><div class="eyebrow">Mukofot tarixi</div><div class="mt12">`;
-  bs.slice().reverse().forEach(b=>{const p=PRAYERS.find(x=>x.k===b.p);
-   h+=`<div class="row"><span>${p?p.n:b.p} · ${b.lvl*STREAK_STEP} kun · ${b.d}</span><span class="jade">−${fmt(b.amt)}</span></div>`});
-  h+=`</div></div>`}
  return h}
 
 /* ────────── KITOB ────────── */

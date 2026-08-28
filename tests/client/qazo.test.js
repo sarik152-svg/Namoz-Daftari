@@ -108,11 +108,15 @@ module.exports = {
   },
 
   /* ---------------------------------------------------------- scoring */
-  async "each make-up prayer lifts a quarter point off the debt"(assert) {
+  async "a made-up prayer counts in the ranking but never against the debt"(assert) {
+    /* It used to take the debt down. The debt is now a punishment for prayers not
+       said and nothing lifts it, so the reward for making one up lives entirely in
+       the ranking. */
     const c = client();
     const none = c.score({ ...blank(), days: { "2026-08-22": {} } }, SARDOR, false);
     const four = c.score(withQazo({ bomdod: 4 }), SARDOR, false);
-    assert.strictEqual(none.debt - four.debt, 4 * c.QAZO_BALL);
+    assert.strictEqual(four.debt, none.debt, "the debt does not move");
+    assert.strictEqual(four.eski, 4, "but the made-up prayers are counted");
   },
 
   async "make-up prayers count in the ranking too"(assert) {
@@ -135,45 +139,18 @@ module.exports = {
     assert.strictEqual(dayBall(c.html).text, "+0,5");
   },
 
-  async "the debt page adds up: penalty minus relief is the debt"(assert) {
-    /* The middle stat had been leaving the congregation bonus out, so the three
-       numbers on that row never quite reconciled. A new kind of relief makes that
-       worse, so the row is checked rather than eyeballed. */
+  async "the debt page shows this month's debt and nothing that offsets it"(assert) {
     const c = client("2026-08-22T09:00:00Z", {
       data: { sardor: { ...blank(), days: {
-        "2026-08-21": { bomdod: { s: "missed" }, tahajjud: { s: "ontime" },
-                        qazo: { peshin: 2 } },
-        "2026-08-22": { bomdod: { s: "ontime", t: "04:05", j: true } },
+        "2026-08-21": { bomdod: { s: "missed" }, peshin: { s: "ontime" },
+                        asr: { s: "ontime" }, shom: { s: "ontime" },
+                        xufton: { s: "ontime" }, tahajjud: { s: "ontime" } },
       } } },
     });
     await c.A.go("app");
     c.A.setTab("sunnat");
-    const nums = c.html.match(/<b class="clay">([^<]*)<\/b><i>Jamg'arilgan minus<\/i>[\s\S]*?<b class="jade">\u2212([^<]*)<\/b>[\s\S]*?<b class="[^"]*">([^<]*)<\/b><i>(Qolgan qarz|Zaxira)<\/i>/);
-    assert.ok(nums, "expected the three debt figures on the page");
-    const num = (t) => Number(String(t).replace(",", ".").replace("+", ""));
-    const [, minus, relief, left, label] = nums;
-    const debt = label === "Zaxira" ? -num(left) : num(left);
-    assert.strictEqual(num(minus) - num(relief), debt);
-  },
-
-  /* ---------------------------------------------------------- the circle */
-  async "the ranking page shows who is making up what, without ranking it"(assert) {
-    const BEHRUZ = { ...SARDOR, id: "behruz", name: "Behruz Qurbonov" };
-    const c = client("2026-08-22T09:00:00Z", {
-      members: [SARDOR, BEHRUZ],
-      data: {
-        sardor: { ...blank(), days: { "2026-08-22": { qazo: { bomdod: 12, asr: 5 } } } },
-        behruz: { ...blank(), days: { "2026-08-20": { qazo: { peshin: 4 } } } },
-      },
-    });
-    await c.A.go("app");
-    c.A.setTab("stats");
-    const from = c.html.indexOf("Qazo daftari");
-    assert.ok(from > 0, "expected a make-up section on the ranking page");
-    const block = c.html.slice(from);
-    assert.ok(block.includes("Bomdod 12"), "expected each prayer named with its count");
-    assert.ok(block.includes("Peshin 4"), "expected the other member's too");
-    assert.ok(!/\d+-o'rin/.test(block), "no places: this is not a contest");
+    assert.ok(c.html.includes("Shu oydagi qarz"), "the debt is a monthly figure now");
+    assert.ok(!c.html.includes("Qarzni kamaytirgani"), "nothing reduces it any more");
   },
 
   /* ---------------------------------------------------------- backlog */

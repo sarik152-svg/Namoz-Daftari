@@ -276,6 +276,34 @@ that badge is the group's agreement about the five daily prayers and does not ro
 Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
 an agreement about praying the five daily prayers on time, and a backlog would dissolve it.
 
+## Debt is a punishment, and nothing pays it off
+
+`o.debt` is the current calendar month's penalties and **nothing else**. Praying on
+time books nothing; a prayer caught up the same day books `P_QAZO`; a prayer left until
+tomorrow or never books `P_MISS`. Ish rejimi and ayollar rejimi cancel the penalty for
+the cases they cover, which is the only way the number can be smaller.
+
+Everything that used to take the debt down is gone: the night prayer, the congregation
+bonus, made-up qazo, the streak reward, and completing the penalty task itself. Those
+are rewards, and rewards live in the ranking. The reason is Sardor's and it is worth
+keeping: a debt that can be paid off with good deeds stops being a record of what was
+missed, and the penalty stops meaning anything. The streak reward went with it — its
+only effect was halving the debt — so the strike panel is now streak information.
+
+**Three steps of penance**, by how much is owed: 5 points → 12 rakats and 500 tasbih,
+7 → 20 and 1000, 10 → 26 and 2000. `JAZO` holds them and `jazoDaraja` picks the step.
+
+**The debt resets on the first of the month; an unfinished task does not.** `score`
+keeps `oylar` — a penalty column per month — and `vazifaQarzi` walks it oldest first,
+comparing each month's required step against the highest `lvl` recorded in `tasks` for
+that month. That is why `Task` carries `lvl` and `oy`: without the month, a task done in
+September could not be told from one owed for August.
+
+**The mark is the point.** While a task is owed, `vazifaBelgi` puts a red ⚠ VAZIFA chip
+beside that member's name on the podium, in the comparison cards and in the team list —
+everywhere the circle looks. It is meant to be uncomfortable, and it clears only when
+the member ticks Bajardim.
+
 ## The year page, and what a new month resets
 
 The ranking is scoped by period — week, month, year — and **every figure in it is
