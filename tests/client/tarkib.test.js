@@ -88,4 +88,42 @@ module.exports = {
     assert.ok(block.includes("Sardor") && block.includes("Hikmatilla"), "both people");
     assert.ok(block.includes("Tahajjud"), "and the rows that made the difference");
   },
+
+  /* ------------------------------------------------ Bugun uses the same scale */
+  async "the day's own total is the ball the ranking would give it"(assert) {
+    /* It used to be on the debt scale, where praying on time is worth nothing and
+       congregation is only the half point on top — so a prayer said with the
+       congregation showed +0,5 on Bugun and +1,5 in the ranking. */
+    const c = client({
+      data: { sardor: { ...blank(), days: { "2026-08-28": {
+        bomdod: { s: "qazo", t: "09:10" },
+        peshin: { s: "ontime", t: "13:05", j: true },
+        qazo: { asr: 2 },
+      } } }, hikmat: span() },
+      date: "2026-08-28",
+    });
+    const day = c.prayerRange(c.__me(), SARDOR, "2026-08-28", "2026-08-28");
+    assert.strictEqual(day.ball, 1.75, "-0,25 for the late Bomdod, +1,5 for Peshin in congregation, +0,5 for two made up");
+    await c.A.go("app");
+    const shown = c.html.match(/<b class="[^"]*">([^<]*)<\/b><i>Shu kun bali<\/i>/);
+    assert.ok(shown, "expected the day total on the screen");
+    assert.strictEqual(shown[1], "+1,75", "the two must never say different things");
+  },
+
+  async "every row on the card shows the ball that total counts"(assert) {
+    const c = client({
+      data: { sardor: { ...blank(), days: { "2026-08-28": {
+        bomdod: { s: "qazo", t: "09:10" },
+        peshin: { s: "ontime", t: "13:05", j: true },
+        asr: { s: "ontime", t: "17:05" },
+        tahajjud: { s: "ontime" },
+      } } }, hikmat: span() },
+      date: "2026-08-28",
+    });
+    await c.A.go("app");
+    const shown = (c.html.match(/([+-]?[\d,]+) ball/g) || []).map(x => x.replace(" ball", ""));
+    assert.ok(shown.includes("+1,5"), "congregation is worth a point and a half: " + shown);
+    assert.ok(shown.includes("+1"), "and praying on time is worth one");
+    assert.ok(shown.includes("-0,25"), "a late prayer still costs a quarter");
+  },
 };

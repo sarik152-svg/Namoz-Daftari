@@ -106,6 +106,7 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
        if ("duels" in patch) duels = patch.duels;
      };
      globalThis.__set_duels = (list) => { duels = list; };
+     globalThis.__state_me = () => data[me];
      globalThis.__state_day = () => ((data[me]||{}).days||{})[date] || {};`,
     sandbox
   );
@@ -134,6 +135,8 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
     },
     field(id) { return elementFor(id); },
     setState: sandbox.__setState,
+    /* The logged-in member's own document. */
+    __me() { return sandbox.__state_me(); },
     /* Duels arrive with /state; tests seed them directly. */
     __setDuels(list) { sandbox.__set_duels(list); },
     /* Every request the app made, in order. */

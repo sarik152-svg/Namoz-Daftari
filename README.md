@@ -276,6 +276,24 @@ that badge is the group's agreement about the five daily prayers and does not ro
 Make-up prayers deliberately do **not** count toward the weekly team badge: that badge is
 an agreement about praying the five daily prayers on time, and a backlog would dissolve it.
 
+## One scale for "ball"
+
+There used to be two. `STATUS.ball` was the **debt** scale — praying on time was worth
+nothing, because it adds no debt, and congregation was only the half point on top. The
+ranking used its own scale where on time is +1 and congregation +1.5. So one prayer said
+with the congregation showed **+0,5** on Bugun and **+1,5** in the ranking, and Sardor
+quite reasonably asked why his day added up to 0.75 when he had made it 1.75.
+
+Both numbers were right about their own ledger and that is exactly the problem. The two
+scales made sense while good deeds paid the debt down; once the debt became a punishment
+nothing can lift, the debt scale had no pluses left to describe and the day total was
+measuring against a ledger that no longer worked that way.
+
+Now there is one scale — the ranking's — and the day total is `prayerRange` over that
+single day rather than a second implementation of the same rules. `belgiBall` gives one
+mark's worth for the card, and a test sums the rows against `prayerRange`. `STATUS` keeps
+only the label and the colour.
+
 ## Ball qayerdan — the score, shown in its parts
 
 Under the podium, one table: every member as a column, every kind of mark as a row,

@@ -200,6 +200,16 @@ const diffMin=(a,b)=>{let d=toMin(b)-toMin(a);if(d<-720)d+=1440;if(d>720)d-=1440
 const winLen=(s,e)=>{let d=toMin(e)-toMin(s);if(d<=0)d+=1440;return d};
 const inWin=(n,s,e)=>e>s?(n>=s&&n<e):(n>=s||n<e);
 
+/* Bitta belgining bali — reyting qanday sanasa, shunday. prayerRange ichidagi
+   qoidalar bilan bir xil bo'lishi shart; test ikkalasining yig'indisini
+   solishtirib turadi. */
+function belgiBall(c,p,r,st){
+ if(!r)return 0;
+ if(!p.fard)return st==="ontime"?NAFL_BALL:0;
+ if(st==="ontime")return 1+(r.j?JAMOAT_BALL:0);
+ if(st==="qazo")return ayolRejimi(c)?AYOL_BALL:-P_QAZO;
+ return -P_MISS}
+
 /* ══════════════ QAYSI KUN, QAYSI VAQT ══════════════ */
 /* Baho har doim a'zoning SHAHRI vaqtida chiqariladi. Telefon boshqa mintaqada
    bo'lsa (masalan Dubay profili bilan Toshkentda yurish) qurilma soati namoz
@@ -236,11 +246,16 @@ const PRAYERS=[
  {k:"xufton",n:"Xufton",ic:"✦",fard:true}
 ];
 const EKY={tahajjud:"endTahajjud",bomdod:"endBomdod",peshin:"endPeshin",asr:"endAsr",shom:"endShom",xufton:"endXufton"};
+/* STATUS.ball ilgari QARZ shkalasida edi: vaqtida o'qilgan namoz 0, jamoat esa
+   faqat ustiga qo'shiladigan yarim ball. Shu sababli bitta jamoat namozi Bugun
+   sahifasida +0,5, reytingda esa +1,5 bo'lib ko'rinardi. Endi ball bitta shkalada
+   — reytingdagida — va u `belgiBall` orqali hisoblanadi. STATUS faqat nom va rang
+   uchun qoldi. */
 const STATUS={
- ontime:{label:"Vaqtida",ball:0,color:"var(--jade)"},
- qazo:{label:"Qazo (kun ichida)",ball:-P_QAZO,color:"var(--brass)"},
- late:{label:"Keyingi kunda qazo",ball:-P_MISS,color:"var(--clay)"},
- missed:{label:"O'qilmagan",ball:-P_MISS,color:"var(--clay)"}
+ ontime:{label:"Vaqtida",color:"var(--jade)"},
+ qazo:{label:"Qazo (kun ichida)",color:"var(--brass)"},
+ late:{label:"Keyingi kunda qazo",color:"var(--clay)"},
+ missed:{label:"O'qilmagan",color:"var(--clay)"}
 };
 const SUNNATS=[
 {t:"Salomni birinchi berish",d:"Kichik kattaga, yurgan o'tirganga, ozchilik ko'pchilikka salom beradi. Salom — muhabbatning kaliti.",a:"Bugun kamida 5 kishiga birinchi bo'lib salom bering.",s:"Buxoriy, 6231; Muslim, 2160"},
@@ -1972,13 +1987,9 @@ function todayTab(){
  /* Kun bali qatorning o'zi va'da qilgan narsani ko'rsatishi kerak: nafl "+0,25
     ball" deb turgan joyda tepadagi raqam qimirlamay qolsa, odam hisob ishlamayapti
     deb o'ylaydi. Jamoat bali bu yerda bor edi, nafl bali tushib qolgan edi. */
- let dayBall=qazoOf(day)*QAZO_BALL;
- PRAYERS.forEach(p=>{const r=day[p.k];
-  if(!r)return;
-  const st=holat(cfg,p.k,r);
-  if(!p.fard){if(st==="ontime")dayBall+=NAFL_BALL;return}
-  if(st==="qazo"&&ayolRejimi(cfg)){dayBall+=AYOL_BALL;return}
-  if(STATUS[st])dayBall+=STATUS[st].ball+(r.j&&st==="ontime"?JAMOAT_BALL:0)});
+ /* Kun bali reytingning o'zidan olinadi — ikkinchi nusxa yozilsa, ular bir kun
+    kelib ajralib ketadi. Aynan shu bo'lgan edi. */
+ const dayBall=prayerRange(data[me],M(me),date,date).ball;
  let nx=null;
  if(isT){const list=PRAYERS.map(p=>({p:p,t:sc[p.k]})).sort((a,b)=>a.t-b.t);
   nx=list.find(x=>x.t>nowDec)||null;
@@ -2018,6 +2029,7 @@ function todayTab(){
   const yengil=!!r&&st!==r.s;
   /* Ayollar rejimida kechikkan namoz holatini o'zgartirmaydi — faqat bali. */
   const ayolQazo=st==="qazo"&&ayolRejimi(cfg);
+  const bal=belgiBall(cfg,p,r,st);
   const state=isT?winState(p.k,tgt,cfg):null;
   /* Nafl uchun oyna faqat tavsiya — belgilash hech qachon to'silmaydi. */
   const open=state==="open",notYet=p.fard&&state==="early",shifted=tgt!==date;
@@ -2060,11 +2072,7 @@ function todayTab(){
        !p.fard?"O'qildi":S0.label}${yengil?" <span class='chip'>ISH REJIMI</span>":""}${
        ayolQazo?" <span class='chip'>AYOLLAR REJIMI</span>":""}${
        r.j?" \u{1F54C} jamoat":""} ·
-       <span class="${!p.fard||ayolQazo||S0.ball===0||(r.j&&st==="ontime")?"jade":"clay"}">${
-         !p.fard?"+"+fmt(NAFL_BALL)+" ball"
-         :ayolQazo?"+"+fmt(AYOL_BALL)+" ball"
-         :r.j&&st==="ontime"?"+"+fmt(JAMOAT_BALL)+" ball"
-         :S0.ball===0?"0 ball":fmt(S0.ball)+" ball"}</span>
+       <span class="${bal<0?"clay":"jade"}">${bal>0?"+":""}${fmt(bal)} ball</span>
        ${dl!=null&&dl>=0&&st==="ontime"&&!yengil?" · +"+dl+" daq":""}</div>
      <div class="muted tiny">${r.t?esc(r.t)+" · ":""}\u{1F512} qulflangan</div></div>`;
   }else{
