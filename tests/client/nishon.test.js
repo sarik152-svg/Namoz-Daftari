@@ -86,15 +86,11 @@ module.exports = {
     assert.ok(done.v(quiet.nishonStat(SARDOR)) < done.kerak);
   },
 
-  async "a night-prayer streak is a badge, not only a count"(assert) {
-    const days = {};
-    for (let i = 0; i < 7; i += 1) {
-      days["2026-08-" + String(16 + i).padStart(2, "0")] = { tahajjud: { s: "ontime" } };
-    }
-    const c = client({ data: { sardor: { ...blank(), days } } });
-    const streak = badge(c, "Tun odati");
-    assert.ok(streak, "expected a tahajjud streak badge");
-    assert.ok(streak.v(c.nishonStat(SARDOR)) >= streak.kerak);
+  async "no badge counts the night prayer any more"(assert) {
+    /* It was taken out of the app entirely: whoever prays it prays it for
+       themselves, and there is nothing to mark. */
+    const c = client();
+    assert.ok(!c.NISHONLAR.some(x => /tahajjud/i.test(x.d)), "no night-prayer badge");
   },
 
   async "the podium seats four, and the list below starts at fifth"(assert) {

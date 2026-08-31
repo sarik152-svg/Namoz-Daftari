@@ -27,6 +27,10 @@ from app.config import (
 )
 from app.security import is_valid_pin
 
+# `tahajjud` was removed from the app on 2026-08-31 — the night prayer is between a
+# person and God, not something the circle scores — but it stays accepted here so a
+# phone still running the old page does not get a 422 for a tap that no longer exists.
+# Nothing reads it back: the client has no such prayer any more.
 PrayerKey = Literal["tahajjud", "bomdod", "peshin", "asr", "shom", "xufton"]
 PrayerStatus = Literal["ontime", "qazo", "late", "missed"]
 FARD_PRAYERS: tuple[PrayerKey, ...] = ("bomdod", "peshin", "asr", "shom", "xufton")

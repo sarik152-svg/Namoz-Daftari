@@ -44,10 +44,12 @@ module.exports = {
     assert.strictEqual(c.__day(), undefined);
   },
 
-  "tahajjud may be marked at any hour"(assert) {
-    const c = client(); // 14:00 Toshkent
+  "the night prayer is not in the app at all"(assert) {
+    /* Taken out on purpose: it is between the person and God, not something the
+       circle scores. Marking it does nothing, because there is nothing to mark. */
+    const c = client();
     c.A.mark("tahajjud", "pray", "2026-08-22");
-    assert.strictEqual(c.__day("tahajjud").s, "ontime");
+    assert.strictEqual(c.__day(), undefined);
   },
 
   "a mark cannot be changed once made"(assert) {

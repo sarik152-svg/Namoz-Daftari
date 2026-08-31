@@ -15,7 +15,7 @@ const owing = (n) => ({ ...SARDOR, qazo_debt: n });
 function client(at = "2026-08-22T09:00:00Z", patch = {}) {
   const loaded = loadClient({
     at,
-    expose: ["score", "prayerRange", "jamoaHafta", "QAZO_BALL", "NAFL_BALL", "cfgNow", "qazoPace", "fmt"],
+    expose: ["score", "prayerRange", "jamoaHafta", "QAZO_BALL", "cfgNow", "qazoPace", "fmt"],
     routes: {
       "/members/sardor/days/2026-08-22": { ok: true },
       "/members/sardor/qazo-debt": { ok: true, qazo_debt: 9125 },
@@ -42,18 +42,9 @@ const dayWith = (qazo, extra) => ({ sardor: withQazo(qazo, extra) });
 
 module.exports = {
   /* ---------------------------------------------------------- tahajjud */
-  async "tahajjud moves the day's own total, not only the ledger"(assert) {
-    const c = client();
-    c.A.mark("tahajjud", "pray", "2026-08-22");
-    await c.A.go("app");
-    /* Pinned to the constant rather than a number: the night prayer's worth is
-       Sardor's to set, and it has already moved once. */
-    assert.strictEqual(dayBall(c.html).text, "+" + c.fmt(c.NAFL_BALL));
-  },
-
   async "a day that only gained points is not painted as a loss"(assert) {
     const c = client();
-    c.A.mark("tahajjud", "pray", "2026-08-22");
+    c.A.mark("peshin", "jamoat", "2026-08-22");
     await c.A.go("app");
     assert.strictEqual(dayBall(c.html).colour, "jade");
   },
@@ -144,7 +135,7 @@ module.exports = {
       data: { sardor: { ...blank(), days: {
         "2026-08-21": { bomdod: { s: "missed" }, peshin: { s: "ontime" },
                         asr: { s: "ontime" }, shom: { s: "ontime" },
-                        xufton: { s: "ontime" }, tahajjud: { s: "ontime" } },
+                        xufton: { s: "ontime" } },
       } } },
     });
     await c.A.go("app");

@@ -45,7 +45,7 @@ module.exports = {
   "the parts add up to the score"(assert) {
     const c = client();
     const u = span({
-      "2026-08-24": { bomdod: { s: "ontime", j: true }, tahajjud: { s: "ontime" } },
+      "2026-08-24": { bomdod: { s: "ontime", j: true } },
       "2026-08-25": { peshin: { s: "qazo" }, qazo: { asr: 6 } },
       "2026-08-26": { shom: { s: "missed" } },
     });
@@ -75,18 +75,19 @@ module.exports = {
   async "the ranking shows everyone's parts side by side"(assert) {
     const c = client({
       data: {
-        sardor: span({ "2026-08-24": { tahajjud: { s: "ontime" } } }),
+        sardor: span({ "2026-08-24": { bomdod: { s: "ontime", j: true } } }),
         hikmat: span({ "2026-08-25": { bomdod: { s: "missed" } } }),
       },
     });
     await c.A.go("app");
     c.A.setTab("stats");
+    c.A.tarkibOch(true);
     const h = c.html;
     assert.ok(h.includes("Ball qayerdan"), "expected the breakdown panel");
     const at = h.indexOf("Ball qayerdan");
     const block = h.slice(at, at + 3000);
     assert.ok(block.includes("Sardor") && block.includes("Hikmatilla"), "both people");
-    assert.ok(block.includes("Tahajjud"), "and the rows that made the difference");
+    assert.ok(block.includes("Jamoat"), "and the rows that made the difference");
   },
 
   /* ------------------------------------------------ Bugun uses the same scale */
@@ -116,7 +117,6 @@ module.exports = {
         bomdod: { s: "qazo", t: "09:10" },
         peshin: { s: "ontime", t: "13:05", j: true },
         asr: { s: "ontime", t: "17:05" },
-        tahajjud: { s: "ontime" },
       } } }, hikmat: span() },
       date: "2026-08-28",
     });
@@ -134,7 +134,7 @@ module.exports = {
     c.A.setTab("stats");
     assert.ok(c.html.includes("Ball qayerdan"), "the heading is always there");
     assert.ok(c.html.includes("A.tarkibOch(true)"), "with a way to open it");
-    assert.ok(!c.html.includes("Tahajjud</td>"), "but no table until then");
+    assert.ok(!c.html.includes("Jamoat</td>"), "but no table until then");
   },
 
   async "opening it shows every column without scrolling sideways"(assert) {

@@ -80,28 +80,26 @@ textarea{line-height:1.6;resize:vertical}
 const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#E0885A","#58BFC9","#9BC95E","#C0864F","#A88FE0"];
 const P_QAZO=0.25,P_MISS=1,STREAK_STEP=10;
 /* Qarz — o'qilmagan namoz uchun jazo, boshqa hech nima emas. Uni hech narsa
-   kamaytirmaydi: na tahajjud, na jamoat, na uzilgan qazo, na bajarilgan vazifa.
+   kamaytirmaydi: na jamoat, na uzilgan qazo, na bajarilgan vazifa.
    Vazifa qarzni to'lamaydi — u jazoning o'zi. Qarz esa har oy boshida noldan
    boshlanadi, bajarilmagan vazifa esa keyingi oyga ham o'tib boradi. */
 const JAZO=[{ball:5,rak:12,tas:500},{ball:7,rak:20,tas:1000},{ball:10,rak:26,tas:2000}];
 const jazoDaraja=qarz=>{let n=0;JAZO.forEach((j,i)=>{if(qarz>=j.ball)n=i+1});return n};
 /* Kitob qoidalari. Ball namoz balidan ALOHIDA yuritiladi — ikkalasi bir
    hisobga qo'shilsa, o'qimagan kun namoz qarzini oshirib yuborardi. */
-/* Tahajjud nafl: hech qachon minus bermaydi, aksincha qarzni kamaytiradi. */
-const NAFL_BALL=1.5;
 /* Jamoat bilan o'qilgan farz namoz yolg'iz o'qilganidan ustun: reytingda 1 emas,
    1,5 ball. Faqat VAQTIDA o'qilganiga beriladi. */
 const JAMOAT_BALL=0.5;
 /* Eski qazolar: yoshlikda o'qilmay qolgan namozlar. Bugungi namozni kechikib
    o'qish («qazo» holati, −0,25) bilan hech qanday aloqasi yo'q — u minus, bu
    plyus. Shuning uchun ilovada ular hech qachon bir xil so'z bilan atalmaydi.
-   Ball tahajjudnikiga teng, lekin alohida: qoidalari boshqa. */
+   Uzilgan qazo — savob, shuning uchun u reytingda sanaladi. */
 const QAZO_BALL=0.25,QAZO_MAX=20;
 const QAZO_VAQT=["bomdod","peshin","asr","shom","xufton"];
 /* Ish rejimi. Peshin, asr va shomning vaqti ish smenasining ichida o'tadi, uyga
    kelgach uchalasi birdan o'qiladi. Shu kun ichida qazo qilib o'qilgani vaqtida
    deb hisoblanadi — aks holda daftar odamning namozini emas, ishini yozib borardi.
-   Bomdod, xufton, tahajjud va eski qazolar hammaniki kabi baholanadi, keyingi
+   Bomdod, xufton va eski qazolar hammaniki kabi baholanadi, keyingi
    kunga qolgan namoz esa baribir −1: yengillik smenaga, kechiktirishga emas.
    Qoida shu yagona joyda turadi va holat o'qiladigan hamma yerdan shu chaqiriladi. */
 const ISH_VAQT=["peshin","asr","shom"];
@@ -191,8 +189,8 @@ function daySchedule(date,c){
  /* Xufton oynasi yarim tundan o'tib, ERTANGI bomdodda yopiladi. Ilgari bu yerda
     shu kunning bomdodi turardi — u xufton boshlanishidan oldin bo'lgani uchun
     oyna teskari hisoblanib, xufton keyingi kunga surilib ketardi. */
- return{tahajjud:fixHr(P.maghrib+2/3*nl),bomdod:T.fajr,peshin:T.dhuhr,asr:T.asr,shom:T.maghrib,xufton:T.isha,
-  endTahajjud:T.fajr,endBomdod:T.sunrise,endPeshin:T.asr,endAsr:T.maghrib,endShom:T.isha,endXufton:N.fajr}}
+ return{bomdod:T.fajr,peshin:T.dhuhr,asr:T.asr,shom:T.maghrib,xufton:T.isha,
+  endBomdod:T.sunrise,endPeshin:T.asr,endAsr:T.maghrib,endShom:T.isha,endXufton:N.fajr}}
 const hm=d=>{if(d==null||isNaN(d))return"--:--";const m=fixn(Math.round(d*60),1440);
  return String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
 const toMin=s=>{const p=String(s).split(":");return +p[0]*60+ +p[1]};
@@ -205,7 +203,6 @@ const inWin=(n,s,e)=>e>s?(n>=s&&n<e):(n>=s||n<e);
    solishtirib turadi. */
 function belgiBall(c,p,r,st){
  if(!r)return 0;
- if(!p.fard)return st==="ontime"?NAFL_BALL:0;
  if(st==="ontime")return 1+(r.j?JAMOAT_BALL:0);
  if(st==="qazo")return ayolRejimi(c)?AYOL_BALL:-P_QAZO;
  return -P_MISS}
@@ -237,15 +234,18 @@ function winState(pk,ds,c){
  return n<sc[pk]?"early":"past"}
 
 /* ══════════════ NAMOZLAR / MATNLAR ══════════════ */
+/* Tahajjud ilovadan olib tashlandi (2026-08-31, Sardor): u g'oyibona qolgani ma'qul
+   — kim o'qisa o'zi uchun o'qiydi, uni belgilab, ballab, butun doiraga ko'rsatib
+   turishning hojati yo'q. Kunning sunnati va oyat matnlarida u qolaveradi: gap
+   hisobdan chiqarishda edi, eslatmasdan qo'yishda emas. */
 const PRAYERS=[
- {k:"tahajjud",n:"Tahajjud",ic:"☾",fard:false},
  {k:"bomdod",n:"Bomdod",ic:"◐",fard:true},
  {k:"peshin",n:"Peshin",ic:"☀",fard:true},
  {k:"asr",n:"Asr",ic:"◑",fard:true},
  {k:"shom",n:"Shom",ic:"◒",fard:true},
  {k:"xufton",n:"Xufton",ic:"✦",fard:true}
 ];
-const EKY={tahajjud:"endTahajjud",bomdod:"endBomdod",peshin:"endPeshin",asr:"endAsr",shom:"endShom",xufton:"endXufton"};
+const EKY={bomdod:"endBomdod",peshin:"endPeshin",asr:"endAsr",shom:"endShom",xufton:"endXufton"};
 /* STATUS.ball ilgari QARZ shkalasida edi: vaqtida o'qilgan namoz 0, jamoat esa
    faqat ustiga qo'shiladigan yarim ball. Shu sababli bitta jamoat namozi Bugun
    sahifasida +0,5, reytingda esa +1,5 bo'lib ko'rinardi. Endi ball bitta shkalada
@@ -447,7 +447,7 @@ const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.le
 /* ══════════════ HISOB ══════════════ */
 function score(u,c,child){
  const days=(u&&u.days)||{},ds=Object.keys(days).sort();
- const o={penalty:0,ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,quran:0,per:{},bonusSum:0,debt:0,eski:0,ayol:0,oylar:{},tasks:((u&&u.tasks)||[]).length};
+ const o={penalty:0,ontime:0,qazo:0,bad:0,jamoat:0,quran:0,per:{},bonusSum:0,debt:0,eski:0,ayol:0,oylar:{},tasks:((u&&u.tasks)||[]).length};
  /* Jazo oyma-oy yig'iladi: qarz har oy boshida noldan boshlanadi, lekin o'sha oyda
     tushgan vazifa bajarilmasa keyingi oyga o'tib ketadi — shuning uchun har oyning
     jazosi alohida eslab qolinadi. */
@@ -463,7 +463,6 @@ function score(u,c,child){
    if(o.oylar[d.slice(0,7)]==null)o.oylar[d.slice(0,7)]=0;
    PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
     const st=holat(c,p.k,r);
-    if(!p.fard){if(st==="ontime"){o.tahajjud++;o.per[p.k].ontime++}return}
     if(!r){if(shut){jaza(d,P_MISS);o.bad++;o.per[p.k].bad++}return}
     if(st==="ontime"){o.ontime++;o.per[p.k].ontime++;if(r.j)o.jamoat++}
     else if(st==="qazo"){o.qazo++;o.per[p.k].qazo++;
@@ -471,7 +470,7 @@ function score(u,c,child){
     else{jaza(d,P_MISS);o.bad++;o.per[p.k].bad++}});
    o.eski+=qazoOf(day);
    if(day.quran)o.quran++}}
- /* Qarz — SHU OYNING jazosi, boshqa hech nima. Ilgari uni tahajjud, jamoat,
+ /* Qarz — SHU OYNING jazosi, boshqa hech nima. Ilgari uni jamoat,
     uzilgan qazo, mukofot va bajarilgan vazifa kamaytirardi; endi kamaytirmaydi.
     Qarz o'qilmagan namoz uchun jazo, savob esa reytingda o'z joyida sanaladi. */
  o.debt=o.oylar[(c?todayFor(c):today()).slice(0,7)]||0;
@@ -480,7 +479,7 @@ function score(u,c,child){
  o.tozaOy=Object.keys(o.oylar).filter(k=>k<shuOy&&o.oylar[k]===0).length;
  /* Bolada qarz ham, jarima ham yo'q — faqat yulduzcha. Kattalar tizimi bolani
     ilovadan qo'rqitib yuboradi, undan ko'ra o'qiganini sanab turgani ma'qul. */
- o.stars=o.ontime+o.tahajjud;
+ o.stars=o.ontime;
  if(child){o.penalty=0;o.debt=0;o.tasks=0;o.oylar={}}
  return o}
 function streakOf(days,pk,c){let cur=c?todayFor(c):today(),n=0;
@@ -558,7 +557,7 @@ function periodDone(z,c){
  return winState("xufton",z,c)!=="early"}
 
 /* Oraliqdagi namoz bali: vaqtida +1, qazo −0,25, o'qilmagan −1.
-   Tahajjud nafl — faqat qo'shadi, hech qachon kamaytirmaydi. */
+   Uzilgan eski qazo esa faqat qo'shadi. */
 function prayerRange(u,m,a,z){
  const c=cfgNow(m),days=(u&&u.days)||{},td=todayFor(c),openX=liveDay("xufton",c);
  /* Hisob a'zo daftar tuta boshlagan kundan boshlanadi — score() dagidek. Aks holda
@@ -568,7 +567,7 @@ function prayerRange(u,m,a,z){
     qolib ketgan, endi uzilgan qazolar (plyus). Ikkalasi butunlay boshqa narsa,
     shuning uchun nomi ham boshqa: bittasini ikkinchisi bilan chalkashtirish shu
     yerda eng oson qilinadigan xato. */
- const o={ontime:0,qazo:0,bad:0,tahajjud:0,jamoat:0,eski:0,ball:0};
+ const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,ball:0};
  if(!boshi)return o;
  /* Chegara bir yilga yetishi kerak: ilgari 40 kun edi va yil bo'yicha hisob
     jimgina fevralda to'xtab qolardi. */
@@ -577,7 +576,6 @@ function prayerRange(u,m,a,z){
   const day=days[d]||{},closed=d<td;
   PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
    const st=holat(c,p.k,r);
-   if(!p.fard){if(st==="ontime"){o.tahajjud++;o.ball+=NAFL_BALL}return}
    if(!r){if(shut){o.bad++;o.ball-=P_MISS}return}
    if(st==="ontime"){o.ontime++;o.ball+=1;if(r.j){o.jamoat++;o.ball+=JAMOAT_BALL}}
    else if(st==="qazo"){o.qazo++;o.ball+=ayolRejimi(c)?AYOL_BALL:-P_QAZO}
@@ -683,7 +681,7 @@ function oyGolibi(y,m){
  const cfg=myCfg(),oraliq=oyOraliq(y,m);
  if(!periodDone(oraliq[1],cfg))return null;
  const jonli=rankBy(oraliq[0],oraliq[1],"namoz").filter(x=>
-   (x.o.ontime+x.o.qazo+x.o.bad+x.o.tahajjud+x.o.eski)>0);
+   (x.o.ontime+x.o.qazo+x.o.bad+x.o.eski)>0);
  if(!jonli.length)return null;
  /* Teng bo'lsa g'olib yo'q — duelda ham shunday. */
  if(jonli.length>1&&jonli[0].ball===jonli[1].ball)return null;
@@ -749,7 +747,6 @@ function oyQahramonView(td){
 const TARKIB=[
  {n:"Vaqtida",k:"ontime"},
  {n:"Jamoat",k:"jamoat"},
- {n:"Tahajjud",k:"tahajjud"},
  {n:"Kechikkan",k:"qazo"},
  {n:"O'qilmagan",k:"bad"},
  {n:"Eski qazo",k:"eski"}
@@ -758,7 +755,6 @@ function ballTarkib(m,o,k){
  const c=cfgNow(m);
  if(k==="ontime")return o.ontime;
  if(k==="jamoat")return o.jamoat*JAMOAT_BALL;
- if(k==="tahajjud")return o.tahajjud*NAFL_BALL;
  if(k==="qazo")return o.qazo*(ayolRejimi(c)?AYOL_BALL:-P_QAZO);
  if(k==="bad")return o.bad*-P_MISS;
  if(k==="eski")return o.eski*QAZO_BALL;
@@ -951,11 +947,11 @@ function perfectStreak(days,c){
    ham shunday ishlaydi, va shu tufayli hammaning ekranida bir xil chiqadi. */
 function haftaJamoa(a,z){
  const kattalar=members.filter(m=>!m.is_child);
- const w={n:kattalar.length,ontime:0,tahajjud:0,jamoat:0,eski:0,
+ const w={n:kattalar.length,ontime:0,jamoat:0,eski:0,
    quran:0,quranKishi:0,mukammal:0,bomdod:0};
  kattalar.forEach(m=>{
   const u=data[m.id]||blank(),o=prayerRange(u,m,a,z),c=cfgNow(m);
-  w.ontime+=o.ontime;w.tahajjud+=o.tahajjud;w.jamoat+=o.jamoat;w.eski+=o.eski;
+  w.ontime+=o.ontime;w.jamoat+=o.jamoat;w.eski+=o.eski;
   let qk=0;
   for(let d=a,i=0;i<40&&d<=z;i++,d=shift(d,1)){
    const day=((u.days||{})[d])||{};
@@ -966,8 +962,6 @@ function haftaJamoa(a,z){
  return w}
 
 const HAFTALIK=[
- {n:"Tun jamoasi",ic:"\u{1F319}",kerak:n=>2*n,v:w=>w.tahajjud,
-  d:n=>`Bu hafta birgalikda ${2*n} ta tahajjud o'qiymiz`},
  {n:"Qazo haftasi",ic:"\u{1F4FF}",kerak:n=>20*n,v:w=>w.eski,
   d:n=>`Bu hafta birgalikda ${20*n} ta eski qazoni uzamiz`},
  {n:"Jamoat haftasi",ic:"\u{1F54C}",kerak:n=>10*n,v:w=>w.jamoat,
@@ -1001,7 +995,6 @@ function nishonStat(m){
   if(day.quran)quranKun++});
  return{s:s,k:k,mukammalKun:mukammalKun,quranKun:quranKun,jumaMukammal:jumaMukammal,
   bomdodStreak:streakOf(days,"bomdod",c),mukammalStreak:perfectStreak(days,c),
-  tahajjudStreak:streakOf(days,"tahajjud",c),
   kunlar:Object.keys(days).length,shaharlar:((u.places)||[]).length,
   /* Qarz odamning profilida turadi, hujjatida emas. */
   qazoQarz:(m&&m.qazo_debt)||0}}
@@ -1019,8 +1012,6 @@ const NISHONLAR=[
  {n:"Birinchi jamoat",ic:"\u{1F54C}",d:"Birinchi marta jamoat bilan o'qish",kerak:1,v:t=>t.s.jamoat},
  {n:"Masjid odami",ic:"\u{1F54B}",d:"40 ta namoz jamoat bilan",kerak:40,v:t=>t.s.jamoat},
  {n:"Juma nuri",ic:"\u{1F54A}",d:"4 ta juma kuni besh vaqt ham vaqtida",kerak:4,v:t=>t.jumaMukammal},
- {n:"Tun mehmoni",ic:"\u{1F319}",d:"10 ta tahajjud",kerak:10,v:t=>t.s.tahajjud},
- {n:"Tun posboni",ic:"\u{1F318}",d:"40 ta tahajjud",kerak:40,v:t=>t.s.tahajjud},
  {n:"Kunlik vird",ic:"\u{1F4FF}",d:"30 kun Qur'on o'qilgan",kerak:30,v:t=>t.quranKun},
  {n:"Toza oy",ic:"\u{1F54A}\uFE0F",d:"Bir oyni bitta ham qarzsiz yopish",kerak:1,v:t=>t.s.tozaOy},
  {n:"Uch toza oy",ic:"\u{1F396}\uFE0F",d:"Uch oyni bitta ham qarzsiz yopish",kerak:3,v:t=>t.s.tozaOy},
@@ -1041,9 +1032,6 @@ const NISHONLAR=[
  {n:"Qazosiz",ic:"\u{1F3C1}",d:"Butun qazo qarzini uzib bo'lish",kerak:1,
   v:t=>t.qazoQarz&&t.s.eski>=t.qazoQarz?1:0},
  /* ---- uzoq yo'l ---- */
- {n:"Tun odati",ic:"\u{1F312}",d:"7 kun ketma-ket tahajjud",kerak:7,v:t=>t.tahajjudStreak},
- {n:"Tun sodiqi",ic:"\u{1F311}",d:"30 kun ketma-ket tahajjud",kerak:30,v:t=>t.tahajjudStreak},
- {n:"Uch yuz tun",ic:"\u{1F320}",d:"300 ta tahajjud",kerak:300,v:t=>t.s.tahajjud},
  {n:"O'ttiz mukammal",ic:"\u{1F48E}",d:"30 kun ketma-ket besh vaqt vaqtida",kerak:30,v:t=>t.mukammalStreak},
  {n:"Chorak yil",ic:"\u{1F451}",d:"90 kun ketma-ket besh vaqt vaqtida",kerak:90,v:t=>t.mukammalStreak},
  {n:"Yuz mukammal",ic:"\u{1F31E}",d:"100 ta mukammal kun",kerak:100,v:t=>t.mukammalKun},
@@ -1074,7 +1062,7 @@ function jamoaHafta(a,z){
   return{m:m,ontime:o.ontime,jamoat:o.jamoat,ok:o.ontime>=maqsad}});
  const bolalar=members.filter(m=>m.is_child).map(m=>{
   const o=prayerRange(data[m.id]||blank(),m,a,z);
-  return{m:m,stars:o.ontime+o.tahajjud}});
+  return{m:m,stars:o.ontime}});
  return{rows:rows,bolalar:bolalar,ok:rows.length>0&&rows.every(x=>x.ok)}}
 function jamoaTarix(c){
  let eng=null;
@@ -1382,7 +1370,11 @@ const A={
  pick(id){me=id;LS.set("nd_me",id);screen="app";pinFor=null;render()},
  async refresh(){await pull();render()},
  async mark(pk,how,ds){
-  const cfg=myCfg(),P=PRAYERS.find(x=>x.k===pk)||{},live=liveDay(pk,cfg);
+  /* Ro'yxatda yo'q vaqt belgilanmaydi. Tahajjud olib tashlangach, eski telefon
+     uni yubormoqchi bo'lsa, jimgina yozilib qolmasin. */
+  const P=PRAYERS.find(x=>x.k===pk);
+  if(!P)return;
+  const cfg=myCfg(),live=liveDay(pk,cfg);
   /* Xufton bomdodgacha kechagi kunga yoziladi, shuning uchun yoziladigan kun
      ekranda ochiq turgan kundan farq qilishi mumkin. */
   const tgt=ds||(date===todayFor(cfg)?live:date);
@@ -1836,7 +1828,7 @@ function syncScreen(){
    Vaqtida o'qilgani hammanikidek, keyingi kunga qolib ketgani ham hammanikidek −1.</p>
   <p class="muted small" style="margin:0 0 12px;line-height:1.6">Ish rejimi kunduzi ishda
    bo'ladigan odam uchun: peshin, asr va shom shu kun ichida qazo qilib o'qilsa ham
-   vaqtida hisoblanadi. Bomdod, xufton, tahajjud va eski qazolar hammaniki kabi, keyingi
+   vaqtida hisoblanadi. Bomdod, xufton va eski qazolar hammaniki kabi, keyingi
    kunga qolgan namoz esa baribir −1.</p>
   <button class="btn btn-green btn-wide" onclick="A.go('add')">+ A'zo qo'shish</button>`:""}
  <div class="label">Oilam</div>
@@ -2197,7 +2189,6 @@ function statsTab(){
    <div class="row"><span>Vaqtida</span><span class="jade">${s.ontime}</span></div>
    <div class="row"><span>Qazo</span><span class="brass">${s.qazo}</span></div>
    <div class="row"><span>O'tkazilgan</span><span class="clay">${s.bad}</span></div>
-   <div class="row"><span>Tahajjud</span><span class="brass">${s.tahajjud}</span></div>
    ${s.eski?`<div class="row"><span>Uzilgan qazo</span><span class="jade">${s.eski}</span></div>`:""}
    <div class="row" style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px">
      ${m.is_child
@@ -2301,7 +2292,7 @@ function taskTab(){
   <div><span class="jade">Ish rejimi</span> — peshin, asr, shom kun ichida o'qilsa qarz yozilmaydi</div>
  </div>
  <p class="muted small" style="margin:11px 0 0;line-height:1.65">Qarzni hech narsa
-  kamaytirmaydi — na tahajjud, na jamoat, na uzilgan qazo, na bajarilgan vazifa.
+  kamaytirmaydi — na jamoat, na uzilgan qazo, na bajarilgan vazifa.
   Qarz o'qilmagan namoz uchun jazo; savob esa reytingda o'z joyida sanaladi.
   Qarz har oy boshida noldan boshlanadi, bajarilmagan vazifa esa qolib ketmaydi.</p></div>
  <div class="panel p14 mb14"><div class="eyebrow">Jazo pog'onalari</div>
@@ -2350,7 +2341,7 @@ function taskTab(){
  members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],cfgNow(m),!!m.is_child);
   h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
    <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))} ${vazifaBelgi(m)}</div>
-   <div class="row"><span>Shu oy qarz / nafl / uzilgan qazo</span><span class="muted">${fmt(o.debt)} · ${o.tahajjud} · ${o.eski}</span></div>
+   <div class="row"><span>Shu oy qarzi / uzilgan qazo</span><span class="muted">${fmt(o.debt)} · ${o.eski}</span></div>
    <div class="row">${m.is_child
      ?`<span>Yulduzcha</span><span class="brass">\u2B50 ${o.stars}</span>`
      :`<span>Shu oy qarzi</span><span class="${o.debt>0?"clay":"jade"}">${fmt(o.debt)}</span>`}</div></div>`});

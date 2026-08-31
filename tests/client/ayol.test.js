@@ -13,7 +13,7 @@ const withDay = (day) => ({ ...blank(), days: { "2026-08-22": day } });
 function client(patch = {}) {
   const loaded = loadClient({
     at: "2026-08-22T09:00:00Z",
-    expose: ["score", "prayerRange", "P_QAZO", "P_MISS", "AYOL_BALL", "NAFL_BALL"],
+    expose: ["score", "prayerRange", "P_QAZO", "P_MISS", "AYOL_BALL"],
     routes: { "/members/zuhra/woman-mode": { ok: true } },
   });
   loaded.setState({
@@ -57,12 +57,6 @@ module.exports = {
     assert.strictEqual(her.penalty, 0, "no penalty is booked");
     assert.strictEqual(his.penalty, c.P_QAZO);
     assert.ok(her.debt < his.debt, "and it takes the debt down rather than up");
-  },
-
-  "every night prayer is worth a point and a half"(assert) {
-    const c = client();
-    assert.strictEqual(c.NAFL_BALL, 1.5);
-    assert.strictEqual(oneDay(c, SARDOR, { tahajjud: { s: "ontime" } }).ball, 1.5);
   },
 
   async "the day card shows it as earned, not as a penalty"(assert) {

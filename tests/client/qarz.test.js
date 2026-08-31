@@ -69,7 +69,7 @@ module.exports = {
       days: {
         ...base.days,
         "2026-08-21": { ...base.days["2026-08-21"],
-          tahajjud: { s: "ontime" }, bomdod: { s: "ontime", j: true },
+          bomdod: { s: "ontime", j: true },
           qazo: { peshin: 4 } },
       },
     }, SARDOR, false);
