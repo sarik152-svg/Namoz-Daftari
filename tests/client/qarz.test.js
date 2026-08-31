@@ -153,4 +153,18 @@ module.exports = {
     c.A.setTab("stats");
     assert.ok(!/VAZIFA/.test(c.html), "two points is not a task");
   },
+
+  async "a day with nothing marked on it is never sent"(assert) {
+    /* pull() replaces the local copy with the server's, so a queued write for a day
+       the server no longer has would post an empty record — and an empty day that
+       has closed is five missed prayers. That is a debt out of nothing. */
+    const c = client();
+    await c.A.go("app");
+    await c.A.pushDayFor("2026-08-20");
+    assert.ok(!c.calls.some(x => x.method === "PUT"), "nothing to say, nothing sent");
+
+    c.A.mark("peshin", "pray", "2026-08-28");
+    await c.A.pushDayFor("2026-08-28");
+    assert.ok(c.calls.some(x => x.method === "PUT"), "a real mark still goes");
+  },
 };

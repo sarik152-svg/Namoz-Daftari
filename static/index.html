@@ -391,6 +391,11 @@ async function pushData(id){
 }
 async function sendDay(id,d){
  const day=((data[id]||{}).days||{})[d]||{};
+ /* Bo'sh kunni yubormaymiz. pull() mahalliy nusxani serverникi bilan almashtiradi,
+    ya'ni navbatda turgan eski kun endi bo'sh bo'lishi mumkin — uni yuborsak,
+    serverda bo'sh yozuv paydo bo'ladi, yopilgan bo'sh kun esa besh o'qilmagan
+    namoz degani. Yo'qdan qarz shunday tug'iladi. */
+ if(!Object.keys(day).length)return;
  await api("/members/"+encodeURIComponent(id)+"/days/"+encodeURIComponent(d),
    {method:"PUT",body:JSON.stringify(day)})}
 async function pushDay(id,d){
@@ -1369,6 +1374,7 @@ const A={
   }catch(e){box.textContent=e.message||"O'zgartirib bo'lmadi";box.className="clay small"}},
  pick(id){me=id;LS.set("nd_me",id);screen="app";pinFor=null;render()},
  async refresh(){await pull();render()},
+ async pushDayFor(d){await pushDay(me,d)},
  async mark(pk,how,ds){
   /* Ro'yxatda yo'q vaqt belgilanmaydi. Tahajjud olib tashlangach, eski telefon
      uni yubormoqchi bo'lsa, jimgina yozilib qolmasin. */
