@@ -135,6 +135,10 @@ class DayRecord(BaseModel):
     xufton: PrayerMark | None = None
     qazo: QazoDay | None = None
     quran: bool | None = None
+    # Haftalik vazifa: one good deed a week, ticked on whatever day it was done.
+    # An ordinary toggle like `quran`, not a write-once mark — it is a claim about
+    # something the member can still be in the middle of.
+    amal: bool | None = None
     sunnat: str | None = Field(default=None, max_length=2000)
 
     def to_wire(self) -> dict:

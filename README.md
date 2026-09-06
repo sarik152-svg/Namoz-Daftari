@@ -240,6 +240,23 @@ point was to take it out of the accounting, not out of sight.
 422 for a tap that no longer exists, and `A.mark` refuses any prayer not in `PRAYERS`
 rather than quietly writing it. Every prayer in the app is now fard.
 
+## Haftalik vazifa — one good deed a week
+
+On Bugun, between the prayers and the make-up notebook: one deed for the week, one
+tick. Washing a parent's feet, calling a brother, visiting somebody ill, giving sadaqa
+where nobody knows who gave it. Doing it is worth `AMAL_BALL` (2); a week that closes
+without it costs `AMAL_JARIMA` (1). Children are never fined for it.
+
+Which deed comes up is counted off the same fixed Monday as the weekly team task, so it
+is derived rather than stored and everybody's phone shows the same one. Being done is
+stored — `amal` on the day it was ticked, an ordinary toggle like `quran` rather than a
+write-once mark, since the member may still be in the middle of it. The **week** is what
+counts, not the day: `amalBajarilgan` asks whether any day in the week carries the tick.
+
+In the scoring loop the credit lands on the day it was ticked and the penalty on the
+week's **last** day, and only once that day is behind us — so a week still running owes
+nothing, and any range that contains the week picks it up naturally.
+
 ## Qazo daftari — prayers made up from years ago
 
 Wholly separate from `PrayerStatus.qazo`, which is today's prayer said after its window

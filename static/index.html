@@ -117,6 +117,42 @@ const holat=(c,pk,r)=>!r?null
 /* Bir kunda o'qilgan eski qazolar soni. */
 const qazoOf=day=>{const q=(day&&day.qazo)||{};
  return QAZO_VAQT.reduce((n,k)=>n+(q[k]||0),0)};
+/* Haftalik vazifa: bir hafta — bir yaxshi amal. Namoz bilan yonma-yon turadi,
+   lekin u bilan aralashmaydi: bajarilsa +2, hafta bajarilmay yopilsa −1.
+   Qaysi amal ekani haftaning o'zidan chiqariladi, hech qayerda saqlanmaydi —
+   nishonlar ham, haftalik jamoa topshirig'i ham shunday ishlaydi. */
+const AMAL_BALL=2,AMAL_JARIMA=1;
+const AMALLAR=[
+ "Ota yoki onangizning oyoqlarini yuving",
+ "Onangizga qo'ng'iroq qilib, uzoq gaplashing \u2014 shoshmasdan",
+ "Otangiz bilan bir choy iching va uning yoshligidan so'rang",
+ "Aka yoki ukangizdan xabar oling",
+ "Opa yoki singlingizdan xabar oling",
+ "Amakingiz yoki tog'angiznikiga boring",
+ "Ammangiz yoki xolangizdan xabar oling",
+ "Buvingiz yoki bobongizni yo'qlang",
+ "Bir kasalning holidan xabar oling",
+ "Sadaqa qiling \u2014 kim olganini bilmaydigan qilib",
+ "Qo'shningizga bir tovoq ovqat eltib bering",
+ "Qarindoshlaringizdan eng kam boradiganingiznikiga boring",
+ "Bir yetim yoki beva ayoldan xabar oling",
+ "Kimdandir ranjigan bo'lsangiz \u2014 kechiring va aytmang",
+ "Bir kishidan uzr so'rang",
+ "Farzandingiz bilan yolg'iz bir soat o'tkazing \u2014 telefonsiz",
+ "Ustozingizdan yoki sizga yaxshilik qilgan kishidan xabar oling",
+ "Bir kishiga bilganingizni o'rgating",
+ "Masjidga yoki yo'lga tushib qolgan axlatni oling",
+ "Bir kishining qarzini so'ramasdan uzib qo'ying yoki muhlat bering",
+ "Uyingizdagi eng og'ir ishni aytmasdan qilib qo'ying",
+ "Bir do'stingizni uyingizga taomga chaqiring"
+];
+/* Navbat haftalik jamoa topshirig'i bilan bir xil epoxdan sanaladi. */
+function haftaAmali(a){
+ const hafta=Math.floor(daysBetween(HAFTA_EPOX,weekRange(a)[0])/7);
+ return AMALLAR[((hafta%AMALLAR.length)+AMALLAR.length)%AMALLAR.length]}
+const amalBajarilgan=(u,wk)=>Object.keys((u&&u.days)||{})
+  .some(d=>d>=wk[0]&&d<=wk[1]&&u.days[d].amal);
+
 const BET_NORMA=10;
 const K_KAM=0.5,K_NOL=1,K_NOTE=0.5,K_DONE=5,K_TASK_AT=4,K_TASK_BET=30;
 
@@ -586,7 +622,7 @@ function prayerRange(u,m,a,z){
     qolib ketgan, endi uzilgan qazolar (plyus). Ikkalasi butunlay boshqa narsa,
     shuning uchun nomi ham boshqa: bittasini ikkinchisi bilan chalkashtirish shu
     yerda eng oson qilinadigan xato. */
- const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,ball:0};
+ const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,amal:0,amalYoq:0,ball:0};
  if(!boshi)return o;
  /* Chegara bir yilga yetishi kerak: ilgari 40 kun edi va yil bo'yicha hisob
     jimgina fevralda to'xtab qolardi. */
@@ -599,7 +635,15 @@ function prayerRange(u,m,a,z){
    if(st==="ontime"){o.ontime++;o.ball+=1;if(r.j){o.jamoat++;o.ball+=JAMOAT_BALL}}
    else if(st==="qazo"){o.qazo++;o.ball+=ayolRejimi(c)?AYOL_BALL:-P_QAZO}
    else{o.bad++;o.ball-=P_MISS}});
-  o.eski+=qazoOf(day);o.ball+=qazoOf(day)*QAZO_BALL}
+  o.eski+=qazoOf(day);o.ball+=qazoOf(day)*QAZO_BALL;
+  /* Haftalik vazifa kunga emas, haftaga tegishli. Bajarilgani belgilangan kunga
+     yoziladi; bajarilmagani esa hafta YOPILGANDA, uning oxirgi kuniga. Shu tufayli
+     u kunlar sikliga tabiiy tushadi va oraliq qaysi haftani o'z ichiga olsa,
+     o'shaniki hisoblanadi. */
+  if(day.amal){o.amal++;o.ball+=AMAL_BALL}
+  const wk=weekRange(d);
+  if(wk[1]===d&&d<td&&!(m&&m.is_child)&&!amalBajarilgan(u,wk)){
+   o.amalYoq++;o.ball-=AMAL_JARIMA}}
  return o}
 
 /* Kitob bali: har normalik bet 1 ball, zametka +0,5, tugatilgan kitob +5. */
@@ -768,7 +812,9 @@ const TARKIB=[
  {n:"Jamoat",k:"jamoat"},
  {n:"Kechikkan",k:"qazo"},
  {n:"O'qilmagan",k:"bad"},
- {n:"Eski qazo",k:"eski"}
+ {n:"Eski qazo",k:"eski"},
+ {n:"Haftalik vazifa",k:"amal"},
+ {n:"Vazifa qolgan",k:"amalYoq"}
 ];
 function ballTarkib(m,o,k){
  const c=cfgNow(m);
@@ -777,6 +823,8 @@ function ballTarkib(m,o,k){
  if(k==="qazo")return o.qazo*(ayolRejimi(c)?AYOL_BALL:-P_QAZO);
  if(k==="bad")return o.bad*-P_MISS;
  if(k==="eski")return o.eski*QAZO_BALL;
+ if(k==="amal")return o.amal*AMAL_BALL;
+ if(k==="amalYoq")return o.amalYoq*-AMAL_JARIMA;
  return 0}
 
 function ballTarkibView(a,z){
@@ -1439,6 +1487,13 @@ const A={
  resetTas(){A.tas=0;render()},
 
 
+ /* Haftalik vazifa: belgi bugungi kunga tushadi, hisob esa haftaniki — hafta
+    ichida qaysi kuni bosilgani ahamiyatsiz. */
+ async setAmal(on){
+  const day=Object.assign({},(data[me].days||{})[date]||{});
+  if(on)day.amal=true;else delete day.amal;
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
+  render();await pushDay(me,date);render()},
 /* ────────── QAZO DAFTARI ────────── */
  /* Sanoq avval faqat ekranda turadi. Har bosishda darhol yozilsa, xato bosilgan
     raqamni qaytarib bo'lmasdi — yozilgan narsa o'zgarmaydi. Vazifadagi tasbeh
@@ -1929,6 +1984,28 @@ const qazoMuddat=kun=>{
  const yil=Math.floor(oy/12),qoloy=oy%12;
  return yil+" yil"+(qoloy?" "+qoloy+" oy":"")};
 
+/* Haftalik vazifa. Bir hafta — bitta amal, bitta belgi. Ataylab sodda: ro'yxat
+   ham, bosqich ham, muddat tanlash ham yo'q — bajardingizmi yoki yo'qmi. */
+function amalPanel(cfg){
+ const td=todayFor(cfg),wk=weekRange(td);
+ const u=data[me]||blank(),bor=amalBajarilgan(u,wk);
+ const qoldi=daysBetween(td,wk[1]);
+ return `<div class="panel p14 mt14" style="border-color:${bor?"#4CAF8B66":"#C9A22744"}">
+  <div class="flex between center">
+   <div><div class="eyebrow">Haftalik vazifa</div>
+    <div class="muted small" style="margin-top:3px">${pretty(wk[0])} — ${pretty(wk[1])}</div></div>
+   <div style="font-size:26px;${bor?"":"opacity:.25;filter:grayscale(1)"}">\u{1F91D}</div></div>
+  <p style="font-size:14.5px;line-height:1.55;margin:11px 0 0;font-family:var(--serif)">${
+    esc(haftaAmali(td))}</p>
+  ${bor
+   ?`<div class="jade small" style="margin-top:12px">\u2713 Bajarildi \u00B7 +${fmt(AMAL_BALL)} ball</div>
+     <button class="link" style="font-size:11px;margin-top:6px" onclick="A.setAmal(false)">belgini olib tashlash</button>`
+   :`<button class="btn btn-green btn-wide" style="margin-top:12px" onclick="A.setAmal(true)">\u2713 Bajardim</button>
+     <div class="muted tiny" style="margin-top:7px;line-height:1.55">${
+       qoldi>0?qoldi+" kun qoldi":"bugun \u2014 haftaning oxirgi kuni"}.
+      Hafta oxirigacha bajarilmasa \u2212${fmt(AMAL_JARIMA)} ball.</div>`}
+ </div>`}
+
 /* ────────── QAZO DAFTARI ────────── */
 /* Yillar oldin qolib ketgan namozlarni uzish. Bugungi kechikkan namoz emas —
    uni «Qazo» deb ataydigan yagona joy namoz kartasidagi holat, bu esa butunlay
@@ -2093,6 +2170,7 @@ function todayTab(){
     :isT?"Vaqti o'tdi — bugun qazo qilsangiz −0,25, ertaga qolsa −1"
     :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)"}</div>`}
   h+=`</div>`});
+ h+=amalPanel(cfg);
  h+=qazoPanel(day,isT);
  h+=`<div class="panel p14 mt14 flex between center">
    <div><div style="font-family:var(--serif);font-size:16px">Bugun Qur'on o'qidim</div>

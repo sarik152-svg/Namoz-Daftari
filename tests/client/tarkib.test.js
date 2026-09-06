@@ -54,6 +54,28 @@ module.exports = {
       "a breakdown that disagrees with the total is worse than none");
   },
 
+  "it still adds up across a week that has finished"(assert) {
+    /* A week gone by carries the weekly deed — done or not done — and both have to
+       appear in the rows or the column stops matching the total under it. */
+    const later = loadClient({
+      at: "2026-09-03T09:00:00Z",
+      expose: ["prayerRange", "ballTarkib", "TARKIB"],
+    });
+    later.setState({
+      members: [SARDOR], data: { sardor: span() },
+      me: "sardor", date: "2026-09-03", token: "tok", isAdmin: false, circleId: 1,
+    });
+    const missed = span();
+    const kept = span({ "2026-08-26": { amal: true } });
+    [missed, kept].forEach(u => {
+      const o = later.prayerRange(u, SARDOR, "2026-08-24", "2026-08-30");
+      const total = later.TARKIB.reduce((n, r) => n + later.ballTarkib(SARDOR, o, r.k), 0);
+      assert.strictEqual(Math.round(total * 100) / 100, o.ball);
+    });
+    const o = later.prayerRange(missed, SARDOR, "2026-08-24", "2026-08-30");
+    assert.strictEqual(o.amalYoq, 1, "that week closed without the deed");
+  },
+
   "it adds up for the women's concession too"(assert) {
     /* Her caught-up prayer earns instead of costing, so that row changes sign. */
     const c = client({ members: [SARDOR, ZUHRA], data: { sardor: span(), zuhra: span() } });
