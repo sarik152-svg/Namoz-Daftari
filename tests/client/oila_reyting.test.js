@@ -11,11 +11,14 @@ const ONA = mk("zuhra", "Zuhra");
 const AZIZ = mk("aziz", "Aziz", { is_child: true, reward_goal: 20 });
 const blank = () => ({ days: {}, bonuses: [], tasks: [], books: [], places: [] });
 const FARD = ["bomdod", "peshin", "asr", "shom", "xufton"];
+/* Walk real dates: "2026-08-32" is not a day, and the scoring quietly agreed. */
 const prayed = (n) => {
   const days = {};
+  let d = new Date("2026-08-31T12:00:00");
   for (let i = 0; i < n; i += 1) {
-    days["2026-08-" + String(31 + i).padStart(2, "0")] =
+    days[d.toISOString().slice(0, 10)] =
       Object.fromEntries(FARD.map(k => [k, { s: "ontime" }]));
+    d = new Date(d.getTime() + 86400000);
   }
   return { ...blank(), days };
 };

@@ -276,6 +276,11 @@ class Circle(BaseModel):
     kind: Literal["friends", "family"]
     owner_id: str
     week_goal: int = Field(default=25, ge=1, le=100)
+    # What each KPI tier pays, in dollars. On the circle rather than the member: the
+    # thresholds differ from person to person, the family's budget does not.
+    bonus_easy: int = Field(default=20, ge=0, le=100_000)
+    bonus_mid: int = Field(default=50, ge=0, le=100_000)
+    bonus_hard: int = Field(default=100, ge=0, le=100_000)
 
     _check_owner = field_validator("owner_id")(_validate_member_id)
 
@@ -343,6 +348,11 @@ class MemberProfile(BaseModel):
     # How many points this child needs for one wish. Per child, because a
     # four-year-old and a twelve-year-old should not be held to the same number.
     reward_goal: int = Field(default=100, ge=10, le=10_000)
+    # Weekly KPI thresholds, in points. Zero means this member has no KPI — a target
+    # of nothing would otherwise be met by doing nothing.
+    kpi_easy: int = Field(default=0, ge=0, le=1000)
+    kpi_mid: int = Field(default=0, ge=0, le=1000)
+    kpi_hard: int = Field(default=0, ge=0, le=1000)
     # Ayollar rejimi: a prayer caught up the same day earns a quarter point instead
     # of costing one. On time and left-until-tomorrow are both judged as anyone's.
     woman_mode: bool = False
@@ -659,6 +669,26 @@ class ChildSkillCreate(BaseModel):
 
     _check_child = field_validator("child_id")(_validate_member_id)
     _check_item = field_validator("item")(_validate_deed)
+
+
+class KpiTargets(BaseModel):
+    """One member's three weekly thresholds. Zero switches the KPI off."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kpi_easy: int = Field(default=0, ge=0, le=1000)
+    kpi_mid: int = Field(default=0, ge=0, le=1000)
+    kpi_hard: int = Field(default=0, ge=0, le=1000)
+
+
+class BonusAmounts(BaseModel):
+    """What the circle pays for each tier."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    bonus_easy: int = Field(ge=0, le=100_000)
+    bonus_mid: int = Field(ge=0, le=100_000)
+    bonus_hard: int = Field(ge=0, le=100_000)
 
 
 class RewardGoal(BaseModel):

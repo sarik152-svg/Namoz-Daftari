@@ -413,8 +413,8 @@ async def test_resetting_the_pin_of_a_real_member_succeeds(api, connection):
 
 
 # ---------------------------------------------------------------- oila doiralari
-FAMILY = {"id": 2, "name": "Oilam", "kind": "family",
-          "owner_id": "sardor", "week_goal": 20}
+FAMILY = {"id": 2, "name": "Oilam", "kind": "family", "owner_id": "sardor",
+          "week_goal": 20, "bonus_easy": 20, "bonus_mid": 50, "bonus_hard": 100}
 NEW_PERSON = {
     "id": "zuhra", "name": "Zuhra", "city": "Toshkent", "lat": 41.3,
     "lng": 69.2, "tz": 5.0, "asr": 2, "fa": 18.0, "ia": 18.0, "pin": "4821",

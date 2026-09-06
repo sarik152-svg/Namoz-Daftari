@@ -870,6 +870,58 @@ function ballTarkibView(a,z){
    ichida qazo qilingani. Eski qazo — Qazo daftaridan uzilgani. O'qilmagan qatoriga
    ilovada belgilanmay qolgan namoz ham kiradi.</p></div>`}
 
+/* Haftalik KPI. Ball ikki joydan yig'iladi: reyting o'qiydigan o'sha namoz bali va
+   shu hafta bolalar bilan qilingan ish. Bitta ish bir marta sanaladi, lekin ikkala
+   joyda ham o'z o'rniga tushadi — bola tilagiga, katta esa KPI'siga.
+   Nol chegara "KPI yo'q" degani: nol maqsadni hech narsa qilmasdan ham bajarib
+   bo'ladi, shuning uchun u maqsad emas, o'chirgich. */
+function kpiHolat(m,a,z){
+ const chegara=[m&&m.kpi_easy||0,m&&m.kpi_mid||0,m&&m.kpi_hard||0];
+ if(!m||m.is_child||!chegara.some(x=>x>0))return{bor:false,ball:0,daraja:0};
+ const c=curCircle()||{};
+ const pul=[c.bonus_easy||0,c.bonus_mid||0,c.bonus_hard||0];
+ const bolaBall=(deeds||[]).filter(d=>d.adult_id===m.id&&d.day>=a&&d.day<=z)
+   .reduce((n,d)=>n+amalBali(d.deed),0);
+ const ball=Math.round((prayerRange(data[m.id]||blank(),m,a,z).ball+bolaBall)*100)/100;
+ let daraja=0;
+ chegara.forEach((x,i)=>{if(x>0&&ball>=x)daraja=i+1});
+ /* Keyingi bosqich — hali olinmagan eng past chegara. */
+ let keyingi=null;
+ for(let i=0;i<3;i++)if(chegara[i]>0&&ball<chegara[i]){keyingi=chegara[i];break}
+ return{bor:true,ball:ball,daraja:daraja,chegara:chegara,pul:daraja?pul[daraja-1]:0,
+  pullar:pul,keyingi:keyingi,qolgan:keyingi==null?0:Math.round((keyingi-ball)*100)/100}}
+
+function kpiView(a,z,tugadi){
+ if(!isFamily())return "";
+ const rows=(members||[]).map(m=>({m:m,k:kpiHolat(m,a,z)})).filter(x=>x.k.bor);
+ if(!rows.length)return "";
+ const egasi=ownsCircle(circles,circleId);
+ const NOM=["Oson","O'rta","Qiyin"];
+ let h=`<div class="panel p14 mb14"><div class="flex between center">
+   <div><div class="eyebrow">Haftalik KPI</div>
+    <div class="muted small" style="margin-top:3px">${pretty(a)} — ${pretty(z)}${
+      tugadi?" · yopildi":""}</div></div>
+   ${egasi?`<button class="btn" style="font-size:11px" onclick="A.setBonuses()">Summalar</button>`:""}</div>`;
+ rows.forEach(x=>{
+  const k=x.k,pct=k.keyingi?Math.min(100,Math.round(k.ball/k.keyingi*100)):100;
+  h+=`<div style="padding:10px 0;border-top:1px solid var(--line)">
+   <div class="flex between center">
+    <span style="font-size:13.5px;color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</span>
+    <span class="flex center gap2">
+     ${k.daraja?`<span class="chip" style="border-color:#4CAF8B66;color:var(--jade)">${
+       NOM[k.daraja-1]} \u00B7 $${k.pul}</span>`:`<span class="muted tiny">hali yo'q</span>`}
+     <span style="font-family:var(--serif);font-size:18px;color:var(--brass)">${fmt(k.ball)}</span></span></div>
+   <div class="bar" style="margin-top:6px"><div style="width:${pct}%;background:${
+     k.daraja===3?"var(--brass)":"var(--jade)"}"></div></div>
+   <div class="flex between center" style="margin-top:5px">
+    <span class="muted tiny">${k.keyingi==null
+      ?"eng yuqori bosqich olindi"
+      :NOM[k.chegara.indexOf(k.keyingi)]+" bosqichga "+fmt(k.qolgan)+" ball qoldi ($"
+        +k.pullar[k.chegara.indexOf(k.keyingi)]+")"}</span>
+    ${egasi?`<button class="link" style="font-size:11px" onclick="A.setKpi('${esc(x.m.id)}')">o'zgartirish</button>`:""}</div>
+  </div>`});
+ return h+`</div>`}
+
 /* Oilaviy ball taxtasi. Oilada o'rin ham, foiz ham, taqqoslash ham yo'q — Sardor
    shunday xohladi: "o'rinlar reytinglar tushunchasi bo'lmasin". Ballar bor, maqsadga
    qancha qolgani bor, poyga yo'q. Do'stlar doirasida kursi o'z joyida qoladi. */
@@ -1624,6 +1676,36 @@ const A={
   try{await api("/child-skills/"+encodeURIComponent(id),{method:"DELETE"});await pull()}
   catch(e){deedMsg=e.message||"Olib tashlab bo'lmadi";deedErr=true}
   render()},
+ async setKpi(id){
+  const m=(members||[]).find(x=>x.id===id)||{};
+  const so=(nom,hozir)=>{
+   const v=prompt(nom+" bosqich uchun necha ball? (0 — bu bosqich yo'q)",String(hozir||0));
+   if(v===null)return null;
+   const n=Math.round(Number(v));
+   return isFinite(n)&&n>=0&&n<=1000?n:null};
+  const oson=so("Oson",m.kpi_easy);if(oson===null)return;
+  const orta=so("O'rta",m.kpi_mid);if(orta===null)return;
+  const qiyin=so("Qiyin",m.kpi_hard);if(qiyin===null)return;
+  try{
+   await api("/members/"+encodeURIComponent(id)+"/kpi",
+     {method:"POST",body:JSON.stringify({kpi_easy:oson,kpi_mid:orta,kpi_hard:qiyin})});
+   await pull();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+ async setBonuses(){
+  const c=curCircle()||{};
+  const so=(nom,hozir)=>{
+   const v=prompt(nom+" bosqich bonusi ($)",String(hozir||0));
+   if(v===null)return null;
+   const n=Math.round(Number(v));
+   return isFinite(n)&&n>=0&&n<=100000?n:null};
+  const oson=so("Oson",c.bonus_easy);if(oson===null)return;
+  const orta=so("O'rta",c.bonus_mid);if(orta===null)return;
+  const qiyin=so("Qiyin",c.bonus_hard);if(qiyin===null)return;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/bonuses",
+     {method:"POST",body:JSON.stringify({bonus_easy:oson,bonus_mid:orta,bonus_hard:qiyin})});
+   await A.loadCircles();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
  async setRewardGoal(id){
   const m=(members||[]).find(x=>x.id===id)||{};
   const v=prompt("Tilak uchun necha ball kerak? ("+(m.name||id)+")",
@@ -2500,6 +2582,8 @@ function statsTab(){
    <button class="btn" style="flex:1;${yil?on:""}" onclick="A.setStatPeriod('yil')">Bu yil</button></div>`;
  /* Yilda eng tepada oy qahramonlari turadi — yil bo'yicha ball emas. */
  if(yil&&!isFamily())ch+=oyQahramonView(td);
+ const hw=weekRange(td);
+ if(isFamily())ch+=kpiView(hw[0],hw[1],periodDone(hw[1],cfg));
  ch+=isFamily()
   ?oilaBallView(rng[0],rng[1],yil?"Bu yil":oy?"Bu oy":"Bu hafta")
   :podium(yil?"Yil qahramoni":oy?"Oy qahramoni":"Hafta qahramoni",

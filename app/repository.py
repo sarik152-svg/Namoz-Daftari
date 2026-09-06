@@ -45,7 +45,7 @@ from app.security import decrypt_pin, encrypt_pin, generate_pin, new_session_tok
 
 logger = logging.getLogger("namoz.repo")
 
-_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt, reward_goal"
+_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt, reward_goal, kpi_easy, kpi_mid, kpi_hard"
 _SEED_FIELD_COUNT = 9
 
 # asyncpg binds parameters by their Postgres type, so a DATE column needs a real
@@ -64,7 +64,7 @@ def _now() -> datetime:
 
 
 # ---------------------------------------------------------------- reads
-_CIRCLE_COLUMNS = "id, name, kind, owner_id, week_goal"
+_CIRCLE_COLUMNS = "id, name, kind, owner_id, week_goal, bonus_easy, bonus_mid, bonus_hard"
 
 
 async def fetch_circles_for(pool: asyncpg.Pool, member_id: str) -> list[Circle]:
@@ -275,7 +275,7 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
             """
             SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa,
                    m.ia, m.is_child, m.work_shift, m.woman_mode, m.qazo_debt,
-                   m.reward_goal
+                   m.reward_goal, m.kpi_easy, m.kpi_mid, m.kpi_hard
               FROM members m
               JOIN circle_members cm ON cm.member_id = m.id
              WHERE cm.circle_id = $1
@@ -522,6 +522,35 @@ async def circle_of_skill(pool: asyncpg.Pool, skill_id: int) -> int | None:
         return await connection.fetchval(
             "SELECT circle_id AS circle FROM child_skills WHERE id = $1", skill_id
         )
+
+
+async def set_kpi(
+    pool: asyncpg.Pool, member_id: str, easy: int, mid: int, hard: int
+) -> bool:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            UPDATE members SET kpi_easy = $2, kpi_mid = $3, kpi_hard = $4,
+                   updated_at = now()
+             WHERE id = $1 RETURNING id
+            """,
+            member_id, easy, mid, hard,
+        )
+    return row is not None
+
+
+async def set_bonuses(
+    pool: asyncpg.Pool, circle_id: int, easy: int, mid: int, hard: int
+) -> Circle | None:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            f"""
+            UPDATE circles SET bonus_easy = $2, bonus_mid = $3, bonus_hard = $4
+             WHERE id = $1 RETURNING {_CIRCLE_COLUMNS}
+            """,
+            circle_id, easy, mid, hard,
+        )
+    return None if row is None else Circle(**dict(row))
 
 
 async def set_reward_goal(pool: asyncpg.Pool, member_id: str, goal: int) -> bool:

@@ -36,6 +36,7 @@ from app.models import (
     ChildDeedCreate,
     ChildFlag,
     ChildRewardCreate,
+    BonusAmounts,
     ChildSkillCreate,
     CircleCreate,
     CircleMemberAdd,
@@ -46,6 +47,7 @@ from app.models import (
     KhatmCreate,
     LoginRequest,
     MemberData,
+    KpiTargets,
     QazoDebt,
     RewardGoal,
     WomanModeFlag,
@@ -714,6 +716,48 @@ async def drop_child_skill(
     await _require_family(request, session, circle_id)
     await repository.delete_child_skill(pool, skill_id, circle_id)
     return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/kpi")
+async def set_kpi(
+    member_id: str, body: KpiTargets, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """One member's three weekly thresholds. The circle owner sets them.
+
+    Zero switches the KPI off for that member rather than setting a target of
+    nothing, which anybody would meet by doing nothing at all.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error(
+                "not_circle_owner", "Buni doira egasi belgilaydi",
+                status.HTTP_403_FORBIDDEN,
+            )
+    if not await repository.set_kpi(
+        pool, member_id, body.kpi_easy, body.kpi_mid, body.kpi_hard
+    ):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/bonuses")
+async def set_bonuses(
+    circle_id: int, body: BonusAmounts, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """What each tier pays. One budget for the whole family, so it lives here."""
+    await _require_owned_circle(request, session, circle_id)
+    circle = await repository.set_bonuses(
+        request.app.state.pool, circle_id,
+        body.bonus_easy, body.bonus_mid, body.bonus_hard,
+    )
+    if circle is None:
+        raise _error("no_circle", "Doira topilmadi", status.HTTP_404_NOT_FOUND)
+    return circle.model_dump()
 
 
 @app.post(f"{API_PREFIX}/members/{{member_id}}/reward-goal")

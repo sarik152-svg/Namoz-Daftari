@@ -240,6 +240,28 @@ point was to take it out of the accounting, not out of sight.
 422 for a tap that no longer exists, and `A.mark` refuses any prayer not in `PRAYERS`
 rather than quietly writing it. Every prayer in the app is now fard.
 
+## Oila: points, not places — and a weekly KPI
+
+A family circle has no podium, no comparison cards, no percentages and no Nth-place
+labels. Sardor was plain about it: inside a family there is no ranking. In their place a
+board of points listed in the family's own order — sorting by score would be a placing
+with the number filed off — and above it the weekly KPI.
+
+Each adult has three thresholds of their own (`members.kpi_easy/mid/hard`) and the
+circle holds one set of amounts (`circles.bonus_easy/mid/hard`, $20/$50/$100 by default).
+A mother at home and a father on a shift cannot be held to the same number, but the money
+is one family budget, so it is agreed once. **Zero is not a target of nothing — it is the
+off switch**, which is why it is the default.
+
+The KPI score is the week's ranking ball **plus** what that adult did with the children
+that week. One act counts once and lands in both places it belongs: the child moves
+toward a wish, the adult toward their tier. Nothing about the result is stored — the tier
+reached, the money owed and what is left to the next step are all recomputed, so the app
+never disagrees with the records underneath it.
+
+Friends keep the podium exactly as it was. `Ball qayerdan` stays for both: it explains a
+number rather than ranking anybody.
+
 ## Bolalar bo'limi — what a parent did with a child
 
 Only in a family, and only when there are children in it. A parent picks the child and
