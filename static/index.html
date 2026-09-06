@@ -870,6 +870,38 @@ function ballTarkibView(a,z){
    ichida qazo qilingani. Eski qazo — Qazo daftaridan uzilgani. O'qilmagan qatoriga
    ilovada belgilanmay qolgan namoz ham kiradi.</p></div>`}
 
+/* Oilaviy ball taxtasi. Oilada o'rin ham, foiz ham, taqqoslash ham yo'q — Sardor
+   shunday xohladi: "o'rinlar reytinglar tushunchasi bo'lmasin". Ballar bor, maqsadga
+   qancha qolgani bor, poyga yo'q. Do'stlar doirasida kursi o'z joyida qoladi. */
+function oilaBallView(a,z,nom){
+ const rows=(members||[]).map(m=>({m:m,o:prayerRange(data[m.id]||blank(),m,a,z)}));
+ if(!rows.length)return "";
+ /* Tartib a'zolar ro'yxatidagidek — ballga qarab saralansa, u o'rin bo'lib qolardi. */
+ const eng=Math.max(1,...rows.map(x=>Math.abs(x.o.ball)));
+ let h=`<div class="panel p14 mb14"><div class="eyebrow">${esc(nom)}</div>
+  <h2 style="font-size:22px;margin:6px 0 4px">Kim qancha ball to'pladi</h2>
+  <p class="muted small" style="margin:0 0 12px;line-height:1.6">${pretty(a)} — ${pretty(z)}.
+   Oilada o'rin yo'q \u2014 har kim o'zi bilan yarashadi.</p>`;
+ rows.forEach(x=>{
+  const pct=Math.min(100,Math.round(Math.abs(x.o.ball)/eng*100));
+  const bola=x.m.is_child,h0=bola?bolaHolat(x.m):null;
+  h+=`<div style="padding:9px 0;border-top:1px solid var(--line)">
+   <div class="flex between center">
+    <span style="font-size:13.5px;color:${colorOf(x.m.id)}">${esc(first(x.m.name))}${
+      bola?` <span class="chip">BOLA</span>`:""} ${vazifaBelgi(x.m)}</span>
+    <span style="font-family:var(--serif);font-size:19px;color:${
+      x.o.ball<0?"var(--clay)":"var(--brass)"}">${fmt(x.o.ball)}</span></div>
+   <div class="bar" style="margin-top:6px"><div style="width:${pct}%;background:${
+     x.o.ball<0?"var(--clay)":"var(--jade)"}"></div></div>
+   ${bola&&h0
+    ?`<div class="muted tiny" style="margin-top:5px">Tilakkacha ${h0.qolgan} ball \u00B7 ${
+       h0.bosqich} / ${h0.maqsad}</div>`
+    :`<div class="muted tiny" style="margin-top:5px">${x.o.ontime} vaqtida${
+       x.o.jamoat?" \u00B7 "+x.o.jamoat+" jamoat":""}${
+       x.o.bad?" \u00B7 "+x.o.bad+" o'qilmagan":""}</div>`}
+  </div>`});
+ return h+`</div>`}
+
 /* ══════════════ BOLALAR ══════════════ */
 /* Ota yoki ona bola bilan nima qilgani. Bitta ish ikkovini ham rag'batlantiradi:
    bola tilagiga yaqinlashadi, katta esa o'z hisobini to'ldiradi — aks holda
@@ -2461,18 +2493,22 @@ function statsTab(){
  const rng=yil?yearRange(td):oy?monthRange(td):weekRange(td);
  const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
  let ch=`<div class="eyebrow">Reyting</div>
-  <h2 style="font-size:24px;margin:6px 0 12px">Kim qayerda</h2>
+  <h2 style="font-size:24px;margin:6px 0 12px">${isFamily()?"Ballar":"Kim qayerda"}</h2>
   <div class="flex gap2 mb14">
    <button class="btn" style="flex:1;${!oy&&!yil?on:""}" onclick="A.setStatPeriod('hafta')">Bu hafta</button>
    <button class="btn" style="flex:1;${oy?on:""}" onclick="A.setStatPeriod('oy')">Bu oy</button>
    <button class="btn" style="flex:1;${yil?on:""}" onclick="A.setStatPeriod('yil')">Bu yil</button></div>`;
  /* Yilda eng tepada oy qahramonlari turadi — yil bo'yicha ball emas. */
- if(yil)ch+=oyQahramonView(td);
- ch+=podium(yil?"Yil qahramoni":oy?"Oy qahramoni":"Hafta qahramoni",
-   rng[0],rng[1],periodDone(rng[1],cfg));
+ if(yil&&!isFamily())ch+=oyQahramonView(td);
+ ch+=isFamily()
+  ?oilaBallView(rng[0],rng[1],yil?"Bu yil":oy?"Bu oy":"Bu hafta")
+  :podium(yil?"Yil qahramoni":oy?"Oy qahramoni":"Hafta qahramoni",
+    rng[0],rng[1],periodDone(rng[1],cfg));
  /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
  ch+=ballTarkibView(rng[0],rng[1]);
  ch+=duelView();
+ /* Taqqoslash — foizlar va o'rinlar. Oilada ko'rsatilmaydi. */
+ if(isFamily())return ch+oilaTahlilView()+qazoJamoaView();
  const ranked=members.slice().sort((a,b)=>{
   const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
