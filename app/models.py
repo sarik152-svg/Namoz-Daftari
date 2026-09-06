@@ -628,6 +628,39 @@ class ChildRewardCreate(BaseModel):
     _check_child = field_validator("child_id")(_validate_member_id)
 
 
+class ChildSkill(BaseModel):
+    """One thing a child has learned and will not have to learn again.
+
+    A checklist rather than a deed: the point is the horizon. Twelve of twenty-eight
+    letters is a different thing to look at than "taught a letter today".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    child_id: str
+    adult_id: str
+    kind: Literal["harf", "sura", "duo"]
+    item: str
+    day: Date
+
+    _check_child = field_validator("child_id")(_validate_member_id)
+    _check_adult = field_validator("adult_id")(_validate_member_id)
+    _check_item = field_validator("item")(_validate_deed)
+
+
+class ChildSkillCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    child_id: str
+    kind: Literal["harf", "sura", "duo"]
+    item: str
+    day: Date
+
+    _check_child = field_validator("child_id")(_validate_member_id)
+    _check_item = field_validator("item")(_validate_deed)
+
+
 class RewardGoal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -724,6 +757,7 @@ class GroupState(BaseModel):
     duels: list[Duel] = Field(default_factory=list)
     deeds: list[ChildDeed] = Field(default_factory=list)
     rewards: list[ChildReward] = Field(default_factory=list)
+    skills: list[ChildSkill] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -734,4 +768,5 @@ class GroupState(BaseModel):
             "duels": [d.model_dump(mode="json") for d in self.duels],
             "deeds": [d.model_dump(mode="json") for d in self.deeds],
             "rewards": [r.model_dump(mode="json") for r in self.rewards],
+            "skills": [s.model_dump(mode="json") for s in self.skills],
         }

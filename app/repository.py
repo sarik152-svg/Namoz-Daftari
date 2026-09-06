@@ -22,6 +22,7 @@ from app.models import (
     ALL_PRAYERS,
     ChildDeed,
     ChildReward,
+    ChildSkill,
     Duel,
     DuelMember,
     Bonus,
@@ -385,6 +386,7 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         duels=await fetch_duels(pool, circle_id),
         deeds=await fetch_child_deeds(pool, circle_id),
         rewards=await fetch_child_rewards(pool, circle_id),
+        skills=await fetch_child_skills(pool, circle_id),
     )
 
 
@@ -463,6 +465,63 @@ async def add_child_reward(
             circle_id, child_id, given_by, wish, day,
         )
     return ChildReward(**dict(row))
+
+
+async def fetch_child_skills(pool: asyncpg.Pool, circle_id: int) -> list[ChildSkill]:
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT id, child_id, adult_id, kind, item, day FROM child_skills
+             WHERE circle_id = $1 ORDER BY id
+            """,
+            circle_id,
+        )
+    return [ChildSkill(**dict(row)) for row in rows]
+
+
+async def add_child_skill(
+    pool: asyncpg.Pool, circle_id: int, child_id: str, adult_id: str,
+    kind: str, item: str, day: Date,
+) -> ChildSkill | None:
+    """Learning the same letter twice is not a second achievement, so a repeat is
+    quietly the same row rather than an error the parent has to read."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO child_skills (circle_id, child_id, adult_id, kind, item, day)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (child_id, kind, item) DO NOTHING
+            RETURNING id, child_id, adult_id, kind, item, day
+            """,
+            circle_id, child_id, adult_id, kind, item, day,
+        )
+        if row is None:
+            row = await connection.fetchrow(
+                """
+                SELECT id, child_id, adult_id, kind, item, day FROM child_skills
+                 WHERE child_id = $1 AND kind = $2 AND item = $3
+                """,
+                child_id, kind, item,
+            )
+    return None if row is None else ChildSkill(**dict(row))
+
+
+async def delete_child_skill(pool: asyncpg.Pool, skill_id: int, circle_id: int) -> bool:
+    """Anybody in the family may untick one: a letter marked by mistake is the
+    family's to correct, unlike a deed, which is somebody's account of their own day."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "DELETE FROM child_skills WHERE id = $1 AND circle_id = $2 RETURNING id",
+            skill_id, circle_id,
+        )
+    return row is not None
+
+
+async def circle_of_skill(pool: asyncpg.Pool, skill_id: int) -> int | None:
+    async with pool.acquire() as connection:
+        return await connection.fetchval(
+            "SELECT circle_id AS circle FROM child_skills WHERE id = $1", skill_id
+        )
 
 
 async def set_reward_goal(pool: asyncpg.Pool, member_id: str, goal: int) -> bool:

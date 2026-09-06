@@ -262,6 +262,22 @@ four-year-old and a twelve-year-old should not be held to the same number.
 Only whoever recorded a deed may take it back. Nobody else gets to erase what a parent
 says they did with their child.
 
+## Bilim — the alphabet, the suras, the duas
+
+Three checklists under each child: twenty-eight Arabic letters shown as the letters
+themselves, twelve short suras, ten everyday duas. Each is learned once — the unique key
+on `child_skills` says so — and each is worth points that go to the same place a deed's
+do, so learning brings the wish closer too.
+
+A checklist rather than more deeds, because the horizon is the point: "12 / 28" says
+something to a child that "taught a letter today" does not. Which items exist and what
+they are worth lives in the client, as everywhere else; the row records only that this
+child learned this item on this day with this adult.
+
+Unticking is open to anyone in the family, unlike a deed, which only its author can take
+back. A letter marked by mistake is a family's to correct; an account of your own
+afternoon is not.
+
 ## Haftalik vazifa — one good deed a week
 
 On Bugun, between the prayers and the make-up notebook: one deed for the week, one

@@ -418,7 +418,7 @@ async function pull(){
    const j=await api(circleId?"/state?circle="+encodeURIComponent(circleId):"/state");
    members=j.members;data={};
    calls=j.calls||[];khatm=j.khatm||null;duels=j.duels||[];
-   deeds=j.deeds||[];rewards=j.rewards||[];
+   deeds=j.deeds||[];rewards=j.rewards||[];skills=j.skills||[];
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -478,7 +478,7 @@ let duels=[],duelMsg="",duelErr=false,duelOchiq=false,duelSize=1;
 /* Bolalar bo'limi ham /state bilan keladi. Amalning bali shu yerdagi ro'yxatda
    turadi, bazada emas — kitob o'qib berishning qiymati keyin o'zgarsa, tarixni
    qayta yozish shart bo'lmasin. Nishonlar ham shunday. */
-let deeds=[],rewards=[],deedMsg="",deedErr=false;
+let deeds=[],rewards=[],skills=[],deedMsg="",deedErr=false;
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -887,6 +887,34 @@ const BOLA_AMALLAR=[
  {k:"suhbat",n:"Kunini so'rab, oxirigacha eshitish",b:1}
 ];
 const amalBali=k=>{const a=BOLA_AMALLAR.find(x=>x.k===k);return a?a.b:0};
+/* Bilim ro'yxatlari — bir marta o'rganiladi va o'rganilgani turaveradi. Vazifadan
+   farqi shunda: bu yerda oxiri ko'rinib turadi, "28 tadan 12 tasi" degani bolaga
+   "bugun bir harf o'rgandik" degandan ko'ra kuchliroq gapiradi. */
+const HARFLAR=[["alif","ا"],["bo","ب"],["to","ت"],["so","ث"],["jim","ج"],["hho","ح"],
+ ["xo","خ"],["dol","د"],["zol","ذ"],["ro","ر"],["zo","ز"],["sin","س"],["shin","ش"],
+ ["sod","ص"],["zod","ض"],["tto","ط"],["zzo","ظ"],["ayn","ع"],["gayn","غ"],["fo","ف"],
+ ["qof","ق"],["kof","ك"],["lom","ل"],["mim","م"],["nun","ن"],["ha","ه"],["vov","و"],
+ ["yo","ي"]].map(x=>({k:x[0],n:x[1],t:x[0]}));
+const BILIM=[
+ {k:"harf",n:"Arab harflari",b:1,items:HARFLAR},
+ {k:"sura",n:"Qisqa suralar",b:3,items:[
+  ["fotiha","Fotiha"],["ixlos","Ixlos"],["falaq","Falaq"],["nos","Nos"],
+  ["kavsar","Kavsar"],["asr","Asr"],["fil","Fil"],["quraysh","Quraysh"],
+  ["moun","Moun"],["nasr","Nasr"],["masad","Masad"],["kofirun","Kofirun"]
+ ].map(x=>({k:x[0],n:x[1]}))},
+ {k:"duo",n:"Kunlik duolar",b:2,items:[
+  ["ovqato","Ovqatdan oldin"],["ovqatk","Ovqatdan keyin"],["uydanch","Uydan chiqishda"],
+  ["uygakir","Uyga kirishda"],["uyqu","Uxlashdan oldin"],["uygon","Uyg'onganda"],
+  ["kiyim","Kiyim kiyganda"],["safar","Safarga chiqqanda"],["salom","Salom berish"],
+  ["shukr","Shukr aytish"]
+ ].map(x=>({k:x[0],n:x[1]}))}
+];
+const bilimBali=k=>{const b=BILIM.find(x=>x.k===k);return b?b.b:0};
+function bilimHolat(childId,kind){
+ const b=BILIM.find(x=>x.k===kind)||{items:[]};
+ const olingan={};
+ (skills||[]).forEach(s=>{if(s.child_id===childId&&s.kind===kind)olingan[s.item]=s.id});
+ return{bor:Object.keys(olingan).length,jami:b.items.length,olingan:olingan,ro:b}}
 const amalNomi=k=>{const a=BOLA_AMALLAR.find(x=>x.k===k);return a?a.n:k};
 const bolalar=()=>(members||[]).filter(m=>m.is_child);
 /* Kattaning bola bilan yig'gan bali — keyingi bosqichdagi KPI shundan o'sadi. */
@@ -897,8 +925,12 @@ const kattaBolaBali=id=>(deeds||[]).filter(d=>d.adult_id===id)
    qoladi, keyingi tilakkacha qolgani esa jamidan berilganlari ayrilib chiqariladi.
    Sanoqni nolga tushirish bolaning butun mehnatini o'chirib yuborardi. */
 function bolaHolat(m){
+ /* Ball ikki joydan yig'iladi: ota-ona bilan qilingan ish va bolaning o'rgangani.
+    Ikkalasi ham bir xil tilakka olib boradi. */
  const jami=(deeds||[]).filter(d=>d.child_id===m.id)
-   .reduce((n,d)=>n+amalBali(d.deed),0);
+   .reduce((n,d)=>n+amalBali(d.deed),0)
+  +(skills||[]).filter(s=>s.child_id===m.id)
+   .reduce((n,s)=>n+bilimBali(s.kind),0);
  const olingan=(rewards||[]).filter(r=>r.child_id===m.id).length;
  const maqsad=Math.max(1,m.reward_goal||100);
  const bosqich=jami-olingan*maqsad;
@@ -1545,6 +1577,32 @@ const A={
    deedMsg="";deedErr=false;await pull()}
   catch(e){deedMsg=e.message||"Olib tashlab bo'lmadi";deedErr=true}
   render()},
+ bilimKind:null,
+ bilimOch(k){A.bilimKind=A.bilimKind===k?null:k;render()},
+ async addSkill(kind,item){
+  const bs=bolalar();if(!bs.length)return;
+  const kim=bs.some(m=>m.id===A.deedChild)?A.deedChild:bs[0].id;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/child-skills",
+     {method:"POST",body:JSON.stringify({child_id:kim,kind:kind,item:item,day:todayFor(myCfg())})});
+   deedMsg="";deedErr=false;await pull();
+  }catch(e){deedMsg=e.message||"Belgilab bo'lmadi";deedErr=true}
+  render()},
+ async dropSkill(id){
+  try{await api("/child-skills/"+encodeURIComponent(id),{method:"DELETE"});await pull()}
+  catch(e){deedMsg=e.message||"Olib tashlab bo'lmadi";deedErr=true}
+  render()},
+ async setRewardGoal(id){
+  const m=(members||[]).find(x=>x.id===id)||{};
+  const v=prompt("Tilak uchun necha ball kerak? ("+(m.name||id)+")",
+    String(m.reward_goal||100));
+  const n=Math.round(Number(v));
+  if(!isFinite(n)||n<10||n>10000)return;
+  try{
+   await api("/members/"+encodeURIComponent(id)+"/reward-goal",
+     {method:"POST",body:JSON.stringify({reward_goal:n})});
+   await pull();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
  async grantReward(id){
   const m=(members||[]).find(x=>x.id===id)||{};
   const tilak=(prompt("Nima so'radi? (ixtiyoriy)")||"").slice(0,200);
@@ -1962,7 +2020,10 @@ function syncScreen(){
       <button class="btn btn-wide" style="margin-top:7px;font-size:11px;${ayol
         ?"border-color:var(--jade);color:var(--jade)":""}"
         onclick="A.setWomanMode('${esc(m.id)}',${ayol?"false":"true"})">${ayol
-        ?"\u{1F338} Ayollar rejimi yoqilgan — o'chirish":"Ayollar rejimini yoqish"}</button>`})()}</div>`).join("")}
+        ?"\u{1F338} Ayollar rejimi yoqilgan — o'chirish":"Ayollar rejimini yoqish"}</button>
+      ${prof.is_child?`<button class="btn btn-wide" style="margin-top:7px;font-size:11px"
+        onclick="A.setRewardGoal('${esc(m.id)}')">\u{1F381} Tilak uchun ${
+          prof.reward_goal||100} ball — o'zgartirish</button>`:""}`})()}</div>`).join("")}
   <p class="muted small" style="margin:0 0 12px;line-height:1.6">Bolalar rejimida qarz ham,
    jarima vazifasi ham yozilmaydi — bola yulduzcha yig'adi. Haftalik jamoa nishonini ham
    to'smaydi, ya'ni bola normaga yetmagani uchun oila nishondan quruq qolmaydi.</p>
@@ -2093,6 +2154,26 @@ function bolalarPanel(cfg){
      esc(a.n)} · +${a.b}</option>`).join("")}</select>
   <button class="btn btn-green btn-wide" style="margin-top:8px" onclick="A.addDeed()">\u2713 Belgilash</button>
   ${deedMsg?`<div class="${deedErr?"clay":"jade"} small" style="margin-top:8px">${esc(deedMsg)}</div>`:""}`;
+ h+=`<div style="margin-top:14px;padding-top:11px;border-top:1px solid var(--line)">
+  <div class="eyebrow" style="margin-bottom:8px">Bilim</div>`;
+ BILIM.forEach(b=>{
+  const st=bilimHolat(kim,b.k),ochiq=A.bilimKind===b.k;
+  const pct=st.jami?Math.round(st.bor/st.jami*100):0;
+  h+=`<div style="margin-bottom:9px">
+   <div class="flex between center" style="font-size:12.5px;margin-bottom:4px">
+    <span>${esc(b.n)} <span class="muted tiny">· har biri +${b.b}</span></span>
+    <span class="flex center gap2"><span class="${st.bor?"brass":"muted"}">${st.bor} / ${st.jami}</span>
+     <button class="link" style="font-size:11px" onclick="A.bilimOch('${b.k}')">${
+       ochiq?"yopish":"ochish"}</button></span></div>
+   <div class="bar"><div style="width:${pct}%;background:var(--jade)"></div></div>
+   ${ochiq?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:9px">${
+     b.items.map(it=>{const bor=st.olingan[it.k];
+      return `<button class="btn" style="padding:6px 9px;font-size:${b.k==="harf"?"17":"11"}px;${
+        bor?"background:var(--jade);color:#08140F;border-color:transparent":""}"
+        onclick="${bor?`A.dropSkill(${bor})`:`A.addSkill('${b.k}','${it.k}')`}"
+        title="${esc(it.t||it.n)}">${esc(it.n)}</button>`}).join("")}</div>`:""}
+  </div>`});
+ h+=`</div>`;
  if(bugun.length){
   h+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
    <div class="eyebrow" style="margin-bottom:6px">Bugun</div>`;

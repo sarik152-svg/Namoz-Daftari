@@ -36,6 +36,7 @@ from app.models import (
     ChildDeedCreate,
     ChildFlag,
     ChildRewardCreate,
+    ChildSkillCreate,
     CircleCreate,
     CircleMemberAdd,
     CircleUpdate,
@@ -678,6 +679,41 @@ async def grant_child_reward(
         pool, circle_id, body.child_id, session.member_id, body.wish, body.day
     )
     return reward.model_dump(mode="json")
+
+
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/child-skills", status_code=201)
+async def add_child_skill(
+    circle_id: int, body: ChildSkillCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Tick off a letter, a sura or a dua the child now knows."""
+    pool: asyncpg.Pool = request.app.state.pool
+    await _require_family(request, session, circle_id)
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi belgilay olmaydi", 403)
+    if not await repository.is_circle_member(pool, circle_id, body.child_id):
+        raise _error("not_in_circle", "Bola bu oilada emas", status.HTTP_404_NOT_FOUND)
+    skill = await repository.add_child_skill(
+        pool, circle_id, body.child_id, session.member_id, body.kind, body.item, body.day
+    )
+    if skill is None:
+        raise _error("no_skill", "Yozib bo'lmadi", status.HTTP_404_NOT_FOUND)
+    return skill.model_dump(mode="json")
+
+
+@app.delete(f"{API_PREFIX}/child-skills/{{skill_id}}")
+async def drop_child_skill(
+    skill_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Untick one. Anybody in the family may: a letter marked by mistake is theirs to
+    correct, unlike a deed, which is one person's account of their own day."""
+    pool: asyncpg.Pool = request.app.state.pool
+    circle_id = await repository.circle_of_skill(pool, skill_id)
+    if circle_id is None:
+        raise _error("no_skill", "Topilmadi", status.HTTP_404_NOT_FOUND)
+    await _require_family(request, session, circle_id)
+    await repository.delete_child_skill(pool, skill_id, circle_id)
+    return {"ok": True}
 
 
 @app.post(f"{API_PREFIX}/members/{{member_id}}/reward-goal")
