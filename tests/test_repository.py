@@ -315,3 +315,15 @@ async def test_the_sender_of_a_challenge_has_already_accepted_it():
     said_yes = {m.member_id for m in duel.members if m.confirmed}
     assert said_yes == {"sardor"}
     assert {m.member_id for m in duel.members} == {"sardor", "behruz", "hikmat", "aziz"}
+
+
+@pytest.mark.asyncio
+async def test_doses_are_bounded_by_their_course_not_by_a_day_window():
+    """A ninety-day course used to come back missing its first two months of doses,
+    and the app reports a dose with no row as one nobody swallowed — so a long course
+    would show two months of pills as skipped."""
+    connection = FakeConnection()
+    await repository.fetch_doses(FakePool(connection), circle_id=1)
+    sent = " ".join(connection.sql)
+    assert "JOIN medicines" in sent
+    assert "d.day >=" not in sent, "the window belongs on the course, not on the dose"

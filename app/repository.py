@@ -598,13 +598,20 @@ async def fetch_medicines(pool: asyncpg.Pool, circle_id: int) -> list[Medicine]:
 
 
 async def fetch_doses(pool: asyncpg.Pool, circle_id: int) -> list[MedicineDose]:
+    """Every dose of the courses that are loaded, however far back they run.
+
+    Bounding these by a day window instead was wrong: a ninety-day course would come
+    back with its first two months of doses missing, and the app, seeing no row,
+    would report them as pills nobody swallowed. The courses are already bounded, and
+    each is at most a year, so this is bounded too.
+    """
     async with pool.acquire() as connection:
         rows = await connection.fetch(
             """
             SELECT d.medicine_id, d.day, d.slot, d.taken
               FROM medicine_doses d
               JOIN medicines m ON m.id = d.medicine_id
-             WHERE m.circle_id = $1 AND d.day >= CURRENT_DATE - 30
+             WHERE m.circle_id = $1 AND m.ends >= CURRENT_DATE - 30
              ORDER BY d.day, d.slot
             """,
             circle_id,
