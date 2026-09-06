@@ -262,6 +262,19 @@ never disagrees with the records underneath it.
 Friends keep the podium exactly as it was. `Ball qayerdan` stays for both: it explains a
 number rather than ranking anybody.
 
+## Boshlang'ich ball — joining after everybody else
+
+Somebody who starts on a Thursday is four days behind through no fault of theirs, and a
+first screen that says so is a discouraging one. `members.start_ball` is an opening
+balance the circle owner can give them, and `start_day` is the day it belongs to — so it
+counts once in the week, month and year containing it and never again.
+
+It is **not** prayer marks, and that is the whole point. Writing "Vaqtida: 25" for
+prayers somebody did not make would put words in their mouth about their own worship, and
+their breakdown would then lie to them for as long as they used the app. The balance gets
+its own row in `Ball qayerdan` instead, and `ontime`, `qazo` and `bad` all stay at zero
+until they actually pray something.
+
 ## Adding a small child
 
 A four-year-old has no use for a login and a PIN, and asking a parent to invent both

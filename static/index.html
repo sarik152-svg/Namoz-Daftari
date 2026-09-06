@@ -627,7 +627,12 @@ function prayerRange(u,m,a,z){
     qolib ketgan, endi uzilgan qazolar (plyus). Ikkalasi butunlay boshqa narsa,
     shuning uchun nomi ham boshqa: bittasini ikkinchisi bilan chalkashtirish shu
     yerda eng oson qilinadigan xato. */
- const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,amal:0,amalYoq:0,ball:0};
+ const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,amal:0,amalYoq:0,boshlangich:0,ball:0};
+ /* Keyin qo'shilgan odamning ochilish bali. U namoz emas va namoz sifatida
+    sanalmaydi — o'z qatorida turadi. Sanasi bor, shuning uchun o'zi tegishli
+    hafta, oy va yilda bir martadan kiradi, keyin qaytmaydi. */
+ if(m&&m.start_ball&&m.start_day&&m.start_day>=a&&m.start_day<=z){
+  o.boshlangich=m.start_ball;o.ball+=m.start_ball}
  if(!boshi)return o;
  /* Chegara bir yilga yetishi kerak: ilgari 40 kun edi va yil bo'yicha hisob
     jimgina fevralda to'xtab qolardi. */
@@ -819,7 +824,8 @@ const TARKIB=[
  {n:"O'qilmagan",k:"bad"},
  {n:"Eski qazo",k:"eski"},
  {n:"Haftalik vazifa",k:"amal"},
- {n:"Vazifa qolgan",k:"amalYoq"}
+ {n:"Vazifa qolgan",k:"amalYoq"},
+ {n:"Boshlang'ich",k:"boshlangich"}
 ];
 function ballTarkib(m,o,k){
  const c=cfgNow(m);
@@ -830,6 +836,7 @@ function ballTarkib(m,o,k){
  if(k==="eski")return o.eski*QAZO_BALL;
  if(k==="amal")return o.amal*AMAL_BALL;
  if(k==="amalYoq")return o.amalYoq*-AMAL_JARIMA;
+ if(k==="boshlangich")return o.boshlangich;
  return 0}
 
 function ballTarkibView(a,z){
@@ -1700,6 +1707,22 @@ const A={
   try{await api("/child-skills/"+encodeURIComponent(id),{method:"DELETE"});await pull()}
   catch(e){deedMsg=e.message||"Olib tashlab bo'lmadi";deedErr=true}
   render()},
+ /* Keyin qo'shilgan odam aybsiz ravishda orqada qoladi. Yechim — ochiq
+    boshlang'ich ball, soxta namoz emas: ibodat yozuvini birovning nomidan yozib
+    bo'lmaydi, "Vaqtida: 25" esa aynan shu bo'lardi. */
+ async setStartBall(id){
+  const m=(members||[]).find(x=>x.id===id)||{};
+  const v=prompt("Boshlang'ich ball ("+(m.name||id)+") \u2014 keyin qo'shilgani uchun."
+   +"\nBu namoz emas, alohida qator bo'lib turadi.",String(m.start_ball||0));
+  if(v===null)return;
+  const n=Math.round(Number(v));
+  if(!isFinite(n)||n<0||n>1000)return;
+  try{
+   await api("/members/"+encodeURIComponent(id)+"/start-ball",
+     {method:"POST",body:JSON.stringify({start_ball:n,
+       start_day:n?todayFor(myCfg()):null})});
+   await A.loadRoster();await pull();render()}
+  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
  async setKpi(id){
   const m=(members||[]).find(x=>x.id===id)||{};
   const so=(nom,hozir)=>{
@@ -2186,7 +2209,10 @@ function syncScreen(){
         ?"\u{1F338} Ayollar rejimi yoqilgan — o'chirish":"Ayollar rejimini yoqish"}</button>
       ${prof.is_child?`<button class="btn btn-wide" style="margin-top:7px;font-size:11px"
         onclick="A.setRewardGoal('${esc(m.id)}')">\u{1F381} Tilak uchun ${
-          prof.reward_goal||100} ball — o'zgartirish</button>`:""}`})()}</div>`).join("")}
+          prof.reward_goal||100} ball — o'zgartirish</button>`
+       :`<button class="btn btn-wide" style="margin-top:7px;font-size:11px"
+        onclick="A.setStartBall('${esc(m.id)}')">\u{1F3C1} Boshlang'ich ball: ${
+          prof.start_ball||0}</button>`}`})()}</div>`).join("")}
   <p class="muted small" style="margin:0 0 12px;line-height:1.6">Bolalar rejimida qarz ham,
    jarima vazifasi ham yozilmaydi — bola yulduzcha yig'adi. Haftalik jamoa nishonini ham
    to'smaydi, ya'ni bola normaga yetmagani uchun oila nishondan quruq qolmaydi.</p>

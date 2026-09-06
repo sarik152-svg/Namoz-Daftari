@@ -353,6 +353,11 @@ class MemberProfile(BaseModel):
     kpi_easy: int = Field(default=0, ge=0, le=1000)
     kpi_mid: int = Field(default=0, ge=0, le=1000)
     kpi_hard: int = Field(default=0, ge=0, le=1000)
+    # An opening balance for somebody who joined after the others, and the day it
+    # belongs to. Dated so it counts once in the week, month and year containing it
+    # rather than being added to every period for ever.
+    start_ball: int = Field(default=0, ge=0, le=1000)
+    start_day: Date | None = None
     # Ayollar rejimi: a prayer caught up the same day earns a quarter point instead
     # of costing one. On time and left-until-tomorrow are both judged as anyone's.
     woman_mode: bool = False
@@ -679,6 +684,16 @@ class KpiTargets(BaseModel):
     kpi_easy: int = Field(default=0, ge=0, le=1000)
     kpi_mid: int = Field(default=0, ge=0, le=1000)
     kpi_hard: int = Field(default=0, ge=0, le=1000)
+
+
+class StartBall(BaseModel):
+    """An opening balance and the day it belongs to. Deliberately not prayer marks:
+    a record of worship is nobody's to write on somebody else's behalf."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start_ball: int = Field(ge=0, le=1000)
+    start_day: Date | None = None
 
 
 class BonusAmounts(BaseModel):

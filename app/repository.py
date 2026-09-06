@@ -45,7 +45,7 @@ from app.security import decrypt_pin, encrypt_pin, generate_pin, new_session_tok
 
 logger = logging.getLogger("namoz.repo")
 
-_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt, reward_goal, kpi_easy, kpi_mid, kpi_hard"
+_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt, reward_goal, kpi_easy, kpi_mid, kpi_hard, start_ball, start_day"
 _SEED_FIELD_COUNT = 9
 
 # asyncpg binds parameters by their Postgres type, so a DATE column needs a real
@@ -275,7 +275,8 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
             """
             SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa,
                    m.ia, m.is_child, m.work_shift, m.woman_mode, m.qazo_debt,
-                   m.reward_goal, m.kpi_easy, m.kpi_mid, m.kpi_hard
+                   m.reward_goal, m.kpi_easy, m.kpi_mid, m.kpi_hard,
+                   m.start_ball, m.start_day
               FROM members m
               JOIN circle_members cm ON cm.member_id = m.id
              WHERE cm.circle_id = $1
@@ -551,6 +552,20 @@ async def set_bonuses(
             circle_id, easy, mid, hard,
         )
     return None if row is None else Circle(**dict(row))
+
+
+async def set_start_ball(
+    pool: asyncpg.Pool, member_id: str, ball: int, day: Date | None
+) -> bool:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            UPDATE members SET start_ball = $2, start_day = $3, updated_at = now()
+             WHERE id = $1 RETURNING id
+            """,
+            member_id, ball, day,
+        )
+    return row is not None
 
 
 async def set_reward_goal(pool: asyncpg.Pool, member_id: str, goal: int) -> bool:

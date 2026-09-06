@@ -48,6 +48,7 @@ from app.models import (
     LoginRequest,
     MemberData,
     KpiTargets,
+    StartBall,
     QazoDebt,
     RewardGoal,
     WomanModeFlag,
@@ -758,6 +759,33 @@ async def set_bonuses(
     if circle is None:
         raise _error("no_circle", "Doira topilmadi", status.HTTP_404_NOT_FOUND)
     return circle.model_dump()
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/start-ball")
+async def set_start_ball(
+    member_id: str, body: StartBall, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """An opening balance for somebody who joined after the others.
+
+    Not prayer marks. Somebody who starts a week late is behind through no fault of
+    theirs, and the fix is a balance that says what it is — writing prayers they did
+    not make would put words in their mouth about their own worship.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    if not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error(
+                "not_circle_owner", "Buni doira egasi belgilaydi",
+                status.HTTP_403_FORBIDDEN,
+            )
+    if not await repository.set_start_ball(
+        pool, member_id, body.start_ball, body.start_day
+    ):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
 
 
 @app.post(f"{API_PREFIX}/members/{{member_id}}/reward-goal")
