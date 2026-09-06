@@ -1872,6 +1872,31 @@ const A={
   data[me]=Object.assign({},data[me],
     {places:((data[me].places)||[]).filter(x=>x.d!==d)});
   placeMsg="";date=todayFor(myCfg());render();await pushData(me);render()},
+ /* Kichkina farzand hech qachon ilovaga kirmaydi, shuning uchun undan login ham,
+    PIN ham so'ralmaydi: ular yasab beriladi va hech kimga kerak bo'lmaydi. Shahar
+    esa qo'shayotgan ota-onanikidan olinadi — bola u bilan yashaydi. */
+ async addChild(){
+  if(!circleId)return;
+  const name=(prompt("Farzandning ismi")||"").trim();
+  if(!name)return;
+  const c=myCfg();
+  const pin=String(Math.floor(1000+Math.random()*9000));
+  let javob;
+  try{
+   javob=await api("/circles/"+encodeURIComponent(circleId)+"/members",{method:"POST",
+     body:JSON.stringify({new_member:{id:slugId(name),name:name,city:c.city,
+       lat:c.lat,lng:c.lng,tz:c.tz,asr:c.asr,fa:c.fa,ia:c.ia,pin:pin}})});
+  }catch(e){famMsg=e.message||"Qo'shib bo'lmadi";famErr=true;render();return}
+  /* Login band bo'lsa server bo'shini o'zi tanlaydi — bayroqni javobdagi id ga
+     qo'yamiz, biz so'raganiga emas. */
+  const id=(javob&&javob.member&&javob.member.id)||slugId(name);
+  try{
+   await api("/members/"+encodeURIComponent(id)+"/child",
+     {method:"POST",body:JSON.stringify({is_child:true})});
+  }catch(e){famMsg=name+" qo'shildi, lekin bolalar rejimini yoqib bo'lmadi";
+   famErr=true;await A.loadRoster();await pull();render();return}
+  famMsg=name+" qo'shildi \u2014 bolalar rejimi yoqilgan.";famErr=false;
+  await A.loadRoster();await pull();render()},
  async addMember(){
   const err=document.getElementById("f_err");
   const name=document.getElementById("f_name").value.trim();
@@ -2148,7 +2173,12 @@ function syncScreen(){
    bo'ladigan odam uchun: peshin, asr va shom shu kun ichida qazo qilib o'qilsa ham
    vaqtida hisoblanadi. Bomdod, xufton va eski qazolar hammaniki kabi, keyingi
    kunga qolgan namoz esa baribir −1.</p>
-  <button class="btn btn-green btn-wide" onclick="A.go('add')">+ A'zo qo'shish</button>`:""}
+  <button class="btn btn-green btn-wide" onclick="A.go('add')">+ A'zo qo'shish</button>
+  ${isFamily()?`<button class="btn btn-wide" style="margin-top:8px"
+    onclick="A.addChild()">\u{1F9F8} + Farzand qo'shish</button>
+   <p class="muted small" style="margin:8px 0 0;line-height:1.6">Kichkina farzand uchun:
+    faqat ismini yozasiz. Login ham, PIN ham so'ralmaydi \u2014 u ilovaga kirmaydi,
+    siz uning nomidan belgilaysiz. Bolalar rejimi darrov yoqiladi.</p>`:""}`:""}
  <div class="label">Oilam</div>
  <p class="muted small" style="margin:0 0 9px;line-height:1.6">Oila alohida doira: uni
   faqat siz va oiladagilar ko'radi, do'stlar guruhiga ko'rinmaydi. Namozni bir marta
@@ -2233,7 +2263,16 @@ const qazoMuddat=kun=>{
 function bolalarPanel(cfg){
  if(!isFamily())return "";
  const bs=bolalar();
- if(!bs.length)return "";
+ /* Bo'sh bo'lsa ham ko'rinadi. Jimgina yo'qolib qolsa, odam bo'limni umuman
+    yo'q deb o'ylaydi — aynan shu bo'ldi. */
+ if(!bs.length)return `<div class="panel p14 mt14">
+  <div class="eyebrow">Bolalar</div>
+  <p class="muted small" style="margin:8px 0 0;line-height:1.65">Bu oilada hali
+   farzand qo'shilmagan. Sozlamalardan <b>Farzand qo'shing</b> — faqat ismini
+   yozasiz, login ham, PIN ham kerak emas. Shundan keyin bu yerda ular bilan
+   qilingan ishlarni belgilaysiz.</p>
+  <button class="btn btn-green btn-wide" style="margin-top:11px" onclick="A.go('sync')">Sozlamalarga</button>
+ </div>`;
  const kim=bs.some(m=>m.id===A.deedChild)?A.deedChild:bs[0].id;
  const bola=bs.find(m=>m.id===kim),h0=bolaHolat(bola);
  const td=todayFor(cfg);

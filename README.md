@@ -262,6 +262,19 @@ never disagrees with the records underneath it.
 Friends keep the podium exactly as it was. `Ball qayerdan` stays for both: it explains a
 number rather than ranking anybody.
 
+## Adding a small child
+
+A four-year-old has no use for a login and a PIN, and asking a parent to invent both
+before they can record that they read to their son is the wrong first step. **Farzand
+qo'shish** takes a name and nothing else: the id and the PIN are generated and never
+shown, the city is copied from the parent adding them, and children's mode is switched
+on in the same breath. They are a member like anybody else underneath — it is only the
+form that shrinks.
+
+The children's panel also stays on screen when a family has no children yet, saying what
+is missing. It used to return nothing at all, and a family with no children read that as
+the feature not existing.
+
 ## Bolalar bo'limi — what a parent did with a child
 
 Only in a family, and only when there are children in it. A parent picks the child and
