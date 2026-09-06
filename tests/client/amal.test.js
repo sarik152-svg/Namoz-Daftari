@@ -113,4 +113,36 @@ module.exports = {
     assert.ok(c.amalBajarilgan(week("2026-08-31", "2026-09-06", "2026-09-01"), wk));
     assert.ok(!c.amalBajarilgan(week("2026-08-31", "2026-09-06", null), wk));
   },
+
+  "ticking it on two days of one week is still one deed"(assert) {
+    /* One deed a week is the whole rule. Crediting each ticked day paid twice for a
+       slip of the thumb, which is what Sardor hit. */
+    const c = client();
+    const bir = week("2026-08-31", "2026-09-06", "2026-09-02");
+    const ikki = week("2026-08-31", "2026-09-06", "2026-09-02");
+    ikki.days["2026-09-04"] = { ...ikki.days["2026-09-04"], amal: true };
+    const a = c.prayerRange(bir, SARDOR, "2026-08-31", "2026-09-06");
+    const b = c.prayerRange(ikki, SARDOR, "2026-08-31", "2026-09-06");
+    assert.strictEqual(b.amal, 1, "one deed, however many times it was tapped");
+    assert.strictEqual(b.ball, a.ball, "and worth the same as ticking it once");
+  },
+
+  "two weeks each pay once"(assert) {
+    const c = client("2026-09-09T07:00:00Z");
+    const u = week("2026-08-31", "2026-09-06", "2026-09-02");
+    Object.assign(u.days, week("2026-09-07", "2026-09-08", "2026-09-07").days);
+    const o = c.prayerRange(u, SARDOR, "2026-08-31", "2026-09-13");
+    assert.strictEqual(o.amal, 2, "a deed in each of two weeks");
+  },
+
+  async "and it cannot be ticked twice in the first place"(assert) {
+    const c = client();
+    await c.A.go("app");
+    await c.A.setAmal(true);
+    const before = c.calls.filter(x => x.method === "PUT").length;
+    c.setState({ date: "2026-09-04" });
+    await c.A.setAmal(true);
+    assert.strictEqual(c.calls.filter(x => x.method === "PUT").length, before,
+      "the week already has its deed");
+  },
 };

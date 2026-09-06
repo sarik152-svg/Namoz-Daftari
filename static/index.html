@@ -629,6 +629,14 @@ function prayerRange(u,m,a,z){
  /* Hisob a'zo daftar tuta boshlagan kundan boshlanadi — score() dagidek. Aks holda
     guruhga keyin qo'shilgan odam o'zi yo'q kunlar uchun jarima olib qolardi. */
  const boshi=Object.keys(days).sort()[0];
+ /* Haftalik vazifa haftaga bitta. Belgi kunga yoziladi, lekin ball haftaniki, va
+    ilgari belgilangan HAR BIR kunga +2 berilardi — ikki marta bosilgani ikki barobar
+    to'lardi. Endi har haftaning eng birinchi belgilangan kuni sanaladi, qolganlari
+    o'sha bitta ishning takroriy belgisi. */
+ const amalKuni={};
+ Object.keys(days).filter(d=>days[d].amal).sort().forEach(d=>{
+  const w=weekRange(d)[0];
+  if(!(w in amalKuni))amalKuni[w]=d});
  /* `qazo` — shu kun ichida kechikib o'qilganlar (minus). `eski` — yillar oldin
     qolib ketgan, endi uzilgan qazolar (plyus). Ikkalasi butunlay boshqa narsa,
     shuning uchun nomi ham boshqa: bittasini ikkinchisi bilan chalkashtirish shu
@@ -656,7 +664,7 @@ function prayerRange(u,m,a,z){
      yoziladi; bajarilmagani esa hafta YOPILGANDA, uning oxirgi kuniga. Shu tufayli
      u kunlar sikliga tabiiy tushadi va oraliq qaysi haftani o'z ichiga olsa,
      o'shaniki hisoblanadi. */
-  if(day.amal){o.amal++;o.ball+=AMAL_BALL}
+  if(day.amal&&amalKuni[weekRange(d)[0]]===d){o.amal++;o.ball+=AMAL_BALL}
   const wk=weekRange(d);
   if(wk[1]===d&&d<td&&!(m&&m.is_child)&&!amalBajarilgan(u,wk)){
    o.amalYoq++;o.ball-=AMAL_JARIMA}}
@@ -1878,6 +1886,10 @@ const A={
  /* Haftalik vazifa: belgi bugungi kunga tushadi, hisob esa haftaniki — hafta
     ichida qaysi kuni bosilgani ahamiyatsiz. */
  async setAmal(on){
+  /* Hafta allaqachon bajarilgan bo'lsa, ikkinchi belgi qo'yilmaydi: u qo'shimcha
+     ish emas, barmoq tegib ketgani. */
+  const wk=weekRange(date);
+  if(on&&amalBajarilgan(data[me],wk))return;
   const day=Object.assign({},(data[me].days||{})[date]||{});
   if(on)day.amal=true;else delete day.amal;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});

@@ -371,9 +371,13 @@ stored — `amal` on the day it was ticked, an ordinary toggle like `quran` rath
 write-once mark, since the member may still be in the middle of it. The **week** is what
 counts, not the day: `amalBajarilgan` asks whether any day in the week carries the tick.
 
-In the scoring loop the credit lands on the day it was ticked and the penalty on the
-week's **last** day, and only once that day is behind us — so a week still running owes
-nothing, and any range that contains the week picks it up naturally.
+In the scoring loop the credit lands on the **first** ticked day of the week and the
+penalty on the week's **last** day, and only once that day is behind us — so a week still
+running owes nothing, and any range that contains the week picks it up naturally.
+
+Crediting every ticked day was the first version and it was wrong: two taps in one week
+paid twice for one deed. The rule is one deed a week, so the second tick is a thumb
+slipping rather than more work, and the app now refuses to write it at all.
 
 ## Qazo daftari — prayers made up from years ago
 
