@@ -283,6 +283,14 @@ late), `vaqtida`, `kechikkan`, and `ichilmagan` — which only a closed day can 
 Anybody in the family may tick a dose: giving a child their syrup is not something only
 the child can record.
 
+**A finished course stays listed** under its own heading with its final tally, and only
+disappears when somebody deletes it. It used to drop off the list the day it ended, which
+took the delete button with it and left no way to clear it away.
+
+Underneath, a family tally: every course added up per person, with the share taken on
+time. That share is out of the doses **already due** — counting hours that have not
+arrived yet against somebody would mean nobody could ever be at a hundred per cent.
+
 ## Boshlang'ich ball — joining after everybody else
 
 Somebody who starts on a Thursday is four days behind through no fault of theirs, and a

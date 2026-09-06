@@ -15,7 +15,7 @@ const DORI = { id: 1, member_id: "zuhra", name: "Vitamin D",
 /* 2026-09-07 09:20Z is 14:20 in Toshkent — the morning dose is due and overdue. */
 function client(at = "2026-09-07T09:20:00Z", patch = {}) {
   const loaded = loadClient({
-    at, expose: ["doriHolat", "DORI_KECHIKISH", "doriKunlik"],
+    at, expose: ["doriHolat", "DORI_KECHIKISH", "doriKunlik", "doriJamoa"],
     routes: {
       "/circles/2/medicines": DORI,
       "/medicines/1/doses": { ok: true },
@@ -122,5 +122,68 @@ module.exports = {
     assert.strictEqual(JSON.stringify(sent.body.times), JSON.stringify(["09:00", "21:00"]));
     assert.strictEqual(sent.body.days, 14);
     assert.strictEqual(sent.body.member_id, "zuhra");
+  },
+
+  /* ------------------------------------------------ tugagan kurslar */
+  async "a finished course stays on screen so it can be cleared away"(assert) {
+    /* It used to drop off the list the day it ended, which left no way to delete
+       it — the button was on the row that had gone. */
+    const tugagan = { ...DORI, id: 2, name: "Antibiotik",
+      starts: "2026-08-20", ends: "2026-08-27" };
+    const c = client("2026-09-07T09:20:00Z", { medicines: [DORI, tugagan] });
+    await c.A.go("app");
+    c.A.setTab("sunnat");
+    const h = c.html;
+    assert.ok(h.includes("Antibiotik"), "the finished course is still listed");
+    assert.ok(h.includes("Tugagan"), "under a heading that says so");
+    assert.ok(h.includes("A.dropMedicine(2)"), "and can be removed");
+  },
+
+  /* ------------------------------------------------ oila dashboard */
+  "the family tally adds every course up per person"(assert) {
+    const boshqa = { ...DORI, id: 2, member_id: "sardor", name: "Magniy",
+      times: ["08:00"], starts: "2026-09-06", ends: "2026-09-10" };
+    const c = client("2026-09-07T09:20:00Z", {
+      medicines: [DORI, boshqa],
+      doses: [
+        { medicine_id: 1, day: "2026-09-06", slot: "08:00", taken: "08:10" },
+        { medicine_id: 1, day: "2026-09-06", slot: "20:00", taken: "23:00" },
+        { medicine_id: 2, day: "2026-09-06", slot: "08:00", taken: "08:00" },
+      ],
+    });
+    const j = c.doriJamoa();
+    const zuhra = j.rows.find(x => x.m.id === "zuhra");
+    const sardor = j.rows.find(x => x.m.id === "sardor");
+    assert.strictEqual(zuhra.vaqtida, 1);
+    assert.strictEqual(zuhra.kechikkan, 1);
+    assert.strictEqual(sardor.vaqtida, 1);
+    assert.strictEqual(j.jami.vaqtida, 2, "and the whole family together");
+    assert.strictEqual(j.jami.kechikkan, 1);
+  },
+
+  "somebody with no medicine is not on the board"(assert) {
+    const c = client();
+    assert.ok(!c.doriJamoa().rows.some(x => x.m.id === "sardor"),
+      "only the people actually on a course");
+  },
+
+  "the share taken properly is out of the doses already due"(assert) {
+    const c = client("2026-09-07T09:20:00Z", {
+      doses: [{ medicine_id: 1, day: "2026-09-06", slot: "08:00", taken: "08:10" }],
+    });
+    const zuhra = c.doriJamoa().rows.find(x => x.m.id === "zuhra");
+    assert.strictEqual(zuhra.vaqtida + zuhra.kechikkan + zuhra.ichilmagan, zuhra.kutilgan,
+      "what is still to come cannot count against her");
+    assert.strictEqual(zuhra.foiz, Math.round(1 / zuhra.kutilgan * 100));
+  },
+
+  async "the dashboard sits under the medicines"(assert) {
+    const c = client("2026-09-07T09:20:00Z",
+      { doses: [{ medicine_id: 1, day: "2026-09-06", slot: "08:00", taken: "08:10" }] });
+    await c.A.go("app");
+    c.A.setTab("sunnat");
+    const h = c.html;
+    assert.ok(h.includes("Oila bo'yicha"), "expected the family tally");
+    assert.ok(h.indexOf("Vitamin D") < h.indexOf("Oila bo'yicha"), "below the courses");
   },
 };

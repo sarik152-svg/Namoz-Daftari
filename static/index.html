@@ -999,6 +999,25 @@ function doriHolat(d){
    else o.qolgan++})}
  return o}
 
+/* Oila bo'yicha yig'ma hisob: har bir odamning barcha kurslari birga. Foiz
+   allaqachon kelib bo'lgan dozalardan olinadi — hali vaqti kirmagan doza odamning
+   hisobiga yozilsa, u hech qachon 100 foizga chiqolmasdi. */
+function doriJamoa(){
+ const kishi={};
+ (medicines||[]).forEach(d=>{
+  const o=doriHolat(d);
+  const k=kishi[d.member_id]||(kishi[d.member_id]={vaqtida:0,kechikkan:0,ichilmagan:0});
+  k.vaqtida+=o.vaqtida;k.kechikkan+=o.kechikkan;k.ichilmagan+=o.ichilmagan});
+ const rows=(members||[]).filter(m=>kishi[m.id]).map(m=>{
+  const k=kishi[m.id],kutilgan=k.vaqtida+k.kechikkan+k.ichilmagan;
+  return{m:m,vaqtida:k.vaqtida,kechikkan:k.kechikkan,ichilmagan:k.ichilmagan,
+   kutilgan:kutilgan,foiz:kutilgan?Math.round(k.vaqtida/kutilgan*100):0}});
+ const jami={vaqtida:0,kechikkan:0,ichilmagan:0,kutilgan:0};
+ rows.forEach(r=>{jami.vaqtida+=r.vaqtida;jami.kechikkan+=r.kechikkan;
+  jami.ichilmagan+=r.ichilmagan;jami.kutilgan+=r.kutilgan});
+ jami.foiz=jami.kutilgan?Math.round(jami.vaqtida/jami.kutilgan*100):0;
+ return{rows:rows,jami:jami}}
+
 /* ══════════════ BOLALAR ══════════════ */
 /* Ota yoki ona bola bilan nima qilgani. Bitta ish ikkovini ham rag'batlantiradi:
    bola tilagiga yaqinlashadi, katta esa o'z hisobini to'ldiradi — aks holda
@@ -2908,7 +2927,8 @@ function doriPanel(){
    ${doriMsg?`<div class="${doriErr?"clay":"jade"} small" style="margin-top:8px">${esc(doriMsg)}</div>`:""}
   </div>`}
  const faol=(medicines||[]).filter(d=>d.ends>=td);
- if(!faol.length&&!A.doriOchiq){
+ const tugagan=(medicines||[]).filter(d=>d.ends<td);
+ if(!faol.length&&!tugagan.length&&!A.doriOchiq){
   h+=`<p class="muted small" style="margin:11px 0 0;line-height:1.6">Hozircha dori
    qo'shilmagan. Qo'shsangiz, har kuni qaysi soatda ichish kerakligi shu yerda
    chiqadi va belgilab borasiz.</p>`}
@@ -2941,6 +2961,54 @@ function doriPanel(){
     <span class="clay">${jam.ichilmagan} ichilmagan</span>${
     jam.qolgan?" \u00B7 "+jam.qolgan+" qoldi":""}</div>
   </div>`});
+
+ /* Kursi tugagan dori ro'yxatdan tushib ketmaydi: tugmasi bilan birga yo'qolsa,
+    uni o'chirishning iloji qolmasdi. */
+ if(tugagan.length){
+  h+=`<div class="label">Tugagan kurslar</div>`;
+  tugagan.forEach(d=>{
+   const kishi=(members||[]).find(m=>m.id===d.member_id),jam=doriHolat(d);
+   const jamiDoza=jam.vaqtida+jam.kechikkan+jam.ichilmagan;
+   h+=`<div class="panel p14 mb10 flex between center">
+    <div style="min-width:0">
+     <div style="font-size:14px">${esc(d.name)}</div>
+     <div class="muted tiny" style="margin-top:3px">${
+       kishi?esc(first(kishi.name)):esc(d.member_id)} \u00B7 ${pretty(d.starts)} — ${pretty(d.ends)}</div>
+     <div class="tiny" style="margin-top:4px"><span class="jade">${jam.vaqtida} vaqtida</span> \u00B7
+      <span class="brass">${jam.kechikkan} kechikkan</span> \u00B7
+      <span class="clay">${jam.ichilmagan} ichilmagan</span>${
+      jamiDoza?" \u00B7 "+Math.round(jam.vaqtida/jamiDoza*100)+"%":""}</div></div>
+    <button class="btn" style="font-size:11px" onclick="A.dropMedicine(${d.id})">O'chirish</button>
+   </div>`})}
+
+ /* Oila bo'yicha yig'ma jadval — dorilarning tagida. */
+ const jamoa=doriJamoa();
+ if(jamoa.rows.length){
+  const kat="padding:5px 4px;text-align:right;white-space:nowrap";
+  h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="eyebrow" style="margin-bottom:8px">Oila bo'yicha</div>
+   <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;width:100%">
+    <tr><th style="${kat};text-align:left"></th>
+     <th style="${kat};font-weight:400" class="jade">vaqtida</th>
+     <th style="${kat};font-weight:400" class="brass">kechikkan</th>
+     <th style="${kat};font-weight:400" class="clay">ichilmagan</th>
+     <th style="${kat};font-weight:400" class="muted">%</th></tr>`;
+  jamoa.rows.forEach(r=>{
+   h+=`<tr style="border-top:1px solid var(--line)">
+    <td style="${kat};text-align:left;color:${colorOf(r.m.id)}">${esc(first(r.m.name))}</td>
+    <td style="${kat}">${r.vaqtida}</td><td style="${kat}">${r.kechikkan}</td>
+    <td style="${kat}">${r.ichilmagan}</td>
+    <td style="${kat};font-family:var(--serif);font-size:14px;color:${
+      r.foiz>=80?"var(--jade)":r.foiz>=50?"var(--brass)":"var(--clay)"}">${r.foiz}%</td></tr>`});
+  h+=`<tr style="border-top:1px solid var(--brass)">
+    <td style="${kat};text-align:left">Jami</td>
+    <td style="${kat}">${jamoa.jami.vaqtida}</td><td style="${kat}">${jamoa.jami.kechikkan}</td>
+    <td style="${kat}">${jamoa.jami.ichilmagan}</td>
+    <td style="${kat};font-family:var(--serif);font-size:15px;color:var(--brass)">${jamoa.jami.foiz}%</td></tr>
+   </table></div>
+   <p class="muted tiny" style="margin:8px 0 0;line-height:1.55">Foiz \u2014 vaqti kelib
+    bo'lgan dozalardan qanchasi vaqtida ichilgani. Hali vaqti kirmagani hisobga kirmaydi.</p>
+  </div>`}
  return h+`</div>`}
 
 /* ────────── VAZIFA ────────── */
