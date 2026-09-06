@@ -110,9 +110,10 @@ const ISH_VAQT=["peshin","asr","shom"];
    to'xtatadi. */
 const AYOL_BALL=0.25;
 const ayolRejimi=c=>!!(c&&c.woman_mode);
+const ishRejimi=c=>!!(c&&c.work_shift);
 /* `c` — a'zoning o'zi yoki cfgNow/cfgAt qaytargan nusxasi; ikkalasida ham bayroq bor. */
 const holat=(c,pk,r)=>!r?null
- :(r.s==="qazo"&&c&&c.work_shift&&ISH_VAQT.indexOf(pk)>=0)?"ontime":r.s;
+ :(r.s==="qazo"&&ishRejimi(c)&&ISH_VAQT.indexOf(pk)>=0)?"ontime":r.s;
 /* Bir kunda o'qilgan eski qazolar soni. */
 const qazoOf=day=>{const q=(day&&day.qazo)||{};
  return QAZO_VAQT.reduce((n,k)=>n+(q[k]||0),0)};
@@ -224,13 +225,22 @@ const PR=k=>{const p=PRAYERS.find(x=>x.k===k);return p?p.n:k};
    yozilib, kechagi kun esa o'qilmagan bo'lib qolar edi. */
 function liveDay(pk,c){
  const n=nowFor(c),ds=today(n);
- if(pk!=="xufton")return ds;
+ /* Xufton bomdodgacha ochiq. Ish rejimidagi odamning peshin, asr va shomi ham
+    xuddi shunday: u ishdan kech kelib uchalasini birdan o'qiydi, va soat 23:30 da
+    o'qib 00:15 da belgilagani kechikish emas. Yengillikning butun ma'nosi shunda —
+    yarim tunda uzilib qolsa, kech ishlaydigan odam uchun undan foyda yo'q. */
+ const tungi=pk==="xufton"||(ishRejimi(c)&&ISH_VAQT.indexOf(pk)>=0);
+ if(!tungi)return ds;
  return decOf(n)<daySchedule(new Date(ds+"T12:00:00"),c).bomdod?shift(ds,-1):ds}
 
 /* Oyna holati: "open" — vaqti kirgan, "early" — hali kirmagan, "past" — o'tib ketgan. */
 function winState(pk,ds,c){
  const sc=daySchedule(new Date(ds+"T12:00:00"),c),n=decOf(nowFor(c));
  if(inWin(n,sc[pk],sc[EKY[pk]]))return "open";
+ /* O'tib ketgan kunning vaqti "hali kirmagan" bo'lolmaydi — u o'tib bo'lgan.
+    Soatning o'zi bilan solishtirish kechagi peshinni yarim tundan keyin "early"
+    deb ko'rsatardi, ilova esa vaqti kirmagan namozni belgilashga qo'ymaydi. */
+ if(c&&ds<todayFor(c))return "past";
  return n<sc[pk]?"early":"past"}
 
 /* ══════════════ NAMOZLAR / MATNLAR ══════════════ */
@@ -461,12 +471,15 @@ function score(u,c,child){
  ((u&&u.bonuses)||[]).forEach(b=>o.bonusSum+=b.amt);
  /* Kechagi xufton bomdodgacha hali ochiq turadi, shuning uchun kun yopilgan
     bo'lsa ham uni «o'qilmagan» deb jarima yozib bo'lmaydi. */
- const openX=c?liveDay("xufton",c):null;
+ /* Hali ochiq turgan kun har bir namoz uchun alohida: xuftonники bomdodgacha,
+    ish rejimida peshin/asr/shom ham shunday. Sikldan tashqarida bir marta
+    hisoblanadi — daySchedule qimmat. */
+ const ochiq={};PRAYERS.forEach(p=>ochiq[p.k]=c?liveDay(p.k,c):null);
  if(ds.length){const td=c?todayFor(c):today();let d=ds[0];
   for(let i=0;i<800&&d<=td;i++,d=shift(d,1)){
    const day=days[d]||{},closed=d<td;
    if(o.oylar[d.slice(0,7)]==null)o.oylar[d.slice(0,7)]=0;
-   PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
+   PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&d!==ochiq[p.k];
     const st=holat(c,p.k,r);
     if(!r){if(shut){jaza(d,P_MISS);o.bad++;o.per[p.k].bad++}return}
     if(st==="ontime"){o.ontime++;o.per[p.k].ontime++;if(r.j)o.jamoat++}
@@ -564,7 +577,8 @@ function periodDone(z,c){
 /* Oraliqdagi namoz bali: vaqtida +1, qazo −0,25, o'qilmagan −1.
    Uzilgan eski qazo esa faqat qo'shadi. */
 function prayerRange(u,m,a,z){
- const c=cfgNow(m),days=(u&&u.days)||{},td=todayFor(c),openX=liveDay("xufton",c);
+ const c=cfgNow(m),days=(u&&u.days)||{},td=todayFor(c);
+ const ochiq={};PRAYERS.forEach(p=>ochiq[p.k]=liveDay(p.k,c));
  /* Hisob a'zo daftar tuta boshlagan kundan boshlanadi — score() dagidek. Aks holda
     guruhga keyin qo'shilgan odam o'zi yo'q kunlar uchun jarima olib qolardi. */
  const boshi=Object.keys(days).sort()[0];
@@ -579,7 +593,7 @@ function prayerRange(u,m,a,z){
  for(let d=a<boshi?boshi:a,i=0;i<400&&d<=z;i++,d=shift(d,1)){
   if(d>td)break;
   const day=days[d]||{},closed=d<td;
-  PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&!(p.k==="xufton"&&d===openX);
+  PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&d!==ochiq[p.k];
    const st=holat(c,p.k,r);
    if(!r){if(shut){o.bad++;o.ball-=P_MISS}return}
    if(st==="ontime"){o.ontime++;o.ball+=1;if(r.j){o.jamoat++;o.ball+=JAMOAT_BALL}}
@@ -733,14 +747,14 @@ function oyQahramonView(td){
   if(ks.length&&(!eng||ks[0]<eng))eng=ks[0]});
  t.rows.forEach(r=>{
   const oraliq=oyOraliq(y,r.oy);
-  const holat=(oraliq[0]>td||!eng||oraliq[1]<eng)?"\u2014"
+  const izoh=(oraliq[0]>td||!eng||oraliq[1]<eng)?"\u2014"
     :!periodDone(oraliq[1],cfg)?"davom etmoqda":"g'olib yo'q";
   h+=`<div class="flex between center" style="padding:5px 0;font-size:12.5px">
    <span class="muted" style="text-transform:capitalize">${OY[r.oy]}</span>
    ${r.golib
      ?`<span style="color:${colorOf(r.golib.id)}">${esc(first(r.golib.name))}
         <span class="muted tiny">${fmt(r.ball)}</span></span>`
-     :`<span class="muted tiny">${holat}</span>`}</div>`});
+     :`<span class="muted tiny">${izoh}</span>`}</div>`});
  return h+`</div></div>`}
 
 /* Ball qayerdan yig'ilgani. Qatorlar prayerRange bilan bir xil qoidada bo'lishi
@@ -2050,7 +2064,7 @@ function todayTab(){
       ${open?'<span class="jade" style="font-size:9px">● VAQTI KIRDI</span>':""}</div>
      <div class="muted small">${st0} — ${en}${crosses?" <span class='tiny'>(ertangi bomdodgacha)</span>":""}${
        !p.fard?" <span class='jade tiny'>· istalgan vaqtda</span>":""}</div>
-     ${shifted?`<div class="brass tiny" style="margin-top:2px">${pretty(tgt)} kunining xuftoni</div>`:""}
+     ${shifted?`<div class="brass tiny" style="margin-top:2px">${pretty(tgt)} kunining ${esc(p.n.toLowerCase())}i</div>`:""}
      ${isFamily()&&isT&&open&&p.fard?(calledFor(p.k,tgt)
        ?`<div class="jade tiny" style="margin-top:3px">\u{1F54C} uyda birga o'qiymiz deb chaqirilgan</div>`
        :`<button class="link" style="font-size:11px;margin-top:2px" onclick="A.callJamoat('${p.k}','${tgt}')">\u{1F54C} Uyda birga o'qiymiz</button>`):""}
