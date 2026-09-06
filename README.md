@@ -279,6 +279,9 @@ the feature not existing.
 
 Only in a family, and only when there are children in it. A parent picks the child and
 the deed — played with them, read to them, taught them an Arabic letter — and taps once.
+There are twenty-seven of them in four groups (play, learning, worship and manners,
+house and work), because one a day for a week is not a list anybody keeps using, and an
+ungrouped list of twenty-seven is a wall nobody reads.
 **Both are credited from the same row**: the child moves toward a wish, the adult toward
 their own tally. That was the deciding call: reading to your son should not be a duty
 with no encouragement in it.

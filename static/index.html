@@ -958,17 +958,41 @@ function oilaBallView(a,z,nom){
 /* Ota yoki ona bola bilan nima qilgani. Bitta ish ikkovini ham rag'batlantiradi:
    bola tilagiga yaqinlashadi, katta esa o'z hisobini to'ldiradi — aks holda
    farzandga kitob o'qib berish rag'batsiz burch bo'lib qolardi. */
+/* Ro'yxat uzun va guruhlangan: har kuni boshqa narsa qilish uchun bir haftalik
+   ro'yxat kamlik qiladi, guruhsiz uzun ro'yxat esa o'qilmaydigan devor bo'lib
+   qoladi. Ball qiyinligiga qarab: qisqa ish 1, o'rtachasi 2, o'rgatish 3. */
 const BOLA_AMALLAR=[
- {k:"oyin",n:"Birga o'ynash (yarim soat, telefonsiz)",b:2},
- {k:"kitob",n:"Kitob o'qib berish",b:2},
- {k:"ertak",n:"Uxlashdan oldin ertak aytish",b:1},
- {k:"arab",n:"Arab harflarini o'rgatish",b:3},
- {k:"sura",n:"Qisqa sura yodlatish",b:3},
- {k:"duo",n:"Duo o'rgatish",b:2},
- {k:"namoz",n:"Namozga birga turish",b:3},
- {k:"sayr",n:"Sayrga olib chiqish",b:2},
- {k:"hunar",n:"Hunar yoki uy ishini o'rgatish",b:2},
- {k:"suhbat",n:"Kunini so'rab, oxirigacha eshitish",b:1}
+ /* O'yin va birga vaqt */
+ {g:"O'yin va vaqt",k:"oyin",n:"Birga o'ynash (yarim soat, telefonsiz)",b:2},
+ {g:"O'yin va vaqt",k:"sayr",n:"Sayrga olib chiqish",b:2},
+ {g:"O'yin va vaqt",k:"tabiat",n:"Tabiatga chiqish, hayvon yoki o'simlikni tanishtirish",b:2},
+ {g:"O'yin va vaqt",k:"sport",n:"Birga jismoniy mashq yoki yugurish",b:2},
+ {g:"O'yin va vaqt",k:"velo",n:"Velosiped yoki suzishni o'rgatish",b:3},
+ {g:"O'yin va vaqt",k:"quruv",n:"Konstruktor, puzzle yoki mantiqiy o'yin",b:2},
+ {g:"O'yin va vaqt",k:"rasm",n:"Birga rasm chizish yoki qo'l mehnati",b:2},
+ {g:"O'yin va vaqt",k:"ekransiz",n:"Ekransiz kun \u2014 birga o'tkazilgan",b:3},
+ /* Ta'lim */
+ {g:"Ta'lim",k:"kitob",n:"Kitob o'qib berish",b:2},
+ {g:"Ta'lim",k:"arab",n:"Arab harflarini o'rgatish",b:3},
+ {g:"Ta'lim",k:"sura",n:"Qisqa sura yodlatish",b:3},
+ {g:"Ta'lim",k:"hisob",n:"Sanashni yoki hisobni o'rgatish",b:3},
+ {g:"Ta'lim",k:"soz",n:"So'z o'yini yoki yangi so'zlar o'rgatish",b:2},
+ {g:"Ta'lim",k:"savol",n:"\"Nega?\" degan savoliga to'liq javob berish",b:1},
+ {g:"Ta'lim",k:"tarix",n:"Payg'ambarimiz hayotidan bir voqea aytib berish",b:2},
+ {g:"Ta'lim",k:"pul",n:"Birga xarid qilib, pulni sanashni o'rgatish",b:2},
+ /* Ibodat va odob */
+ {g:"Ibodat va odob",k:"namoz",n:"Namozga birga turish",b:3},
+ {g:"Ibodat va odob",k:"duo",n:"Duo o'rgatish",b:2},
+ {g:"Ibodat va odob",k:"sadaqa",n:"Sadaqani bolaning qo'li bilan berdirish",b:3},
+ {g:"Ibodat va odob",k:"qarindosh",n:"Qarindosh yoki qo'shnini birga yo'qlash",b:2},
+ {g:"Ibodat va odob",k:"shukr",n:"Uxlashdan oldin kunning yaxshiligini sanash",b:1},
+ {g:"Ibodat va odob",k:"ertak",n:"Uxlashdan oldin ertak aytish",b:1},
+ /* Uy va mehnat */
+ {g:"Uy va mehnat",k:"hunar",n:"Hunar yoki uy ishini o'rgatish",b:2},
+ {g:"Uy va mehnat",k:"ovqat",n:"Birga ovqat tayyorlash",b:2},
+ {g:"Uy va mehnat",k:"uyish",n:"Uy ishida birga qatnashish (stol, gul, tozalik)",b:1},
+ {g:"Uy va mehnat",k:"ekish",n:"Birga daraxt yoki gul ekish",b:3},
+ {g:"Uy va mehnat",k:"suhbat",n:"Kunini so'rab, oxirigacha eshitish",b:1}
 ];
 const amalBali=k=>{const a=BOLA_AMALLAR.find(x=>x.k===k);return a?a.b:0};
 /* Bilim ro'yxatlari — bir marta o'rganiladi va o'rganilgani turaveradi. Vazifadan
@@ -2303,8 +2327,10 @@ function bolalarPanel(cfg){
     h0.olingan?" \u00B7 shu paytgacha "+h0.olingan+" tilak bajarilgan":""}</div>`}
  h+=`<div class="label">Bugun nima qildingiz?</div>
   <select id="d_kind" class="input" onchange="A.setDeedKind(this.value)">${
-   BOLA_AMALLAR.map(a=>`<option value="${a.k}"${a.k===A.deedKind?" selected":""}>${
-     esc(a.n)} · +${a.b}</option>`).join("")}</select>
+   [...new Set(BOLA_AMALLAR.map(a=>a.g))].map(g=>
+    `<optgroup label="${esc(g)}">${BOLA_AMALLAR.filter(a=>a.g===g)
+      .map(a=>`<option value="${a.k}"${a.k===A.deedKind?" selected":""}>${
+        esc(a.n)} · +${a.b}</option>`).join("")}</optgroup>`).join("")}</select>
   <button class="btn btn-green btn-wide" style="margin-top:8px" onclick="A.addDeed()">\u2713 Belgilash</button>
   ${deedMsg?`<div class="${deedErr?"clay":"jade"} small" style="margin-top:8px">${esc(deedMsg)}</div>`:""}`;
  h+=`<div style="margin-top:14px;padding-top:11px;border-top:1px solid var(--line)">

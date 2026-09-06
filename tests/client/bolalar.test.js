@@ -46,10 +46,22 @@ const deed = (i, adult, k) => ({ id: i, child_id: "aziz", adult_id: adult,
   deed: k, day: "2026-09-06" });
 
 module.exports = {
-  "every deed is a real thing to do, and worth something"(assert) {
+  "there is enough here for a different thing every day"(assert) {
     const c = client();
-    assert.ok(c.BOLA_AMALLAR.length >= 8, "a short list gets boring quickly");
-    assert.ok(c.BOLA_AMALLAR.every(a => a.k && a.n && a.b >= 1));
+    assert.ok(c.BOLA_AMALLAR.length >= 24, "a short list gets boring in a fortnight: "
+      + c.BOLA_AMALLAR.length);
+    assert.ok(c.BOLA_AMALLAR.every(a => a.k && a.n && a.b >= 1 && a.g),
+      "each needs a key, a name, a worth and a group");
+    const keys = c.BOLA_AMALLAR.map(a => a.k);
+    assert.strictEqual(new Set(keys).size, keys.length, "no key twice");
+    assert.ok(new Set(c.BOLA_AMALLAR.map(a => a.g)).size >= 4,
+      "grouped, or the list is a wall of text");
+  },
+
+  async "the list is grouped so it can be scanned"(assert) {
+    const c = client();
+    await c.A.go("app");
+    assert.ok(c.html.includes("<optgroup"), "expected groups in the picker");
   },
 
   "the child's points are the deeds done with them"(assert) {
