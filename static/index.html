@@ -418,6 +418,7 @@ async function pull(){
    const j=await api(circleId?"/state?circle="+encodeURIComponent(circleId):"/state");
    members=j.members;data={};
    calls=j.calls||[];khatm=j.khatm||null;duels=j.duels||[];
+   deeds=j.deeds||[];rewards=j.rewards||[];
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -474,6 +475,10 @@ let calls=[],khatm=null,khatmMsg="";
 /* Duellar ham /state bilan keladi — natija saqlanmaydi, u shu yerdagi yozuvlardan
    chiqariladi, xuddi nishonlar kabi. */
 let duels=[],duelMsg="",duelErr=false,duelOchiq=false,duelSize=1;
+/* Bolalar bo'limi ham /state bilan keladi. Amalning bali shu yerdagi ro'yxatda
+   turadi, bazada emas — kitob o'qib berishning qiymati keyin o'zgarsa, tarixni
+   qayta yozish shart bo'lmasin. Nishonlar ham shunday. */
+let deeds=[],rewards=[],deedMsg="",deedErr=false;
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -864,6 +869,41 @@ function ballTarkibView(a,z){
   <p class="muted tiny" style="margin:9px 0 0;line-height:1.6">Kechikkan — o'sha kun
    ichida qazo qilingani. Eski qazo — Qazo daftaridan uzilgani. O'qilmagan qatoriga
    ilovada belgilanmay qolgan namoz ham kiradi.</p></div>`}
+
+/* ══════════════ BOLALAR ══════════════ */
+/* Ota yoki ona bola bilan nima qilgani. Bitta ish ikkovini ham rag'batlantiradi:
+   bola tilagiga yaqinlashadi, katta esa o'z hisobini to'ldiradi — aks holda
+   farzandga kitob o'qib berish rag'batsiz burch bo'lib qolardi. */
+const BOLA_AMALLAR=[
+ {k:"oyin",n:"Birga o'ynash (yarim soat, telefonsiz)",b:2},
+ {k:"kitob",n:"Kitob o'qib berish",b:2},
+ {k:"ertak",n:"Uxlashdan oldin ertak aytish",b:1},
+ {k:"arab",n:"Arab harflarini o'rgatish",b:3},
+ {k:"sura",n:"Qisqa sura yodlatish",b:3},
+ {k:"duo",n:"Duo o'rgatish",b:2},
+ {k:"namoz",n:"Namozga birga turish",b:3},
+ {k:"sayr",n:"Sayrga olib chiqish",b:2},
+ {k:"hunar",n:"Hunar yoki uy ishini o'rgatish",b:2},
+ {k:"suhbat",n:"Kunini so'rab, oxirigacha eshitish",b:1}
+];
+const amalBali=k=>{const a=BOLA_AMALLAR.find(x=>x.k===k);return a?a.b:0};
+const amalNomi=k=>{const a=BOLA_AMALLAR.find(x=>x.k===k);return a?a.n:k};
+const bolalar=()=>(members||[]).filter(m=>m.is_child);
+/* Kattaning bola bilan yig'gan bali — keyingi bosqichdagi KPI shundan o'sadi. */
+const kattaBolaBali=id=>(deeds||[]).filter(d=>d.adult_id===id)
+  .reduce((n,d)=>n+amalBali(d.deed),0);
+
+/* Mukofot berish hech narsani nolga tushirmaymaydi: bola yig'gan ball yig'ilganicha
+   qoladi, keyingi tilakkacha qolgani esa jamidan berilganlari ayrilib chiqariladi.
+   Sanoqni nolga tushirish bolaning butun mehnatini o'chirib yuborardi. */
+function bolaHolat(m){
+ const jami=(deeds||[]).filter(d=>d.child_id===m.id)
+   .reduce((n,d)=>n+amalBali(d.deed),0);
+ const olingan=(rewards||[]).filter(r=>r.child_id===m.id).length;
+ const maqsad=Math.max(1,m.reward_goal||100);
+ const bosqich=jami-olingan*maqsad;
+ return{jami:jami,olingan:olingan,maqsad:maqsad,bosqich:bosqich,
+  tayyor:bosqich>=maqsad,qolgan:Math.max(0,maqsad-bosqich)}}
 
 /* ══════════════ DUEL ══════════════ */
 /* Ikki kishi yoki ikki juftlik bir hafta ball bo'yicha bellashadi. Natija hech
@@ -1487,6 +1527,34 @@ const A={
  resetTas(){A.tas=0;render()},
 
 
+ /* ────────── BOLALAR ────────── */
+ deedChild:null,deedKind:"oyin",
+ setDeedChild(id){A.deedChild=id;deedMsg="";render()},
+ setDeedKind(k){if(BOLA_AMALLAR.some(a=>a.k===k))A.deedKind=k;render()},
+ async addDeed(){
+  const bs=bolalar();if(!bs.length)return;
+  const kim=bs.some(m=>m.id===A.deedChild)?A.deedChild:bs[0].id;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/child-deeds",
+     {method:"POST",body:JSON.stringify({child_id:kim,deed:A.deedKind,day:todayFor(myCfg())})});
+   deedMsg="Belgilandi";deedErr=false;await pull();
+  }catch(e){deedMsg=e.message||"Belgilab bo'lmadi";deedErr=true}
+  render()},
+ async dropDeed(id){
+  try{await api("/child-deeds/"+encodeURIComponent(id),{method:"DELETE"});
+   deedMsg="";deedErr=false;await pull()}
+  catch(e){deedMsg=e.message||"Olib tashlab bo'lmadi";deedErr=true}
+  render()},
+ async grantReward(id){
+  const m=(members||[]).find(x=>x.id===id)||{};
+  const tilak=(prompt("Nima so'radi? (ixtiyoriy)")||"").slice(0,200);
+  if(!confirm((m.name||id)+" ning tilagi bajarildi deb yozilsinmi?"))return;
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/child-rewards",
+     {method:"POST",body:JSON.stringify({child_id:id,wish:tilak,day:todayFor(myCfg())})});
+   deedMsg="";deedErr=false;await pull();
+  }catch(e){deedMsg=e.message||"Yozib bo'lmadi";deedErr=true}
+  render()},
  /* Haftalik vazifa: belgi bugungi kunga tushadi, hisob esa haftaniki — hafta
     ichida qaysi kuni bosilgani ahamiyatsiz. */
  async setAmal(on){
@@ -1984,6 +2052,60 @@ const qazoMuddat=kun=>{
  const yil=Math.floor(oy/12),qoloy=oy%12;
  return yil+" yil"+(qoloy?" "+qoloy+" oy":"")};
 
+/* Bolalar bo'limi. Faqat oilada va faqat bolalar bo'lsa ko'rinadi. Ota ham, ona
+   ham belgilay oladi va kim belgilagani yozilib qoladi — bir ish ikkovining ham
+   hisobiga tushadi. */
+function bolalarPanel(cfg){
+ if(!isFamily())return "";
+ const bs=bolalar();
+ if(!bs.length)return "";
+ const kim=bs.some(m=>m.id===A.deedChild)?A.deedChild:bs[0].id;
+ const bola=bs.find(m=>m.id===kim),h0=bolaHolat(bola);
+ const td=todayFor(cfg);
+ const bugun=(deeds||[]).filter(d=>d.child_id===kim&&d.day===td);
+ const pct=Math.min(100,Math.round(h0.bosqich/h0.maqsad*100));
+ let h=`<div class="panel p14 mt14" style="border-color:${h0.tayyor?"#C9A22788":"var(--line)"}">
+  <div class="eyebrow">Bolalar</div>`;
+ if(bs.length>1){
+  h+=`<div class="flex gap2" style="margin-top:10px;flex-wrap:wrap">${bs.map(m=>{
+   const on=m.id===kim;
+   return `<button class="btn" style="font-size:12px;${on
+     ?"background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600":""}"
+     onclick="A.setDeedChild('${esc(m.id)}')">${esc(first(m.name))}</button>`}).join("")}</div>`}
+ h+=`<div class="flex between center" style="margin-top:12px">
+   <span style="font-family:var(--serif);font-size:17px;color:${colorOf(bola.id)}">${esc(first(bola.name))}</span>
+   <span class="brass" style="font-family:var(--serif);font-size:20px">${h0.bosqich} / ${h0.maqsad}</span></div>
+  <div class="bar" style="margin-top:7px"><div style="width:${pct}%;background:${
+    h0.tayyor?"var(--brass)":"var(--jade)"}"></div></div>`;
+ if(h0.tayyor){
+  h+=`<div class="panel p14" style="margin-top:12px;border-color:#C9A22788">
+   <div style="font-family:var(--serif);font-size:16px">\u{1F381} ${esc(first(bola.name))} ${
+     h0.maqsad} ballga yetdi</div>
+   <p class="muted small" style="margin:5px 0 10px;line-height:1.6">Endi bir tilagini
+    aytadi \u2014 va u bajariladi. Yig'gan bali o'chmaydi, keyingi tilak shundan sanaladi.</p>
+   <button class="btn btn-gold btn-wide" onclick="A.grantReward('${esc(bola.id)}')">Tilagi bajarildi</button></div>`;
+ }else{
+  h+=`<div class="muted tiny" style="margin-top:6px">Tilakkacha ${h0.qolgan} ball${
+    h0.olingan?" \u00B7 shu paytgacha "+h0.olingan+" tilak bajarilgan":""}</div>`}
+ h+=`<div class="label">Bugun nima qildingiz?</div>
+  <select id="d_kind" class="input" onchange="A.setDeedKind(this.value)">${
+   BOLA_AMALLAR.map(a=>`<option value="${a.k}"${a.k===A.deedKind?" selected":""}>${
+     esc(a.n)} · +${a.b}</option>`).join("")}</select>
+  <button class="btn btn-green btn-wide" style="margin-top:8px" onclick="A.addDeed()">\u2713 Belgilash</button>
+  ${deedMsg?`<div class="${deedErr?"clay":"jade"} small" style="margin-top:8px">${esc(deedMsg)}</div>`:""}`;
+ if(bugun.length){
+  h+=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
+   <div class="eyebrow" style="margin-bottom:6px">Bugun</div>`;
+  bugun.forEach(d=>{
+   const kishi=(members||[]).find(x=>x.id===d.adult_id);
+   h+=`<div class="flex between center" style="padding:4px 0;font-size:12px">
+    <span><span style="color:${colorOf(d.adult_id)}">${kishi?esc(first(kishi.name)):d.adult_id}</span>
+     <span class="muted"> \u2014 ${esc(amalNomi(d.deed))}</span> <span class="jade">+${amalBali(d.deed)}</span></span>
+    ${d.adult_id===me?`<button class="link" style="font-size:11px" onclick="A.dropDeed(${d.id})">olib tashlash</button>`:""}
+   </div>`});
+  h+=`</div>`}
+ return h+`</div>`}
+
 /* Haftalik vazifa. Bir hafta — bitta amal, bitta belgi. Ataylab sodda: ro'yxat
    ham, bosqich ham, muddat tanlash ham yo'q — bajardingizmi yoki yo'qmi. */
 function amalPanel(cfg){
@@ -2171,6 +2293,7 @@ function todayTab(){
     :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)"}</div>`}
   h+=`</div>`});
  h+=amalPanel(cfg);
+ h+=bolalarPanel(cfg);
  h+=qazoPanel(day,isT);
  h+=`<div class="panel p14 mt14 flex between center">
    <div><div style="font-family:var(--serif);font-size:16px">Bugun Qur'on o'qidim</div>

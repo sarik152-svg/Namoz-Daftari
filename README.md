@@ -240,6 +240,28 @@ point was to take it out of the accounting, not out of sight.
 422 for a tap that no longer exists, and `A.mark` refuses any prayer not in `PRAYERS`
 rather than quietly writing it. Every prayer in the app is now fard.
 
+## Bolalar bo'limi — what a parent did with a child
+
+Only in a family, and only when there are children in it. A parent picks the child and
+the deed — played with them, read to them, taught them an Arabic letter — and taps once.
+**Both are credited from the same row**: the child moves toward a wish, the adult toward
+their own tally. That was the deciding call: reading to your son should not be a duty
+with no encouragement in it.
+
+Two API routes and two tables, and neither stores a score. `child_deeds` records who did
+what with whom on which day; what a deed is *worth* lives in the client's `BOLA_AMALLAR`,
+so an hour of reading can be revalued later without rewriting anybody's history — the
+same reasoning as the badges.
+
+**Granting a wish is an event, not a reset.** `child_rewards` records that one was given;
+the child's lifetime points keep accumulating and what is left toward the next wish is
+the total minus `granted × goal`. A counter that went back to zero would erase how much
+the child has actually done. The goal is per child (`members.reward_goal`), because a
+four-year-old and a twelve-year-old should not be held to the same number.
+
+Only whoever recorded a deed may take it back. Nobody else gets to erase what a parent
+says they did with their child.
+
 ## Haftalik vazifa — one good deed a week
 
 On Bugun, between the prayers and the make-up notebook: one deed for the week, one

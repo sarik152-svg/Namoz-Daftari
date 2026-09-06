@@ -103,7 +103,10 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
        if ("token" in patch) token = patch.token;
        if ("isAdmin" in patch) isAdmin = patch.isAdmin;
        if ("circleId" in patch) circleId = patch.circleId;
+       if ("circles" in patch) circles = patch.circles;
        if ("duels" in patch) duels = patch.duels;
+       if ("deeds" in patch) deeds = patch.deeds;
+       if ("rewards" in patch) rewards = patch.rewards;
      };
      globalThis.__set_duels = (list) => { duels = list; };
      globalThis.__state_me = () => data[me];

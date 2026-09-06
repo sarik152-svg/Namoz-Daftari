@@ -340,6 +340,9 @@ class MemberProfile(BaseModel):
     # because this member's shift covers all three. Everything else is judged the
     # same as anyone's, including a prayer left until the next day.
     work_shift: bool = False
+    # How many points this child needs for one wish. Per child, because a
+    # four-year-old and a twelve-year-old should not be held to the same number.
+    reward_goal: int = Field(default=100, ge=10, le=10_000)
     # Ayollar rejimi: a prayer caught up the same day earns a quarter point instead
     # of costing one. On time and left-until-tomorrow are both judged as anyone's.
     woman_mode: bool = False
@@ -556,6 +559,81 @@ class QazoDebt(BaseModel):
     qazo_debt: int = Field(ge=0, le=MAX_QAZO_DEBT)
 
 
+# ---------------------------------------------------------------- bolalar
+DEED_PATTERN = re.compile(r"^[a-z_]{1,32}$")
+
+
+def _validate_deed(value: str) -> str:
+    if not DEED_PATTERN.match(value):
+        raise ValueError("deed must be 1-32 lowercase letters or underscores")
+    return value
+
+
+class ChildDeed(BaseModel):
+    """Something a parent did with a child: who, with whom, what, when.
+
+    Deliberately not a score. What the deed is worth lives in the client's
+    catalogue, so an hour of reading can be revalued later without rewriting
+    anybody's history — the same call the badges make.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    child_id: str
+    adult_id: str
+    deed: str
+    day: Date
+
+    _check_child = field_validator("child_id")(_validate_member_id)
+    _check_adult = field_validator("adult_id")(_validate_member_id)
+    _check_deed = field_validator("deed")(_validate_deed)
+
+
+class ChildDeedCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    child_id: str
+    deed: str
+    day: Date
+
+    _check_child = field_validator("child_id")(_validate_member_id)
+    _check_deed = field_validator("deed")(_validate_deed)
+
+
+class ChildReward(BaseModel):
+    """A wish earned and granted. An event, never a reset: the child's points keep
+    accumulating and what is left toward the next wish is the total minus what has
+    already been given."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    child_id: str
+    given_by: str
+    wish: str = ""
+    day: Date
+
+    _check_child = field_validator("child_id")(_validate_member_id)
+    _check_giver = field_validator("given_by")(_validate_member_id)
+
+
+class ChildRewardCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    child_id: str
+    wish: str = Field(default="", max_length=200)
+    day: Date
+
+    _check_child = field_validator("child_id")(_validate_member_id)
+
+
+class RewardGoal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reward_goal: int = Field(ge=10, le=10_000)
+
+
 # ---------------------------------------------------------------- duel
 class DuelMember(BaseModel):
     """One participant: which side they are on, and whether they have accepted."""
@@ -644,6 +722,8 @@ class GroupState(BaseModel):
     calls: list[JamoatCall] = Field(default_factory=list)
     khatm: Khatm | None = None
     duels: list[Duel] = Field(default_factory=list)
+    deeds: list[ChildDeed] = Field(default_factory=list)
+    rewards: list[ChildReward] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -652,4 +732,6 @@ class GroupState(BaseModel):
             "calls": [c.model_dump(mode="json") for c in self.calls],
             "khatm": None if self.khatm is None else self.khatm.model_dump(mode="json"),
             "duels": [d.model_dump(mode="json") for d in self.duels],
+            "deeds": [d.model_dump(mode="json") for d in self.deeds],
+            "rewards": [r.model_dump(mode="json") for r in self.rewards],
         }

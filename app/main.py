@@ -33,7 +33,9 @@ from app.config import (
 from app.db import create_pool, run_migrations
 from app.models import (
     AdminLoginRequest,
+    ChildDeedCreate,
     ChildFlag,
+    ChildRewardCreate,
     CircleCreate,
     CircleMemberAdd,
     CircleUpdate,
@@ -44,6 +46,7 @@ from app.models import (
     LoginRequest,
     MemberData,
     QazoDebt,
+    RewardGoal,
     WomanModeFlag,
     WorkShiftFlag,
     Session,
@@ -613,6 +616,86 @@ async def set_child(
                 status.HTTP_403_FORBIDDEN,
             )
     if not await repository.set_child(pool, member_id, body.is_child):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- bolalar
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/child-deeds", status_code=201)
+async def add_child_deed(
+    circle_id: int, body: ChildDeedCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Record something you did with a child: read to them, taught them a letter.
+
+    Whoever taps it is the adult on the row, which is the point — either parent does
+    it and either parent records it, and the family can see which of them did.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    await _require_family(request, session, circle_id)
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi belgilay olmaydi", 403)
+    child = await repository.fetch_member_profile(pool, body.child_id)
+    if child is None or not await repository.is_circle_member(pool, circle_id, body.child_id):
+        raise _error("not_in_circle", "Bola bu oilada emas", status.HTTP_404_NOT_FOUND)
+    if not child.is_child:
+        raise _error("not_a_child", "Bu a'zo bolalar rejimida emas", 409)
+    deed = await repository.add_child_deed(
+        pool, circle_id, body.child_id, session.member_id, body.deed, body.day
+    )
+    return deed.model_dump(mode="json")
+
+
+@app.delete(f"{API_PREFIX}/child-deeds/{{deed_id}}")
+async def drop_child_deed(
+    deed_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Take back a mis-tap. Only whoever recorded it: nobody else gets to erase what
+    a parent says they did with their child."""
+    pool: asyncpg.Pool = request.app.state.pool
+    if not await repository.delete_child_deed(pool, deed_id, session.member_id or ""):
+        raise _error("not_yours", "Buni faqat belgilagan odam olib tashlaydi", 403)
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/child-rewards", status_code=201)
+async def grant_child_reward(
+    circle_id: int, body: ChildRewardCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """The child reached the number and asked for something; it was given.
+
+    Granting does not reset anything. The points a child has earned stay earned, and
+    what is left toward the next wish is the total minus the wishes already granted.
+    """
+    pool: asyncpg.Pool = request.app.state.pool
+    await _require_family(request, session, circle_id)
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi bera olmaydi", 403)
+    if not await repository.is_circle_member(pool, circle_id, body.child_id):
+        raise _error("not_in_circle", "Bola bu oilada emas", status.HTTP_404_NOT_FOUND)
+    reward = await repository.add_child_reward(
+        pool, circle_id, body.child_id, session.member_id, body.wish, body.day
+    )
+    return reward.model_dump(mode="json")
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/reward-goal")
+async def set_reward_goal(
+    member_id: str, body: RewardGoal, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """How many points this child needs for one wish. The circle owner sets it."""
+    pool: asyncpg.Pool = request.app.state.pool
+    if not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error(
+                "not_circle_owner", "Buni doira egasi belgilaydi",
+                status.HTTP_403_FORBIDDEN,
+            )
+    if not await repository.set_reward_goal(pool, member_id, body.reward_goal):
         raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
     return {"ok": True}
 

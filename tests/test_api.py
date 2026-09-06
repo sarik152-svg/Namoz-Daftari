@@ -304,6 +304,84 @@ async def test_a_stranger_cannot_call_off_somebody_elses_duel(api, connection):
     assert response.status_code == 403
 
 
+# ---------------------------------------------------------------- bolalar
+def in_family(connection: FakeConnection) -> dict:
+    """A session inside circle 2, which is a family."""
+    connection.rows["SELECT id, name, kind"] = [FAMILY]
+    connection.rows["FROM circles WHERE id"] = [FAMILY]
+    connection.scalars["FROM circle_members"] = True
+    return as_session(connection)
+
+
+@pytest.mark.asyncio
+async def test_a_deed_records_whoever_marked_it(api, connection):
+    headers = in_family(connection)
+    connection.rows["SELECT id, name, city"] = [dict(
+        id="aziz", name="Aziz", city="Toshkent", lat=41.3, lng=69.2, tz=5.0,
+        asr=2, fa=18.0, ia=18.0, is_child=True, work_shift=False,
+        woman_mode=False, qazo_debt=0, reward_goal=100)]
+    connection.rows["INSERT INTO child_deeds"] = [dict(
+        id=1, child_id="aziz", adult_id="sardor", deed="kitob", day=Date(2026, 9, 6))]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/child-deeds", headers=headers,
+            json={"child_id": "aziz", "deed": "kitob", "day": "2026-09-06"},
+        )
+    assert response.status_code == 201
+    assert response.json()["adult_id"] == "sardor", "the adult is the caller, not a field"
+
+
+@pytest.mark.asyncio
+async def test_a_deed_needs_somebody_in_children_mode(api, connection):
+    """Otherwise a grown-up could be logged as somebody's child."""
+    headers = in_family(connection)
+    connection.rows["SELECT id, name, city"] = [dict(
+        id="behruz", name="Behruz", city="Toshkent", lat=41.3, lng=69.2, tz=5.0,
+        asr=2, fa=18.0, ia=18.0, is_child=False, work_shift=False,
+        woman_mode=False, qazo_debt=0, reward_goal=100)]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/circles/2/child-deeds", headers=headers,
+            json={"child_id": "behruz", "deed": "kitob", "day": "2026-09-06"},
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "not_a_child"
+
+
+@pytest.mark.asyncio
+async def test_only_whoever_marked_a_deed_may_take_it_back(api, connection):
+    headers = as_session(connection, member_id="zuhra")
+    connection.rows["DELETE FROM child_deeds"] = []
+    async with api as client:
+        response = await client.delete("/api/v1/child-deeds/5", headers=headers)
+    assert response.status_code == 403
+    assert connection.args_for("DELETE FROM child_deeds")[1] == "zuhra"
+
+
+@pytest.mark.asyncio
+async def test_the_circle_owner_sets_a_child_reward_goal(api, connection):
+    headers = as_session(connection)
+    connection.scalars["SELECT true AS owns"] = True
+    connection.rows["UPDATE members SET reward_goal"] = [{"id": "aziz"}]
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/aziz/reward-goal", json={"reward_goal": 60}, headers=headers
+        )
+    assert response.status_code == 200
+    assert connection.args_for("UPDATE members SET reward_goal")[1] == 60
+
+
+@pytest.mark.asyncio
+async def test_a_stranger_does_not_set_a_reward_goal(api, connection):
+    headers = as_session(connection, member_id="behruz")
+    connection.scalars["SELECT true AS owns"] = None
+    async with api as client:
+        response = await client.post(
+            "/api/v1/members/aziz/reward-goal", json={"reward_goal": 60}, headers=headers
+        )
+    assert response.status_code == 403
+
+
 @pytest.mark.asyncio
 async def test_admin_password_is_checked(api, connection):
     async with api as client:

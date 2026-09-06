@@ -20,6 +20,8 @@ from app.config import (
 )
 from app.models import (
     ALL_PRAYERS,
+    ChildDeed,
+    ChildReward,
     Duel,
     DuelMember,
     Bonus,
@@ -42,7 +44,7 @@ from app.security import decrypt_pin, encrypt_pin, generate_pin, new_session_tok
 
 logger = logging.getLogger("namoz.repo")
 
-_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt"
+_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt, reward_goal"
 _SEED_FIELD_COUNT = 9
 
 # asyncpg binds parameters by their Postgres type, so a DATE column needs a real
@@ -271,7 +273,8 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         member_rows = await connection.fetch(
             """
             SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa,
-                   m.ia, m.is_child, m.work_shift, m.woman_mode, m.qazo_debt
+                   m.ia, m.is_child, m.work_shift, m.woman_mode, m.qazo_debt,
+                   m.reward_goal
               FROM members m
               JOIN circle_members cm ON cm.member_id = m.id
              WHERE cm.circle_id = $1
@@ -380,7 +383,95 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         calls=[JamoatCall(**dict(row)) for row in call_rows],
         khatm=khatm,
         duels=await fetch_duels(pool, circle_id),
+        deeds=await fetch_child_deeds(pool, circle_id),
+        rewards=await fetch_child_rewards(pool, circle_id),
     )
+
+
+# ---------------------------------------------------------------- bolalar
+async def fetch_child_deeds(pool: asyncpg.Pool, circle_id: int, limit: int = 400) -> list[ChildDeed]:
+    """A family's deeds, newest first. No totals here — the client adds them up from
+    its own catalogue, which is where what a deed is worth is written down."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT id, child_id, adult_id, deed, day FROM child_deeds
+             WHERE circle_id = $1 ORDER BY id DESC LIMIT $2
+            """,
+            circle_id, limit,
+        )
+    return [ChildDeed(**dict(row)) for row in rows]
+
+
+async def fetch_child_rewards(pool: asyncpg.Pool, circle_id: int) -> list[ChildReward]:
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT id, child_id, given_by, wish, day FROM child_rewards
+             WHERE circle_id = $1 ORDER BY id DESC LIMIT 200
+            """,
+            circle_id,
+        )
+    return [ChildReward(**dict(row)) for row in rows]
+
+
+async def add_child_deed(
+    pool: asyncpg.Pool, circle_id: int, child_id: str, adult_id: str,
+    deed: str, day: Date,
+) -> ChildDeed:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO child_deeds (circle_id, child_id, adult_id, deed, day)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, child_id, adult_id, deed, day
+            """,
+            circle_id, child_id, adult_id, deed, day,
+        )
+    return ChildDeed(**dict(row))
+
+
+async def delete_child_deed(pool: asyncpg.Pool, deed_id: int, adult_id: str) -> bool:
+    """Only whoever recorded it may take it back — a mis-tap is theirs to undo, and
+    nobody else gets to erase what somebody says they did with their child."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "DELETE FROM child_deeds WHERE id = $1 AND adult_id = $2 RETURNING id",
+            deed_id, adult_id,
+        )
+    return row is not None
+
+
+async def circle_of_deed(pool: asyncpg.Pool, deed_id: int) -> int | None:
+    async with pool.acquire() as connection:
+        return await connection.fetchval(
+            "SELECT circle_id AS circle FROM child_deeds WHERE id = $1", deed_id
+        )
+
+
+async def add_child_reward(
+    pool: asyncpg.Pool, circle_id: int, child_id: str, given_by: str,
+    wish: str, day: Date,
+) -> ChildReward:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO child_rewards (circle_id, child_id, given_by, wish, day)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, child_id, given_by, wish, day
+            """,
+            circle_id, child_id, given_by, wish, day,
+        )
+    return ChildReward(**dict(row))
+
+
+async def set_reward_goal(pool: asyncpg.Pool, member_id: str, goal: int) -> bool:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "UPDATE members SET reward_goal = $2, updated_at = now() WHERE id = $1 RETURNING id",
+            member_id, goal,
+        )
+    return row is not None
 
 
 # ---------------------------------------------------------------- duel
