@@ -47,7 +47,9 @@ from app.models import (
     KhatmCreate,
     LoginRequest,
     MemberData,
+    DoseCreate,
     KpiTargets,
+    MedicineCreate,
     StartBall,
     QazoDebt,
     RewardGoal,
@@ -805,6 +807,67 @@ async def set_reward_goal(
             )
     if not await repository.set_reward_goal(pool, member_id, body.reward_goal):
         raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- dorilar
+@app.post(f"{API_PREFIX}/circles/{{circle_id}}/medicines", status_code=201)
+async def add_medicine(
+    circle_id: int, body: MedicineCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Start a course: who, what, at which hours, for how many days."""
+    pool: asyncpg.Pool = request.app.state.pool
+    await _require_family(request, session, circle_id)
+    if not await repository.is_circle_member(pool, circle_id, body.member_id):
+        raise _error("not_in_circle", "Bu a'zo oilada emas", status.HTTP_404_NOT_FOUND)
+    med = await repository.add_medicine(
+        pool, circle_id, body.member_id, body.name, body.times, body.starts, body.days
+    )
+    return med.model_dump(mode="json")
+
+
+@app.delete(f"{API_PREFIX}/medicines/{{medicine_id}}")
+async def drop_medicine(
+    medicine_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    pool: asyncpg.Pool = request.app.state.pool
+    circle_id = await repository.circle_of_medicine(pool, medicine_id)
+    if circle_id is None:
+        raise _error("no_medicine", "Topilmadi", status.HTTP_404_NOT_FOUND)
+    await _require_family(request, session, circle_id)
+    await repository.delete_medicine(pool, medicine_id, circle_id)
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/medicines/{{medicine_id}}/doses")
+async def take_dose(
+    medicine_id: int, body: DoseCreate, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """This dose went down, at this hour. Anybody in the family may mark it: giving a
+    child their syrup is not something only the child can record."""
+    pool: asyncpg.Pool = request.app.state.pool
+    circle_id = await repository.circle_of_medicine(pool, medicine_id)
+    if circle_id is None:
+        raise _error("no_medicine", "Topilmadi", status.HTTP_404_NOT_FOUND)
+    await _require_family(request, session, circle_id)
+    await repository.take_dose(pool, medicine_id, body.day, body.slot, body.taken)
+    return {"ok": True}
+
+
+@app.delete(f"{API_PREFIX}/medicines/{{medicine_id}}/doses")
+async def untake_dose(
+    medicine_id: int, day: Date, slot: str, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """Take back a mis-tap."""
+    pool: asyncpg.Pool = request.app.state.pool
+    circle_id = await repository.circle_of_medicine(pool, medicine_id)
+    if circle_id is None:
+        raise _error("no_medicine", "Topilmadi", status.HTTP_404_NOT_FOUND)
+    await _require_family(request, session, circle_id)
+    await repository.untake_dose(pool, medicine_id, day, slot)
     return {"ok": True}
 
 

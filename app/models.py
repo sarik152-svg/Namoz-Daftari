@@ -712,6 +712,83 @@ class RewardGoal(BaseModel):
     reward_goal: int = Field(ge=10, le=10_000)
 
 
+# ---------------------------------------------------------------- dorilar
+class Medicine(BaseModel):
+    """A course: who takes what, at which hours, over which days.
+
+    The plan and what happened are kept apart. This does not change when somebody is
+    late — that belongs to the dose.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    member_id: str
+    name: str = Field(min_length=1, max_length=80)
+    times: list[str] = Field(min_length=1, max_length=6)
+    starts: Date
+    ends: Date
+
+    _check_member = field_validator("member_id")(_validate_member_id)
+
+    @field_validator("times")
+    @classmethod
+    def _check_times(cls, value: list[str]) -> list[str]:
+        for t in value:
+            if not CLOCK_PATTERN.match(t):
+                raise ValueError("each time must be HH:MM")
+        if len(set(value)) != len(value):
+            raise ValueError("the same hour twice is one dose, not two")
+        return sorted(value)
+
+
+class MedicineCreate(BaseModel):
+    """`days` rather than an end date: a course is prescribed as a length."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: str
+    name: str = Field(min_length=1, max_length=80)
+    times: list[str] = Field(min_length=1, max_length=6)
+    starts: Date
+    days: int = Field(ge=1, le=365)
+
+    _check_member = field_validator("member_id")(_validate_member_id)
+    _check_times = field_validator("times")(Medicine._check_times.__func__)
+
+
+class MedicineDose(BaseModel):
+    """One dose that was taken: the hour it was due, and the hour it went down.
+
+    On time or late is a comparison made when it is read, not a verdict stored here,
+    so the grace period can be argued about later without rewriting history.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    medicine_id: int
+    day: Date
+    slot: str
+    taken: str
+
+    @field_validator("slot", "taken")
+    @classmethod
+    def _clock(cls, value: str) -> str:
+        if not CLOCK_PATTERN.match(value):
+            raise ValueError("time must be HH:MM")
+        return value
+
+
+class DoseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    day: Date
+    slot: str
+    taken: str
+
+    _clock = field_validator("slot", "taken")(MedicineDose._clock.__func__)
+
+
 # ---------------------------------------------------------------- duel
 class DuelMember(BaseModel):
     """One participant: which side they are on, and whether they have accepted."""
@@ -803,6 +880,8 @@ class GroupState(BaseModel):
     deeds: list[ChildDeed] = Field(default_factory=list)
     rewards: list[ChildReward] = Field(default_factory=list)
     skills: list[ChildSkill] = Field(default_factory=list)
+    medicines: list[Medicine] = Field(default_factory=list)
+    doses: list[MedicineDose] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -814,4 +893,6 @@ class GroupState(BaseModel):
             "deeds": [d.model_dump(mode="json") for d in self.deeds],
             "rewards": [r.model_dump(mode="json") for r in self.rewards],
             "skills": [s.model_dump(mode="json") for s in self.skills],
+            "medicines": [m.model_dump(mode="json") for m in self.medicines],
+            "doses": [d.model_dump(mode="json") for d in self.doses],
         }

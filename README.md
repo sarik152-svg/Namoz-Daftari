@@ -262,6 +262,27 @@ never disagrees with the records underneath it.
 Friends keep the podium exactly as it was. `Ball qayerdan` stays for both: it explains a
 number rather than ranking anybody.
 
+## Dorilar — a family's medicine schedule
+
+On the Sunnat page, between the day's sunnah and the terms of the agreement, and only in
+a family. Who takes what, at which hours, for how many days; and each dose ticked at the
+hour it actually went down.
+
+**The plan and what happened are separate tables.** `medicines` is a course — a name,
+some hours, a first and a last day — and it does not change when somebody is late.
+`medicine_doses` is one row per dose actually taken, carrying the hour it was due and the
+hour it was swallowed. Whether that was on time is a **comparison made when it is read**
+against `DORI_KECHIKISH` (30 minutes), not a verdict written down, so the grace period
+can be argued about later without rewriting anybody's history.
+
+A dose with no row is not simply "missed". Five states are told apart because they mean
+different things to the person reading them: `kutilmoqda` (the hour has not come),
+`kechikmoqda` (it has, the day is still open, there is time to take it and merely be
+late), `vaqtida`, `kechikkan`, and `ichilmagan` — which only a closed day can produce.
+
+Anybody in the family may tick a dose: giving a child their syrup is not something only
+the child can record.
+
 ## Boshlang'ich ball — joining after everybody else
 
 Somebody who starts on a Thursday is four days behind through no fault of theirs, and a

@@ -23,6 +23,8 @@ from app.models import (
     ChildDeed,
     ChildReward,
     ChildSkill,
+    Medicine,
+    MedicineDose,
     Duel,
     DuelMember,
     Bonus,
@@ -388,6 +390,8 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         deeds=await fetch_child_deeds(pool, circle_id),
         rewards=await fetch_child_rewards(pool, circle_id),
         skills=await fetch_child_skills(pool, circle_id),
+        medicines=await fetch_medicines(pool, circle_id),
+        doses=await fetch_doses(pool, circle_id),
     )
 
 
@@ -575,6 +579,95 @@ async def set_reward_goal(pool: asyncpg.Pool, member_id: str, goal: int) -> bool
             member_id, goal,
         )
     return row is not None
+
+
+# ---------------------------------------------------------------- dorilar
+async def fetch_medicines(pool: asyncpg.Pool, circle_id: int) -> list[Medicine]:
+    """Courses that have not finished long ago. One that ended last month is history
+    nobody is reading; the doses stay, the plan drops off the screen."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT id, member_id, name, times, starts, ends FROM medicines
+             WHERE circle_id = $1 AND ends >= CURRENT_DATE - 30
+             ORDER BY id
+            """,
+            circle_id,
+        )
+    return [Medicine(**dict(row)) for row in rows]
+
+
+async def fetch_doses(pool: asyncpg.Pool, circle_id: int) -> list[MedicineDose]:
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT d.medicine_id, d.day, d.slot, d.taken
+              FROM medicine_doses d
+              JOIN medicines m ON m.id = d.medicine_id
+             WHERE m.circle_id = $1 AND d.day >= CURRENT_DATE - 30
+             ORDER BY d.day, d.slot
+            """,
+            circle_id,
+        )
+    return [MedicineDose(**dict(row)) for row in rows]
+
+
+async def add_medicine(
+    pool: asyncpg.Pool, circle_id: int, member_id: str, name: str,
+    times: list[str], starts: Date, days: int,
+) -> Medicine:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO medicines (circle_id, member_id, name, times, starts, ends)
+            VALUES ($1, $2, $3, $4, $5, $5::date + ($6::int - 1))
+            RETURNING id, member_id, name, times, starts, ends
+            """,
+            circle_id, member_id, name, sorted(times), starts, days,
+        )
+    return Medicine(**dict(row))
+
+
+async def delete_medicine(pool: asyncpg.Pool, medicine_id: int, circle_id: int) -> bool:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "DELETE FROM medicines WHERE id = $1 AND circle_id = $2 RETURNING id",
+            medicine_id, circle_id,
+        )
+    return row is not None
+
+
+async def circle_of_medicine(pool: asyncpg.Pool, medicine_id: int) -> int | None:
+    async with pool.acquire() as connection:
+        return await connection.fetchval(
+            "SELECT circle_id AS circle FROM medicines WHERE id = $1", medicine_id
+        )
+
+
+async def take_dose(
+    pool: asyncpg.Pool, medicine_id: int, day: Date, slot: str, taken: str
+) -> None:
+    """Marking the same dose twice keeps the first hour. When it went down is a fact
+    about that moment, and a second tap is a slip rather than a correction."""
+    async with pool.acquire() as connection:
+        await connection.execute(
+            """
+            INSERT INTO medicine_doses (medicine_id, day, slot, taken)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (medicine_id, day, slot) DO NOTHING
+            """,
+            medicine_id, day, slot, taken,
+        )
+
+
+async def untake_dose(
+    pool: asyncpg.Pool, medicine_id: int, day: Date, slot: str
+) -> None:
+    async with pool.acquire() as connection:
+        await connection.execute(
+            "DELETE FROM medicine_doses WHERE medicine_id = $1 AND day = $2 AND slot = $3",
+            medicine_id, day, slot,
+        )
 
 
 # ---------------------------------------------------------------- duel

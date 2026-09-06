@@ -419,6 +419,7 @@ async function pull(){
    members=j.members;data={};
    calls=j.calls||[];khatm=j.khatm||null;duels=j.duels||[];
    deeds=j.deeds||[];rewards=j.rewards||[];skills=j.skills||[];
+   medicines=j.medicines||[];doses=j.doses||[];
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -479,6 +480,11 @@ let duels=[],duelMsg="",duelErr=false,duelOchiq=false,duelSize=1;
    turadi, bazada emas — kitob o'qib berishning qiymati keyin o'zgarsa, tarixni
    qayta yozish shart bo'lmasin. Nishonlar ham shunday. */
 let deeds=[],rewards=[],skills=[],deedMsg="",deedErr=false;
+/* Oilaviy dorilar. Kurs — reja, doza — bo'lgan voqea. "Vaqtida" yoki "kechikkan"
+   o'qish paytida solishtirib chiqariladi, saqlanmaydi: shunda kechikish chegarasi
+   keyin o'zgarsa, tarixni qayta yozish shart bo'lmaydi. */
+let medicines=[],doses=[],doriMsg="",doriErr=false;
+const DORI_KECHIKISH=30;
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
 const M=id=>members.find(x=>x.id===id)||members[0];
@@ -960,6 +966,38 @@ function oilaBallView(a,z,nom){
        x.o.bad?" \u00B7 "+x.o.bad+" o'qilmagan":""}</div>`}
   </div>`});
  return h+`</div>`}
+
+/* ══════════════ DORILAR ══════════════ */
+/* Bir kunning dozalari va har birining holati:
+     vaqtida    — belgilangan soatdan keyin 30 daqiqa ichida ichilgan
+     kechikkan  — ichilgan, lekin kechroq
+     kechikmoqda— vaqti o'tdi, kun hali ochiq: ichib, kechikkan bo'lish mumkin
+     kutilmoqda — vaqti hali kirmagan
+     ichilmagan — kun yopildi, ichilmadi */
+function doriKunlik(d,ds){
+ const cfg=myCfg(),td=todayFor(cfg),hozir=nowFor(cfg);
+ const soat=String(hozir.getHours()).padStart(2,"0")+":"+String(hozir.getMinutes()).padStart(2,"0");
+ return (d.times||[]).map(slot=>{
+  const ich=(doses||[]).find(x=>x.medicine_id===d.id&&x.day===ds&&x.slot===slot);
+  let holat;
+  if(ich)holat=diffMin(slot,ich.taken)<=DORI_KECHIKISH?"vaqtida":"kechikkan";
+  else if(ds<td)holat="ichilmagan";
+  else if(ds>td)holat="kutilmoqda";
+  else holat=toMin(soat)>=toMin(slot)?"kechikmoqda":"kutilmoqda";
+  return{slot:slot,taken:ich?ich.taken:null,holat:holat}})}
+
+/* Kurs boshidan bugungacha bo'lgan yig'ma hisob. */
+function doriHolat(d){
+ const td=todayFor(myCfg());
+ const o={vaqtida:0,kechikkan:0,ichilmagan:0,qolgan:0};
+ let kun=d.starts;
+ for(let i=0;i<400&&kun<=d.ends;i++,kun=shift(kun,1)){
+  doriKunlik(d,kun).forEach(x=>{
+   if(x.holat==="vaqtida")o.vaqtida++;
+   else if(x.holat==="kechikkan")o.kechikkan++;
+   else if(x.holat==="ichilmagan")o.ichilmagan++;
+   else o.qolgan++})}
+ return o}
 
 /* ══════════════ BOLALAR ══════════════ */
 /* Ota yoki ona bola bilan nima qilgani. Bitta ish ikkovini ham rag'batlantiradi:
@@ -1723,6 +1761,50 @@ const A={
        start_day:n?todayFor(myCfg()):null})});
    await A.loadRoster();await pull();render()}
   catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+ /* ────────── DORILAR ────────── */
+ doriOchiq:false,doriKim:null,
+ doriForm(on){A.doriOchiq=!!on;doriMsg="";doriErr=false;render()},
+ setDoriKim(id){A.doriKim=id;render()},
+ async addMedicine(){
+  const val=id=>{const el=document.getElementById(id);return ((el&&el.value)||"").trim()};
+  const name=val("dori_name");
+  const times=val("dori_times").split(/[,\s]+/).filter(Boolean);
+  const days=Math.round(Number(val("dori_days")));
+  const ayt=t=>{doriMsg=t;doriErr=true;render()};
+  if(!name)return ayt("Dori nomini yozing");
+  if(!times.length)return ayt("Kamida bitta soat yozing, masalan 08:00");
+  if(!times.every(t=>/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(t)))
+   return ayt("Soatlar 08:00 ko'rinishida bo'lsin");
+  if(!isFinite(days)||days<1||days>365)return ayt("Necha kun ekanini yozing");
+  try{
+   await api("/circles/"+encodeURIComponent(circleId)+"/medicines",{method:"POST",
+     body:JSON.stringify({member_id:A.doriKim||me,name:name,times:times,
+       starts:todayFor(myCfg()),days:days})});
+   A.doriOchiq=false;doriMsg="";doriErr=false;await pull();
+  }catch(e){doriMsg=e.message||"Qo'shib bo'lmadi";doriErr=true}
+  render()},
+ async dropMedicine(id){
+  if(!confirm("Bu dori ro'yxatdan o'chirilsinmi?"))return;
+  try{await api("/medicines/"+encodeURIComponent(id),{method:"DELETE"});await pull()}
+  catch(e){doriMsg=e.message||"O'chirib bo'lmadi";doriErr=true}
+  render()},
+ async takeDose(id,slot){
+  const n=nowFor(myCfg());
+  const soat=String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
+  try{
+   await api("/medicines/"+encodeURIComponent(id)+"/doses",{method:"POST",
+     body:JSON.stringify({day:todayFor(myCfg()),slot:slot,taken:soat})});
+   await pull()}
+  catch(e){doriMsg=e.message||"Belgilab bo'lmadi";doriErr=true}
+  render()},
+ async untakeDose(id,slot){
+  try{
+   await api("/medicines/"+encodeURIComponent(id)+"/doses?day="
+     +encodeURIComponent(todayFor(myCfg()))+"&slot="+encodeURIComponent(slot),
+     {method:"DELETE"});
+   await pull()}
+  catch(e){doriMsg=e.message||"Olib tashlab bo'lmadi";doriErr=true}
+  render()},
  async setKpi(id){
   const m=(members||[]).find(x=>x.id===id)||{};
   const so=(nom,hozir)=>{
@@ -2790,8 +2872,76 @@ function sunnatTab(){
   <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
    <div class="eyebrow">Bugungi mashq</div>
    <p class="muted" style="font-size:13px;margin:5px 0 0">${esc(s.a)}</p></div></div>
+ ${doriPanel()}
  ${isChild(me)?"":`<div style="height:18px"></div>`+taskTab()}
  <div style="height:16px"></div>`}
+
+/* ────────── DORILAR ────────── */
+/* Oila birga dori ichadi: kim nimani, qaysi soatlarda, qachongacha. Kurs — reja,
+   doza — bo'lgan voqea, va ikkalasi alohida turadi. */
+function doriPanel(){
+ if(!isFamily())return "";
+ const td=todayFor(myCfg());
+ const RANG={vaqtida:"var(--jade)",kechikkan:"var(--brass)",
+   kechikmoqda:"var(--clay)",kutilmoqda:"var(--mut)",ichilmagan:"var(--clay)"};
+ const NOM={vaqtida:"vaqtida",kechikkan:"kechikkan",kechikmoqda:"vaqti o'tdi",
+   kutilmoqda:"kutilmoqda",ichilmagan:"ichilmagan"};
+ let h=`<div style="height:18px"></div>
+  <div class="panel p14"><div class="flex between center">
+   <div><div class="eyebrow">Dorilar</div>
+    <div class="muted small" style="margin-top:3px">Oilada kim nima ichadi</div></div>
+   <button class="btn" style="font-size:11px" onclick="A.doriForm(${A.doriOchiq?"false":"true"})">${
+     A.doriOchiq?"Yopish":"+ Dori qo'shish"}</button></div>`;
+ if(A.doriOchiq){
+  h+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="label" style="margin-top:0">Kimga</div>
+   <select id="dori_kim" class="input" onchange="A.setDoriKim(this.value)">${
+     (members||[]).map(m=>`<option value="${esc(m.id)}"${
+       m.id===(A.doriKim||me)?" selected":""}>${esc(first(m.name))}</option>`).join("")}</select>
+   <div class="label">Dori nomi</div>
+   <input id="dori_name" class="input" maxlength="80" placeholder="masalan: Vitamin D">
+   <div class="label">Kunda qaysi soatlarda</div>
+   <input id="dori_times" class="input" placeholder="08:00, 20:00">
+   <div class="label">Necha kun</div>
+   <input id="dori_days" class="input" type="number" min="1" max="365" placeholder="30">
+   <button class="btn btn-green btn-wide" style="margin-top:12px" onclick="A.addMedicine()">Qo'shish</button>
+   ${doriMsg?`<div class="${doriErr?"clay":"jade"} small" style="margin-top:8px">${esc(doriMsg)}</div>`:""}
+  </div>`}
+ const faol=(medicines||[]).filter(d=>d.ends>=td);
+ if(!faol.length&&!A.doriOchiq){
+  h+=`<p class="muted small" style="margin:11px 0 0;line-height:1.6">Hozircha dori
+   qo'shilmagan. Qo'shsangiz, har kuni qaysi soatda ichish kerakligi shu yerda
+   chiqadi va belgilab borasiz.</p>`}
+ faol.forEach(d=>{
+  const kishi=(members||[]).find(m=>m.id===d.member_id);
+  const kunlik=doriKunlik(d,td),jam=doriHolat(d);
+  const qoldi=Math.max(0,daysBetween(td,d.ends));
+  h+=`<div class="panel p14" style="margin-top:11px">
+   <div class="flex between center">
+    <div><div style="font-family:var(--serif);font-size:16px">${esc(d.name)}</div>
+     <div class="muted small" style="margin-top:2px">${
+       kishi?esc(first(kishi.name)):esc(d.member_id)} \u00B7 ${
+       qoldi?qoldi+" kun qoldi":"oxirgi kuni"}</div></div>
+    <button class="link" style="font-size:11px" onclick="A.dropMedicine(${d.id})">o'chirish</button></div>
+   <div style="margin-top:10px">`;
+  kunlik.forEach(x=>{
+   const ich=!!x.taken;
+   h+=`<div class="flex between center" style="padding:6px 0">
+    <span style="font-size:13px">${x.slot}
+     <span class="tiny" style="color:${RANG[x.holat]}">\u00B7 ${NOM[x.holat]}${
+       x.taken?" ("+x.taken+")":""}</span></span>
+    <button class="mbtn" style="${ich
+      ?"background:"+RANG[x.holat]+";border-color:transparent;color:#0D1220":""}"
+      onclick="${ich?`A.untakeDose(${d.id},'${x.slot}')`:`A.takeDose(${d.id},'${x.slot}')`}">\u2713</button>
+   </div>`});
+  h+=`</div>
+   <div class="muted tiny" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+    <span class="jade">${jam.vaqtida} vaqtida</span> \u00B7
+    <span class="brass">${jam.kechikkan} kechikkan</span> \u00B7
+    <span class="clay">${jam.ichilmagan} ichilmagan</span>${
+    jam.qolgan?" \u00B7 "+jam.qolgan+" qoldi":""}</div>
+  </div>`});
+ return h+`</div>`}
 
 /* ────────── VAZIFA ────────── */
 function taskTab(){
