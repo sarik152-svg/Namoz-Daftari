@@ -245,6 +245,20 @@ module.exports = {
     assert.ok(!c.html.includes("Kitob qarzi"), "and no book debt on the page");
   },
 
+  async "the new-book form sits under the books, not above them"(assert) {
+    /* Adding a book is done once; reading them is done every day, so the form
+       waits at the bottom and the books meet the eye first. */
+    const c = client({ data: { sardor: { ...blank(), books: [
+      { id: 1, title: "Sirlar xazinasi", author: "Navoiy", pages: 300,
+        started: "2026-09-01", log: [], notes: [] },
+    ]}, behruz: blank() }});
+    await c.A.go("app");
+    c.A.setTab("book");
+    const h = c.html;
+    assert.ok(h.includes("Yangi kitob"), "the form is still there");
+    assert.ok(h.indexOf("Sirlar xazinasi") < h.indexOf("Yangi kitob"), "below the books");
+  },
+
   async "the book scoring rules moved to the bottom of Nishon"(assert) {
     const c = client();
     await c.A.go("app");

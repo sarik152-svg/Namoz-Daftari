@@ -3631,17 +3631,17 @@ function booksMineView(){
    <div><div class="eyebrow">Ketma-ket normani bajardingiz</div>
     <div class="muted small" style="margin-top:3px">Uzmang — tezlik shundan chiqadi</div></div>
    <div class="brass" style="font-family:var(--serif);font-size:26px">${k.streak} kun</div></div>`;
+ h+=bs.length?bs.map(b=>bookCard(b,td)).join("")
+  :`<div class="panel" style="padding:26px;text-align:center">
+    <div style="font-size:26px">\u{1F4DA}</div>
+    <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Kitob qo'shilmagan</div>
+    <p class="muted" style="font-size:13px;margin-top:6px">Birinchi kitobingizni qo'shing — hisob shundan boshlanadi.</p></div>`;
  h+=`<div class="panel p14 mb14"><div class="eyebrow">Yangi kitob</div>
   <input id="b_title" class="input" placeholder="Kitob nomi" style="margin-top:9px">
   <input id="b_author" class="input" placeholder="Muallif" style="margin-top:8px">
   <input id="b_pages" class="input" type="number" min="1" inputmode="numeric" placeholder="Necha bet" style="margin-top:8px">
   ${A.bookErr&&!A.bookOpenId?`<div class="clay small" style="margin-top:8px">${esc(A.bookErr)}</div>`:""}
   <button class="btn btn-green btn-wide" style="margin-top:10px" onclick="A.bookAdd()">Qo'shish</button></div>`;
- h+=bs.length?bs.map(b=>bookCard(b,td)).join("")
-  :`<div class="panel" style="padding:26px;text-align:center">
-    <div style="font-size:26px">\u{1F4DA}</div>
-    <div style="font-family:var(--serif);font-size:19px;margin-top:6px">Kitob qo'shilmagan</div>
-    <p class="muted" style="font-size:13px;margin-top:6px">Birinchi kitobingizni qo'shing — hisob shundan boshlanadi.</p></div>`;
  return h}
 
 function booksAllView(){

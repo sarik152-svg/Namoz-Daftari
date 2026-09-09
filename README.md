@@ -726,6 +726,9 @@ inflates a prayer debt:
 
 Only closed days are scored; the current day is shown but never penalised.
 
+The **Yangi kitob** form is at the bottom of the page, under the books: adding a book
+is done once, reading them is done every day.
+
 That table is printed at the **bottom of Nishon**, not on Kitob. It is read once and
 then known, and the reading page is for the books. The make-up task that used to open
 every 4 points of book debt — 30 pages and a note — is **gone**: Sardor took it out, and
