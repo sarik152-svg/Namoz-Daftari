@@ -197,12 +197,34 @@ Once someone changes their PIN, the admin can still see the new value — that i
 
 ## Offline behaviour
 
-The app polls every 60 seconds and replaces its local copy with the server's. That
-would destroy a mark made while offline, so failed day writes are queued in
-`nd_outbox` and retried before each poll. If the queue cannot drain, the poll is
-skipped and your marks stay on screen. Failures that retrying cannot fix — expired
-session, someone else's record, rejected payload — are dropped rather than retried
-forever.
+Everything tapped on a phone that has lost its signal waits in one queue in
+`localStorage`, and `pull()` refuses to run until that queue is empty — it replaces
+the local copy with the server's, so anything unsent would be overwritten by a copy
+that never had it.
+
+The queue carries three kinds of entry, because three different things have to be
+re-sent:
+
+| | |
+|---|---|
+| `day` | that day's marks, replayed from the local copy (a PUT, safe to repeat) |
+| `data` | the member's whole document — book pages and notes live here |
+| `req` | the request itself: a Qur'an reading, a child's deed, a dose, a zikr tick |
+
+A `req` cannot be replayed from local state because the server writes it, so the
+request is stored verbatim. **It is queued only when the connection dropped** — when
+`fetch` itself failed and no status came back. A server that answered, even with a
+500, may already have done the work, and replaying that would write it twice.
+
+Only what people tap every day is queued. Settings — adding a member, a PIN, a duel,
+a KPI — are done at home with a connection, and need their answer immediately, so
+they fail loudly instead.
+
+The app polls every 60 seconds. If the queue cannot drain, the poll is skipped and
+what you tapped stays on screen. Failures that retrying cannot fix — expired session,
+someone else's record, rejected payload — are dropped rather than retried for ever,
+and the queue is capped at 200 entries so a phone left offline for a month does not
+fill its storage.
 
 ## The day ends at the next Fajr, not at midnight
 
@@ -821,6 +843,12 @@ log — a badge earned in the spring would vanish in the autumn. `GET /state` th
 also carries `quran_stats`: days read and total ayahs per member, counted in Postgres
 over the whole table (`fetch_quran_stats`). The client falls back to the window only
 when that list is absent.
+
+**Xatm sur'ati** sits under the panel: ayahs read ÷ **every day since the first
+reading**, not the days actually read, and the days left at that pace — the same rule
+as the book's remaining-days estimate, for the same reason. A pace measured only over
+the days somebody opened the Qur'an would flatter, and the estimate is a measurement,
+not a promise.
 
 **Qur'on · jamoa** on the ranking page shows each person's sura, ayah, total ayahs and
 this week's reading. The *Qazo daftari · jamoa* board it replaced came off on Sardor's

@@ -117,6 +117,7 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
      };
      globalThis.__set_duels = (list) => { duels = list; };
      globalThis.__state_me = () => data[me];
+     globalThis.__outbox = () => outbox;
      globalThis.__state_day = () => ((data[me]||{}).days||{})[date] || {};`,
     sandbox
   );
@@ -149,6 +150,8 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
     __me() { return sandbox.__state_me(); },
     /* Duels arrive with /state; tests seed them directly. */
     __setDuels(list) { sandbox.__set_duels(list); },
+    /* What is still waiting to be sent. */
+    __outbox() { return sandbox.__outbox(); },
     /* Every request the app made, in order. */
     calls,
     /* Whatever render() last wrote into #app. */

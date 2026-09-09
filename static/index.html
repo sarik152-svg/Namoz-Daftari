@@ -396,21 +396,59 @@ function forgetSession(){
  circles=[];circleId=null;LS.set("nd_circles",circles);LS.set("nd_circle",circleId);
  screen="login"}
 
-/* Marks made while offline wait here. pull() replaces local data with the
-   server's copy, so anything not yet sent must be flushed first or it is lost. */
-let outbox=LS.get("nd_outbox",[]);
-const setOutbox=v=>{outbox=v;LS.set("nd_outbox",outbox)};
+/* Anything done while offline waits here. pull() replaces local data with the
+   server's copy, so whatever has not been sent must be flushed first or it is lost.
+   Uch xil yozuv bor, chunki uch xil narsani qaytadan yuborish kerak:
+     day  — o'sha kunning belgilarini mahalliy nusxadan qayta yuborish (PUT, takror
+            yuborilsa ham zarari yo'q)
+     data — a'zoning butun hujjati: kitob betlari, zametkalar shu yerda
+     req  — so'rovning o'zi (Qur'on, bolalar amali, dori, zikr belgisi). Bularni
+            mahalliy nusxadan tiklab bo'lmaydi, chunki ularni server yozadi.
+   Navbatga faqat doira egasi emas, HAR KUNI bosiladigan narsalar qo'yiladi.
+   Sozlamalar (a'zo qo'shish, PIN, duel, KPI) navbatga tushmaydi: ular uyda,
+   ulanib turib qilinadi va javobi darhol kerak. */
+const OUTBOX_MAX=200;
+let outboxSeq=0;
+const outboxId=()=>Date.now().toString(36)+"-"+(outboxSeq++);
+let outbox=LS.get("nd_outbox",[]).map(o=>o.k?o:{k:"day",n:outboxId(),id:o.id,d:o.d});
+const setOutbox=v=>{
+ outbox=v.length>OUTBOX_MAX?v.slice(v.length-OUTBOX_MAX):v;
+ LS.set("nd_outbox",outbox)};
+const dropEntry=n=>setOutbox(outbox.filter(o=>o.n!==n));
 const rememberFailure=(id,d)=>{
- if(!outbox.some(o=>o.id===id&&o.d===d))setOutbox(outbox.concat([{id:id,d:d}]))};
-const clearFailure=(id,d)=>setOutbox(outbox.filter(o=>!(o.id===id&&o.d===d)));
+ if(!outbox.some(o=>o.k==="day"&&o.id===id&&o.d===d))
+  setOutbox(outbox.concat([{k:"day",n:outboxId(),id:id,d:d}]))};
+const clearFailure=(id,d)=>
+ setOutbox(outbox.filter(o=>!(o.k==="day"&&o.id===id&&o.d===d)));
+const rememberData=id=>{
+ if(!outbox.some(o=>o.k==="data"&&o.id===id))
+  setOutbox(outbox.concat([{k:"data",n:outboxId(),id:id}]))};
+const rememberReq=(m,p,b)=>setOutbox(outbox.concat([{k:"req",n:outboxId(),m:m,p:p,b:b}]));
 const PERMANENT=[401,403,404,422];
 async function flushOutbox(){
  for(const o of outbox.slice()){
-  try{await sendDay(o.id,o.d);clearFailure(o.id,o.d)}
+  try{
+   if(o.k==="data")await sendData(o.id);
+   else if(o.k==="req")await api(o.p,{method:o.m,
+     body:o.b===undefined?undefined:JSON.stringify(o.b)});
+   else await sendDay(o.id,o.d);
+   dropEntry(o.n)}
   catch(e){
-    if(PERMANENT.indexOf(e.status)>=0){clearFailure(o.id,o.d);continue}
+    if(PERMANENT.indexOf(e.status)>=0){dropEntry(o.n);continue}
     return false}}
  return true}
+/* So'rovni yuboradi, tarmoq uzilgan bo'lsa navbatga qo'yadi.
+   Navbatga FAQAT javob umuman kelmagan holatda qo'yiladi. Server javob bergan
+   bo'lsa — 500 bo'lsa ham — u so'rovni bajarib ulgurgan bo'lishi mumkin, va uni
+   qayta yuborish bitta amalni ikki marta yozib qo'yardi. */
+async function sendOrQueue(m,p,b){
+ try{
+  await api(p,{method:m,body:b===undefined?undefined:JSON.stringify(b)});
+  online=true;syncMsg="";return true}
+ catch(e){
+  if(e.status===undefined){
+   rememberReq(m,p,b);online=false;syncMsg="oflayn \u2014 keyin yuboriladi";return false}
+  throw e}}
 
 async function pull(){
  if(!loggedIn())return false;
@@ -429,20 +467,27 @@ async function pull(){
  }catch(e){online=false;syncMsg=e.status===401?"":"ulanmadi";return false}
 }
 async function pushMembers(){LS.set("nd_members",members)}
+async function sendData(id){
+ await api("/members/"+encodeURIComponent(id)+"/data",
+   {method:"PUT",body:JSON.stringify(data[id]||blank())})}
 async function pushData(id){
  LS.set("nd_data",data);
  if(!loggedIn())return;
  try{
-   await api("/members/"+encodeURIComponent(id)+"/data",
-     {method:"PUT",body:JSON.stringify(data[id])});
+   await sendData(id);
+   setOutbox(outbox.filter(o=>!(o.k==="data"&&o.id===id)));
    online=true;syncMsg="";
  }catch(e){online=false;
+   /* Kitob beti va zametka shu hujjatda. Yuborilmasa, keyingi pull() mahalliy
+      nusxani serverniki bilan almashtiradi va yozilgani yo'qoladi — shuning uchun
+      navbatga qo'yiladi va butun hujjat qaytadan yuboriladi. */
+   if(PERMANENT.indexOf(e.status)<0)rememberData(id);
    syncMsg=e.status===403?"Bu sizning yozuvingiz emas":e.status===429?"Juda ko'p urinish"
-     :"saqlanmadi - oflayn"}
+     :"saqlanmadi - keyin yuboriladi"}
 }
 async function sendDay(id,d){
  const day=((data[id]||{}).days||{})[d]||{};
- /* Bo'sh kunni yubormaymiz. pull() mahalliy nusxani serverникi bilan almashtiradi,
+ /* Bo'sh kunni yubormaymiz. pull() mahalliy nusxani serverniki bilan almashtiradi,
     ya'ni navbatda turgan eski kun endi bo'sh bo'lishi mumkin — uni yuborsak,
     serverda bo'sh yozuv paydo bo'ladi, yopilgan bo'sh kun esa besh o'qilmagan
     namoz degani. Yo'qdan qarz shunday tug'iladi. */
@@ -1101,6 +1146,25 @@ function quronYigma(id){
  (quran||[]).forEach(q=>{if(q.member_id===id)kun[q.day]=1});
  return{kunlar:Object.keys(kun).length,
    oyat:Object.keys(orni).reduce((n,k)=>n+orni[k],0)}}
+/* Xatm sur'ati. Kitobdagi hisob bilan bir xil: o'qilgan oyat birinchi kundan beri
+   o'tgan HAR BIR kunga bo'linadi, faqat o'qilgan kunlarga emas — «kuniga nechi
+   oyat» degani shu, va tashlab qo'yilgan kunlar muddatni uzaytirib ko'rsatadi.
+   6236 — Qur'ondagi jami oyat. Bu va'da emas, o'lchov: shu sur'at saqlansa. */
+const QURON_OYAT=SURALAR.reduce((n,x)=>n+x.oyat,0);
+function quronSurat(id,td){
+ const o=quronOrni(id),kunlar=[];
+ (quran||[]).forEach(q=>{if(q.member_id===id)kunlar.push(q.day)});
+ const oqilgan=quronYigma(id).oyat,qoldi=Math.max(0,QURON_OYAT-oqilgan);
+ if(!oqilgan)return{oyat:0,qoldi:QURON_OYAT,kun:0,tezlik:0,kunQoldi:null,tugash:null,
+   foiz:0};
+ kunlar.sort();
+ const kun=Math.max(1,daysBetween(kunlar[0],td)+1);
+ const tezlik=oqilgan/kun;
+ const kunQoldi=qoldi<=0?0:(tezlik>0?Math.ceil(qoldi/tezlik):null);
+ return{oyat:oqilgan,qoldi:qoldi,kun:kun,tezlik:tezlik,kunQoldi:kunQoldi,
+  tugash:kunQoldi?shift(td,kunQoldi):null,
+  foiz:Math.min(100,Math.round(oqilgan/QURON_OYAT*100))}}
+
 /* Ketma-ket o'qilgan kunlar. Bugun hali o'qilmagan bo'lsa kechadan sanaladi —
    kun tugamasdan qatorni uzilgan deb aytish erta. */
 function quronKetma(id,td){
@@ -1962,8 +2026,8 @@ const A={
   const bs=bolalar();if(!bs.length)return;
   const kim=bs.some(m=>m.id===A.deedChild)?A.deedChild:bs[0].id;
   try{
-   await api("/circles/"+encodeURIComponent(circleId)+"/child-deeds",
-     {method:"POST",body:JSON.stringify({child_id:kim,deed:A.deedKind,day:todayFor(myCfg())})});
+   await sendOrQueue("POST","/circles/"+encodeURIComponent(circleId)+"/child-deeds",
+     {child_id:kim,deed:A.deedKind,day:todayFor(myCfg())});
    deedMsg="Belgilandi";deedErr=false;await pull();
   }catch(e){deedMsg=e.message||"Belgilab bo'lmadi";deedErr=true}
   render()},
@@ -1978,8 +2042,8 @@ const A={
   const bs=bolalar();if(!bs.length)return;
   const kim=bs.some(m=>m.id===A.deedChild)?A.deedChild:bs[0].id;
   try{
-   await api("/circles/"+encodeURIComponent(circleId)+"/child-skills",
-     {method:"POST",body:JSON.stringify({child_id:kim,kind:kind,item:item,day:todayFor(myCfg())})});
+   await sendOrQueue("POST","/circles/"+encodeURIComponent(circleId)+"/child-skills",
+     {child_id:kim,kind:kind,item:item,day:todayFor(myCfg())});
    deedMsg="";deedErr=false;await pull();
   }catch(e){deedMsg=e.message||"Belgilab bo'lmadi";deedErr=true}
   render()},
@@ -2019,15 +2083,15 @@ const A={
   if(oyat<=hozir){
    quronMsg="Siz allaqachon "+hozir+"-oyatgacha o'qigansiz";quronErr=true;render();return}
   try{
-   await api("/me/quran",{method:"POST",
-     body:JSON.stringify({sura:A.suraTanlov,ayah:oyat,day:todayFor(myCfg())})});
+   await sendOrQueue("POST","/me/quran",
+     {sura:A.suraTanlov,ayah:oyat,day:todayFor(myCfg())});
    quronMsg="";quronErr=false;await pull();
   }catch(e){quronMsg=e.message||"Saqlab bo'lmadi";quronErr=true}
   render()},
  async finishSura(on){
   try{
-   await api("/me/quran/done?on="+(on?"true":"false"),{method:"POST",
-     body:JSON.stringify({sura:A.suraTanlov,day:todayFor(myCfg())})});
+   await sendOrQueue("POST","/me/quran/done?on="+(on?"true":"false"),
+     {sura:A.suraTanlov,day:todayFor(myCfg())});
    quronMsg="";quronErr=false;await pull();
   }catch(e){quronMsg=e.message||"Saqlab bo'lmadi";quronErr=true}
   render()},
@@ -2064,8 +2128,8 @@ const A={
   render()},
  async markZikr(id,on){
   try{
-   await api("/me/zikrs/"+encodeURIComponent(id)+"/day/"
-     +encodeURIComponent(todayFor(myCfg()))+"?on="+(on?"true":"false"),{method:"PUT"});
+   await sendOrQueue("PUT","/me/zikrs/"+encodeURIComponent(id)+"/day/"
+     +encodeURIComponent(todayFor(myCfg()))+"?on="+(on?"true":"false"));
    await A.loadPrivate()}
   catch(e){shaxsiyMsg=e.message||"Belgilab bo'lmadi";shaxsiyErr=true}
   render()},
@@ -2087,8 +2151,8 @@ const A={
   render()},
  async markTodo(id,on){
   try{
-   await api("/me/todos/"+encodeURIComponent(id)+"/day/"
-     +encodeURIComponent(todayFor(myCfg()))+"?on="+(on?"true":"false"),{method:"PUT"});
+   await sendOrQueue("PUT","/me/todos/"+encodeURIComponent(id)+"/day/"
+     +encodeURIComponent(todayFor(myCfg()))+"?on="+(on?"true":"false"));
    await A.loadPrivate()}
   catch(e){shaxsiyMsg=e.message||"Belgilab bo'lmadi";shaxsiyErr=true}
   render()},
@@ -2123,8 +2187,8 @@ const A={
   const n=nowFor(myCfg());
   const soat=String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");
   try{
-   await api("/medicines/"+encodeURIComponent(id)+"/doses",{method:"POST",
-     body:JSON.stringify({day:todayFor(myCfg()),slot:slot,taken:soat})});
+   await sendOrQueue("POST","/medicines/"+encodeURIComponent(id)+"/doses",
+     {day:todayFor(myCfg()),slot:slot,taken:soat});
    await pull()}
   catch(e){doriMsg=e.message||"Belgilab bo'lmadi";doriErr=true}
   render()},
@@ -2832,6 +2896,9 @@ function quronPanel(cfg){
  const n=A.suraTanlov,jami=suraOyat(n),hozir=orin[n]||0;
  const tugagan=suraTugagan(me,n);
  const bugun=quronKunlik(me,td),tugatilgan=quronTugatgani(me);
+ /* Kitobdagi «yana necha kun» hisobining Qur'ondagi ko'rinishi. Va'da emas —
+    shu sur'at saqlansa degani, va tashlab qo'yilgan kun uni uzaytiradi. */
+ const surat=quronSurat(me,td);
  /* Davom etadigan sura: eng oxirgi qo'l urilgani, aks holda birinchisi. */
  const pct=jami?Math.min(100,Math.round(hozir/jami*100)):0;
  return `<div class="panel p14 mt14">
@@ -2854,6 +2921,13 @@ function quronPanel(cfg){
       placeholder="qaysi oyatgacha o'qidingiz?">
     <button class="btn btn-green" onclick="A.addQuran()">Saqlash</button></div>
    ${quronMsg?`<div class="${quronErr?"clay":"jade"} small" style="margin-top:8px">${esc(quronMsg)}</div>`:""}
+   ${surat.oyat?`<div class="muted tiny" style="margin-top:9px;line-height:1.6">
+     Jami <b class="brass">${surat.oyat}</b> / ${QURON_OYAT} oyat \u00B7 kuniga
+     ${fmt(Math.round(surat.tezlik*10)/10)} oyat${surat.kunQoldi
+      ?` \u00B7 shu sur'atda xatmga yana <b class="brass">${surat.kunQoldi} kun</b>${
+        surat.tugash?" ("+pretty(surat.tugash)
+          +(surat.tugash.slice(0,4)!==td.slice(0,4)?" "+surat.tugash.slice(0,4):"")+")":""}`
+      :` \u00B7 <span class="jade">xatm to'ldi</span>`}</div>`:""}
    ${hozir>=jami&&!tugagan
     ?`<button class="btn btn-gold btn-wide" style="margin-top:10px" onclick="A.finishSura(true)">\u2713 Surani tugatdim \u00B7 +${QURON_BALL} ball</button>`
     :tugagan?`<button class="link" style="font-size:11px;margin-top:8px" onclick="A.finishSura(false)">tugatilgan belgisini olib tashlash</button>`

@@ -18,7 +18,7 @@ function client(patch = {}, at = "2026-09-09T07:00:00Z") {
              "quronHafta", "quronJamoaView", "prayerRange", "SURALAR",
              "QURON_BALL", "suraOyat", "quronYigma", "quronKetma",
              "nishonStat", "NISHONLAR", "haftaJamoa", "HAFTALIK",
-             "jamoaQuron", "jamoaQuronView"],
+             "jamoaQuron", "jamoaQuronView", "quronSurat", "QURON_OYAT"],
     routes: {
       "/me/quran": { ok: true },
       "/me/quran/done?on=true": { ok: true },
@@ -403,5 +403,61 @@ module.exports = {
 
   "nobody reading means no collective panel"(assert) {
     assert.strictEqual(client().jamoaQuronView(), "");
+  },
+
+  /* ------------------------------------------------------------ sur'at */
+  "the pace divides by every day since the first reading, not the days read"(assert) {
+    /* Same rule as the book: "ayahs a day" means every day, so the days somebody
+       did not open it push the finish date out. Anything else would flatter. */
+    const c = client({ quran: [
+      oqidi("sardor", 1, 7, "2026-09-05"),
+      oqidi("sardor", 2, 93, "2026-09-09"),
+    ]});
+    const s = c.quronSurat("sardor", "2026-09-09");
+    assert.strictEqual(s.oyat, 100);
+    assert.strictEqual(s.kun, 5, "five days, of which two were read");
+    assert.strictEqual(s.tezlik, 20);
+    assert.strictEqual(s.qoldi, c.QURON_OYAT - 100);
+    assert.strictEqual(s.kunQoldi, Math.ceil((c.QURON_OYAT - 100) / 20));
+  },
+
+  "the whole Qur'an is 6236 ayahs"(assert) {
+    assert.strictEqual(client().QURON_OYAT, 6236);
+  },
+
+  "nobody who has not started gets a finish date"(assert) {
+    const s = client().quronSurat("sardor", "2026-09-09");
+    assert.strictEqual(s.oyat, 0);
+    assert.strictEqual(s.kunQoldi, null, "no pace, so no promise about when");
+  },
+
+  "reaching the end leaves nothing to project"(assert) {
+    const c = client({ quranStats: [
+      { member_id: "sardor", kunlar: 300, oyat: 6236 },
+    ], quran: [oqidi("sardor", 114, 6, "2026-09-09")] });
+    const s = c.quronSurat("sardor", "2026-09-09");
+    assert.strictEqual(s.qoldi, 0);
+    assert.strictEqual(s.kunQoldi, 0);
+    assert.strictEqual(s.foiz, 100);
+  },
+
+  async "the panel says the pace and when the khatm would land"(assert) {
+    const c = client({ quran: [
+      oqidi("sardor", 1, 7, "2026-09-05"),
+      oqidi("sardor", 2, 93, "2026-09-09"),
+    ]});
+    await c.A.go("app");
+    /* The template wraps lines, so compare on normalised whitespace. */
+    const h = c.html.replace(/\s+/g, " ");
+    assert.ok(h.includes("/ 6236 oyat"), "the whole book as the target");
+    assert.ok(h.includes("kuniga 20 oyat"), "the pace");
+    assert.ok(h.includes("xatmga yana"), "and how long at that pace");
+    assert.ok(h.includes("307 kun"), "the days left at that pace");
+  },
+
+  async "a reader who has logged nothing is not shown a pace"(assert) {
+    const c = client();
+    await c.A.go("app");
+    assert.ok(!c.html.includes("xatmga yana"), "nothing to project from");
   },
 };
