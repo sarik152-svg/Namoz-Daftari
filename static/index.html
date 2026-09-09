@@ -261,12 +261,14 @@ const PR=k=>{const p=PRAYERS.find(x=>x.k===k);return p?p.n:k};
    yozilib, kechagi kun esa o'qilmagan bo'lib qolar edi. */
 function liveDay(pk,c){
  const n=nowFor(c),ds=today(n);
- /* Xufton bomdodgacha ochiq. Ish rejimidagi odamning peshin, asr va shomi ham
-    xuddi shunday: u ishdan kech kelib uchalasini birdan o'qiydi, va soat 23:30 da
-    o'qib 00:15 da belgilagani kechikish emas. Yengillikning butun ma'nosi shunda —
-    yarim tunda uzilib qolsa, kech ishlaydigan odam uchun undan foyda yo'q. */
- const tungi=pk==="xufton"||(ishRejimi(c)&&ISH_VAQT.indexOf(pk)>=0);
- if(!tungi)return ds;
+ /* Kun yarim tunda emas, KEYINGI KUNNING BOMDODIDA yopiladi — hamma namoz uchun
+    (2026-09-10, Sardor). Ilgari faqat xufton va ish rejimidagi peshin/asr/shom
+    shunday edi, qolganlari yarim tunda uzilardi: kechqurun kechikib o'qilgan shom
+    uchun −1 yozilib qolardi, holbuki u o'sha kechada o'qilgan. Endi kun ichida
+    kechikkani −0,25 bo'lib qolaveradi va faqat bomdod kirgach, o'qilmagani −1
+    bo'ladi. Yengillik o'sha kechaga, cheksiz kechiktirishga emas.
+    `pk` endi qarorga ta'sir qilmaydi, lekin chaqiruvlar joyida qoladi: qoida
+    kelajakda yana namozga qarab bo'linishi mumkin. */
  return decOf(n)<daySchedule(new Date(ds+"T12:00:00"),c).bomdod?shift(ds,-1):ds}
 
 /* Oyna holati: "open" — vaqti kirgan, "early" — hali kirmagan, "past" — o'tib ketgan. */
@@ -3500,13 +3502,15 @@ function jazoQoida(){
  return `<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
  <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
   <div><span class="jade">Vaqtida o'qilsa</span> — qarz yozilmaydi</div>
-  <div><span class="brass">Vaqti o'tib, o'sha kun ichida qazo qilinsa</span> — ${fmt(P_QAZO)} qarz</div>
-  <div><span class="clay">Kun yopilib, keyingi kunga qolsa yoki o'qilmasa</span> — ${fmt(P_MISS)} qarz</div>
+  <div><span class="brass">Vaqti o'tib, keyingi bomdodgacha qazo qilinsa</span> — ${fmt(P_QAZO)} qarz</div>
+  <div><span class="clay">Keyingi kunning bomdodi kirib ketsa</span> — ${fmt(P_MISS)} qarz</div>
   <div><span class="jade">Ayollar rejimi</span> — kun ichida qazo qilinsa qarz yozilmaydi</div>
   <div><span class="jade">Ish rejimi</span> — peshin, asr, shom kun ichida o'qilsa qarz yozilmaydi</div>
  </div>
  <p class="muted small" style="margin:11px 0 0;line-height:1.65">Qarzni hech narsa
   kamaytirmaydi — na jamoat, na uzilgan qazo, na bajarilgan vazifa.
+  Kun yarim tunda emas, ertangi bomdodda yopiladi: kechqurun kechikib o'qilgan namoz
+  \u2014 qazo, tong otguncha o'qilmagani esa o'qilmagan namoz.
   Qarz o'qilmagan namoz uchun jazo; savob esa reytingda o'z joyida sanaladi.
   Qarz har oy boshida noldan boshlanadi, bajarilmagan vazifa esa qolib ketmaydi.</p></div>
  <div class="panel p14 mb14"><div class="eyebrow">Jazo pog'onalari</div>

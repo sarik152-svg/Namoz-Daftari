@@ -204,6 +204,33 @@ skipped and your marks stay on screen. Failures that retrying cannot fix — exp
 session, someone else's record, rejected payload — are dropped rather than retried
 forever.
 
+## The day ends at the next Fajr, not at midnight
+
+Sardor prayed his Shom late one evening, marked it after midnight, and was charged a
+whole point. The mark had been written `late` — "prayed the next day" — because the
+calendar had turned over, and `late` is worth −1 like a prayer never said.
+
+Since 2026-09-10 **every prayer belongs to its own day until the next day's Fajr**. A
+prayer caught up before dawn is `qazo`, a quarter point; only when Fajr comes in does
+an unprayed one become −1. His words: *"agar men bomdodgacham o'qimasdan bomdod vaqti
+kirib ketsa unda −1 qilsang bo'ladi, aks holda shu 0,25 bo'laverish kerak"*.
+
+It is one line — `liveDay` no longer looks at which prayer it was asked about. Both
+ledgers read that function (`score` and `prayerRange` both derive their "is this day
+still open" from it), so the day card, the debt and the ranking moved together.
+
+Two rules that used to be special cases are now the general one: Xufton crossing
+midnight, and the work shift's Peshin/Asr/Shom staying open till dawn. **Ish rejimi
+still means something different** — it changes the *verdict* (a caught-up midday
+prayer counts as on time, +1), not the window; for everybody else the same prayer is
+a qazo, −0.25.
+
+`026_bomdodgacha.sql` applies it backwards, and carefully: `late` carries no time of
+its own, so the only evidence of when it was written is the row's `updated_at`. Only
+rows last written **before 05:00 local the next day** are converted — an early
+stand-in for Fajr that under-converts on purpose. A `missed` mark and an unmarked
+prayer are left alone, as always.
+
 ## Xufton — the day-boundary fix
 
 Xufton is the one prayer whose window crosses midnight: it opens at Isha and closes at

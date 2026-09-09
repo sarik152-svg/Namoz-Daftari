@@ -32,10 +32,14 @@ module.exports = {
     assert.notStrictEqual(schedule.endXufton, today.fajr, "must not be today's fajr");
   },
 
-  "a xufton prayed after midnight belongs to yesterday"(assert) {
+  "a prayer caught up after midnight belongs to yesterday"(assert) {
+    /* Until 2026-09-10 this was xufton's alone and the rest turned over at
+       midnight, which charged a whole point for a Shom prayed late in the evening.
+       Every prayer now runs to the next Fajr. */
     const c = client("2026-08-21T20:00:00Z"); // 01:00 Toshkent on the 22nd
     assert.strictEqual(c.liveDay("xufton", TOSHKENT), "2026-08-21");
-    assert.strictEqual(c.liveDay("shom", TOSHKENT), "2026-08-22");
+    assert.strictEqual(c.liveDay("shom", TOSHKENT), "2026-08-21");
+    assert.strictEqual(c.liveDay("bomdod", TOSHKENT), "2026-08-21");
   },
 
   "a fard prayer cannot be marked before its time"(assert) {

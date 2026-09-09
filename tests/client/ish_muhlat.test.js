@@ -1,6 +1,7 @@
-/* Ish rejimidagi odamning peshin, asr va shomi xufton kabi ertalabki bomdodgacha
-   ochiq turadi. Kech ishlaydigan odam uchun butun yengillikning ma'nosi shunda:
-   soat 23:30 da uyga kelib o'qib, 00:15 da belgilash kechikish emas. */
+/* Kun yarim tunda emas, keyingi kunning bomdodida yopiladi — hamma uchun va har
+   bir namoz uchun (2026-09-10, Sardor). Ish rejimi endi kunni emas, BAHONI
+   o'zgartiradi: uzilgan peshin/asr/shom unga vaqtida deb yoziladi, boshqaga esa
+   o'sha uzilgan namoz qazo bo'lib qolaveradi. */
 const { loadClient } = require("./harness");
 
 const mk = (over = {}) => ({
@@ -35,16 +36,19 @@ module.exports = {
     });
   },
 
-  "for anybody else the day turned over at midnight"(assert) {
+  "the same window is everybody's, not only a work shift"(assert) {
+    /* Sardor prayed his Shom late in the evening and was charged a whole point for
+       it. The day now runs to the next Fajr for everyone. */
     const c = client(ODDIY);
     ["peshin", "asr", "shom"].forEach(k => {
-      assert.strictEqual(c.liveDay(k, ODDIY), "2026-09-06", k + " is today's");
+      assert.strictEqual(c.liveDay(k, ODDIY), "2026-09-05", k + " still belongs to yesterday");
     });
   },
 
-  "bomdod gets no such grace, even on a work shift"(assert) {
+  "bomdod is in the window too — every prayer is"(assert) {
     const c = client(ISH);
-    assert.strictEqual(c.liveDay("bomdod", ISH), "2026-09-06");
+    assert.strictEqual(c.liveDay("bomdod", ISH), "2026-09-05");
+    assert.strictEqual(c.liveDay("bomdod", ODDIY), "2026-09-05");
   },
 
   "a day already past is never 'not yet'"(assert) {
@@ -78,19 +82,30 @@ module.exports = {
     const o = c.prayerRange(u, ISH, "2026-09-05", "2026-09-05");
     assert.strictEqual(o.bad, 0, "nothing is owed yet");
     const other = c.prayerRange(u, ODDIY, "2026-09-05", "2026-09-05");
-    assert.strictEqual(other.bad, 3, "for anybody else the three are already lost");
+    assert.strictEqual(other.bad, 0, "and nobody else is charged before Fajr either");
   },
 
-  async "the same tap gives anybody else nothing"(assert) {
+  async "the same tap lands on yesterday for anybody else — but as a qazo"(assert) {
+    /* This is what the work shift is now worth: not a longer day, a kinder verdict.
+       The prayer is caught up either way; only its value differs. */
     const c = client(ODDIY);
     await c.A.mark("peshin", "pray");
-    /* No grace: it lands on today, whose Peshin has not come, so it is refused. */
-    assert.strictEqual(((c.__me().days || {})["2026-09-05"] || {}).peshin, undefined);
+    const day = ((c.__me().days || {})["2026-09-05"]) || {};
+    assert.strictEqual(day.peshin.s, "qazo", "it lands on yesterday, caught up");
+    const o = c.prayerRange(c.__me(), ODDIY, "2026-09-05", "2026-09-05");
+    assert.strictEqual(o.qazo, 1, "a qazo for him");
+    assert.strictEqual(o.ontime, 0, "not the work shift's on-time");
+    assert.strictEqual(o.ball, -0.25, "quarter of a point, not a whole one");
   },
 
   "once fajr has passed, yesterday is closed to everyone"(assert) {
-    /* 2026-09-06 02:00Z is 07:00 in Toshkent, well after Fajr. */
+    /* 2026-09-06 02:00Z is 07:00 in Toshkent, well after Fajr. The concession is
+       for that night, not for putting a prayer off indefinitely. */
     const c = client(ISH, "2026-09-06T02:00:00Z");
-    assert.strictEqual(c.liveDay("peshin", ISH), "2026-09-06", "the grace has run out");
+    assert.strictEqual(c.liveDay("peshin", ISH), "2026-09-06", "the window has run out");
+    assert.strictEqual(c.liveDay("shom", ODDIY), "2026-09-06");
+    const u = { ...blank(), days: { "2026-09-05": { bomdod: { s: "ontime" } } } };
+    assert.strictEqual(c.prayerRange(u, ODDIY, "2026-09-05", "2026-09-05").bad, 4,
+      "now the four unmarked ones are lost");
   },
 };
