@@ -30,6 +30,7 @@ from app.models import (
     Promise,
     QuranDone,
     QuranRead,
+    QuranStat,
     Todo,
     Zikr,
     Duel,
@@ -402,6 +403,7 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         promises=await fetch_promises(pool, circle_id),
         quran=await fetch_quran(pool, circle_id),
         quran_done=await fetch_quran_done(pool, circle_id),
+        quran_stats=await fetch_quran_stats(pool, circle_id),
     )
 
 
@@ -641,6 +643,39 @@ async def fetch_quran_done(pool: asyncpg.Pool, circle_id: int) -> list[QuranDone
             circle_id,
         )
     return [QuranDone(**dict(row)) for row in rows]
+
+
+async def fetch_quran_stats(pool: asyncpg.Pool, circle_id: int) -> list[QuranStat]:
+    """Days read and ayahs reached, over the whole log.
+
+    `fetch_quran` is windowed and badges are derived, never stored, so counting days
+    from the window would quietly take a badge away four months after it was earned.
+    Ayahs are the sum of the furthest ayah per sura — going back over a sura is
+    reading, but it is not new ground.
+    """
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            WITH eng AS (
+                SELECT q.member_id, q.sura, max(q.ayah) AS ayah
+                  FROM quran_reads q
+                  JOIN circle_members cm ON cm.member_id = q.member_id
+                 WHERE cm.circle_id = $1
+                 GROUP BY q.member_id, q.sura
+            ), kun AS (
+                SELECT q.member_id, count(DISTINCT q.day) AS kunlar
+                  FROM quran_reads q
+                  JOIN circle_members cm ON cm.member_id = q.member_id
+                 WHERE cm.circle_id = $1
+                 GROUP BY q.member_id
+            )
+            SELECT kun.member_id, kun.kunlar, coalesce(sum(eng.ayah), 0) AS oyat
+              FROM kun LEFT JOIN eng ON eng.member_id = kun.member_id
+             GROUP BY kun.member_id, kun.kunlar
+            """,
+            circle_id,
+        )
+    return [QuranStat(**dict(row)) for row in rows]
 
 
 async def add_quran_read(

@@ -771,6 +771,30 @@ finished in the spring must not stop counting in the autumn). `POST /me/quran` a
 `POST /me/quran/done?on=` take no member id: reading is not something anybody can log on
 somebody else's behalf.
 
+### Nishonlar for it
+
+Thirteen personal badges, from **Ilk oyat** (a first reading logged) through **O'n /
+Ellik / Yuz sura**, **Ming / Besh ming oyat**, a reading streak (**Ketma-ket vird**, 7
+days; **O'ttiz kunlik vird**, 30), up to **Xatm** — all 114 suras finished — and **Butun
+Qur'on**, 6236 ayahs read. Two team tasks joined the weekly rotation, **Sura haftasi**
+(two suras each) and **Oyat haftasi** (200 ayahs each), beside the **Qur'on haftasi**
+that was already there.
+
+The collective one is **Jamoa xatmi** on the Nishon page: 114 suras closed by the circle
+together, **each sura counted once no matter who finished it**. It is not a race and
+holds no per-person tally — the whole point is that the circle closes the book together.
+
+Two badges here were quietly dead before this: **Kunlik vird** and **Qur'on yuz kun**
+counted `day.quran`, the tick that this feature deleted, and so could never be earned
+again. The weekly **Qur'on haftasi** task counted the same missing field. All three now
+read the log.
+
+Because badges are derived and never stored, day counts cannot come from the windowed
+log — a badge earned in the spring would vanish in the autumn. `GET /state` therefore
+also carries `quran_stats`: days read and total ayahs per member, counted in Postgres
+over the whole table (`fetch_quran_stats`). The client falls back to the window only
+when that list is absent.
+
 **Qur'on · jamoa** on the ranking page shows each person's sura, ayah, total ayahs and
 this week's reading. The *Qazo daftari · jamoa* board it replaced came off on Sardor's
 call; this answers the same "who is where" for reading. It sits **directly under the

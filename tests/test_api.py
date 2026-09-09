@@ -476,6 +476,9 @@ async def test_state_carries_the_reading_and_the_finished_suras(api, connection)
     connection.rows["FROM quran_done d"] = [
         {"member_id": "sardor", "sura": 114, "day": Date(2026, 9, 7)}
     ]
+    connection.rows["FROM kun LEFT JOIN eng"] = [
+        {"member_id": "sardor", "kunlar": 12, "oyat": 640}
+    ]
     async with api as client:
         response = await client.get("/api/v1/state?circle=2", headers=headers)
     body = response.json()
@@ -485,6 +488,24 @@ async def test_state_carries_the_reading_and_the_finished_suras(api, connection)
     assert body["quran_done"] == [
         {"member_id": "sardor", "sura": 114, "day": "2026-09-07"}
     ]
+    assert body["quran_stats"] == [
+        {"member_id": "sardor", "kunlar": 12, "oyat": 640}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_the_totals_are_counted_over_everything_not_the_window(api, connection):
+    """Badges are derived, never stored. A day count taken from the four-month window
+    would shrink on its own and take a badge back four months after it was earned."""
+    headers = as_session(connection)
+    connection.scalars["FROM circle_members WHERE circle_id"] = True
+    connection.rows["FROM members m"] = [MEMBER_JSON]
+    for table in ("day_records", "bonuses", "tasks", "books", "places"):
+        connection.rows[f"FROM {table}"] = []
+    async with api as client:
+        await client.get("/api/v1/state?circle=2", headers=headers)
+    stats = next(q for q in connection.sql if "count(DISTINCT q.day)" in q)
+    assert "day >=" not in stats
 
 
 @pytest.mark.asyncio

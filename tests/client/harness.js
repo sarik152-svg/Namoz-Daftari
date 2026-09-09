@@ -113,6 +113,7 @@ function loadClient({ at = "2026-08-22T09:00:00Z", expose = [], routes = null } 
        if ("promises" in patch) promises = patch.promises;
        if ("quran" in patch) quran = patch.quran;
        if ("quranDone" in patch) quranDone = patch.quranDone;
+       if ("quranStats" in patch) quranStats = patch.quranStats;
      };
      globalThis.__set_duels = (list) => { duels = list; };
      globalThis.__state_me = () => data[me];

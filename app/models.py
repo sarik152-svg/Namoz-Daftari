@@ -760,6 +760,23 @@ class QuranDone(BaseModel):
     _check_member = field_validator("member_id")(_validate_member_id)
 
 
+class QuranStat(BaseModel):
+    """One member's reading totalled over the whole table, not the window.
+
+    The log in `/state` is four months deep, so a day count taken from it would
+    shrink on its own and a badge earned in the spring would be lost in the autumn.
+    These two numbers are counted in Postgres over everything and never decay.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: str
+    kunlar: int = Field(ge=0)
+    oyat: int = Field(ge=0)
+
+    _check_member = field_validator("member_id")(_validate_member_id)
+
+
 class QuranDoneCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1053,6 +1070,7 @@ class GroupState(BaseModel):
     promises: list[Promise] = Field(default_factory=list)
     quran: list[QuranRead] = Field(default_factory=list)
     quran_done: list[QuranDone] = Field(default_factory=list)
+    quran_stats: list[QuranStat] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -1069,4 +1087,5 @@ class GroupState(BaseModel):
             "promises": [p.model_dump(mode="json") for p in self.promises],
             "quran": [q.model_dump(mode="json") for q in self.quran],
             "quran_done": [q.model_dump(mode="json") for q in self.quran_done],
+            "quran_stats": [q.model_dump(mode="json") for q in self.quran_stats],
         }

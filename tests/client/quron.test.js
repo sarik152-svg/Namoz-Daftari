@@ -16,7 +16,9 @@ function client(patch = {}, at = "2026-09-09T07:00:00Z") {
     at,
     expose: ["quronOrni", "quronKunlik", "quronTugatgani", "quronJami",
              "quronHafta", "quronJamoaView", "prayerRange", "SURALAR",
-             "QURON_BALL", "suraOyat"],
+             "QURON_BALL", "suraOyat", "quronYigma", "quronKetma",
+             "nishonStat", "NISHONLAR", "haftaJamoa", "HAFTALIK",
+             "jamoaQuron", "jamoaQuronView"],
     routes: {
       "/me/quran": { ok: true },
       "/me/quran/done?on=true": { ok: true },
@@ -276,5 +278,130 @@ module.exports = {
     assert.ok(h.includes("Kitob bali"), "on Nishon instead");
     assert.ok(h.includes("Umuman o'qilmagan kun"), "with the rules themselves");
     assert.ok(h.indexOf("Kitob bali") > h.indexOf("Nishonlar"), "at the bottom");
+  },
+
+  /* ------------------------------------------------------------ nishon */
+  "the lifetime totals come from the server, not the four-month window"(assert) {
+    /* The log is windowed, so counting days from it would take a badge back four
+       months after it was earned. */
+    const c = client({
+      quran: [oqidi("sardor", 1, 7, "2026-09-09")],
+      quranStats: [{ member_id: "sardor", kunlar: 140, oyat: 6236 }],
+    });
+    const y = c.quronYigma("sardor");
+    assert.strictEqual(y.kunlar, 140);
+    assert.strictEqual(y.oyat, 6236, "not the 7 ayahs still in view");
+  },
+
+  "with no aggregate it falls back to what is in view"(assert) {
+    const c = client({ quran: [
+      oqidi("sardor", 1, 7, "2026-09-08"),
+      oqidi("sardor", 2, 40, "2026-09-09"),
+    ]});
+    const y = c.quronYigma("sardor");
+    assert.strictEqual(y.kunlar, 2);
+    assert.strictEqual(y.oyat, 47);
+  },
+
+  "a reading streak survives today not being read yet"(assert) {
+    /* The day is not over. Calling the run broken before it ends would punish
+       somebody who reads in the evening. */
+    const c = client({ quran: [
+      oqidi("sardor", 1, 3, "2026-09-07"),
+      oqidi("sardor", 1, 5, "2026-09-08"),
+    ]});
+    assert.strictEqual(c.quronKetma("sardor", "2026-09-09"), 2);
+    assert.strictEqual(c.quronKetma("sardor", "2026-09-10"), 0, "a day missed ends it");
+  },
+
+  "the Qur'on badges are read from the log, not the deleted tick"(assert) {
+    const c = client({
+      quranDone: Array.from({ length: 12 }, (_, i) =>
+        ({ member_id: "sardor", sura: i + 1, day: "2026-09-08" })),
+      quranStats: [{ member_id: "sardor", kunlar: 33, oyat: 1200 }],
+    });
+    const t = c.nishonStat(SARDOR);
+    assert.strictEqual(t.suralar, 12);
+    assert.strictEqual(t.oyat, 1200);
+    assert.strictEqual(t.quranKun, 33);
+    const olingan = c.NISHONLAR.filter(x => x.v(t) >= x.kerak).map(x => x.n);
+    ["Ilk oyat", "Ilk sura", "O'n sura", "Ming oyat", "Kunlik vird"].forEach(n =>
+      assert.ok(olingan.includes(n), "expected the badge " + n));
+    ["Ellik sura", "Xatm", "Besh ming oyat"].forEach(n =>
+      assert.ok(!olingan.includes(n), n + " must still be out of reach"));
+  },
+
+  "finishing all 114 suras is the Xatm badge"(assert) {
+    const c = client({
+      quranDone: Array.from({ length: 114 }, (_, i) =>
+        ({ member_id: "sardor", sura: i + 1, day: "2026-09-08" })),
+      quranStats: [{ member_id: "sardor", kunlar: 200, oyat: 6236 }],
+    });
+    const t = c.nishonStat(SARDOR);
+    const olingan = c.NISHONLAR.filter(x => x.v(t) >= x.kerak).map(x => x.n);
+    ["Xatm", "Yuz sura", "Butun Qur'on"].forEach(n =>
+      assert.ok(olingan.includes(n), "expected " + n));
+  },
+
+  "every badge is still reachable — none reads a field that is gone"(assert) {
+    const c = client();
+    const t = c.nishonStat(SARDOR);
+    c.NISHONLAR.forEach(x => {
+      assert.strictEqual(typeof x.v(t), "number", x.n + " must produce a number");
+      assert.ok(!Number.isNaN(x.v(t)), x.n + " must not be NaN");
+    });
+  },
+
+  /* ------------------------------------------------- umumiy (jamoa) */
+  "the week's team task counts ayahs read, not a tick"(assert) {
+    const c = client({ quran: [
+      oqidi("sardor", 1, 7, "2026-09-08"),
+      oqidi("sardor", 2, 40, "2026-09-09"),
+      oqidi("behruz", 1, 5, "2026-09-09"),
+    ]});
+    const w = c.haftaJamoa("2026-09-07", "2026-09-13");
+    assert.strictEqual(w.oyat, 7 + 40 + 5, "everybody's reading this week");
+    assert.strictEqual(w.quran, 3, "three person-days");
+    const sura = c.HAFTALIK.find(x => x.n === "Sura haftasi");
+    const oyat = c.HAFTALIK.find(x => x.n === "Oyat haftasi");
+    assert.ok(sura && oyat, "both Qur'on team tasks exist");
+    assert.strictEqual(oyat.v(w), 52);
+    assert.strictEqual(oyat.kerak(2), 400, "200 ayahs each");
+  },
+
+  "finished suras this week feed the team task"(assert) {
+    const c = client({ quranDone: [
+      { member_id: "sardor", sura: 1, day: "2026-09-09" },
+      { member_id: "behruz", sura: 114, day: "2026-09-09" },
+    ]});
+    const w = c.haftaJamoa("2026-09-07", "2026-09-13");
+    assert.strictEqual(c.HAFTALIK.find(x => x.n === "Sura haftasi").v(w), 2);
+  },
+
+  "the collective khatm counts each sura once, whoever finished it"(assert) {
+    const c = client({ quranDone: [
+      { member_id: "sardor", sura: 1, day: "2026-09-08" },
+      { member_id: "behruz", sura: 1, day: "2026-09-09" },
+      { member_id: "behruz", sura: 114, day: "2026-09-09" },
+    ], quranStats: [{ member_id: "sardor", kunlar: 3, oyat: 7 }] });
+    const j = c.jamoaQuron();
+    assert.strictEqual(j.sura, 2, "Fotiha twice is still one sura");
+    assert.strictEqual(j.qolgan, 112);
+    assert.strictEqual(j.oquvchi, 1, "only those with reading logged");
+  },
+
+  async "the collective khatm panel is on Nishon, under the weekly badge"(assert) {
+    const c = client({ quranDone: [{ member_id: "sardor", sura: 1, day: "2026-09-08" }],
+      quranStats: [{ member_id: "sardor", kunlar: 3, oyat: 7 }] });
+    await c.A.go("app");
+    c.A.setTab("nishon");
+    const h = c.html;
+    assert.ok(h.includes("Jamoa xatmi"), "expected the collective badge");
+    assert.ok(h.indexOf("Hammamiz uchun") < h.indexOf("Jamoa xatmi"), "under the weekly one");
+    assert.ok(h.indexOf("Jamoa xatmi") < h.indexOf("Olingan nishonlar"), "above the personal ones");
+  },
+
+  "nobody reading means no collective panel"(assert) {
+    assert.strictEqual(client().jamoaQuronView(), "");
   },
 };
