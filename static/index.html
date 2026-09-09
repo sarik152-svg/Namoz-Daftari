@@ -3066,10 +3066,11 @@ function statsTab(){
   ?oilaBallView(rng[0],rng[1],yil?"Bu yil":oy?"Bu oy":"Bu hafta")
   :podium(yil?"Yil qahramoni":oy?"Oy qahramoni":"Hafta qahramoni",
     rng[0],rng[1],periodDone(rng[1],cfg));
+ /* Qur'on qahramondan keyin turadi — Sardor shu yerni ko'rsatgan. */
+ ch+=quronJamoaView();
  /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
  ch+=ballTarkibView(rng[0],rng[1]);
  ch+=duelView();
- ch+=quronJamoaView();
  /* Taqqoslash — foizlar va o'rinlar. Oilada ko'rsatilmaydi. */
  if(isFamily())return ch+oilaTahlilView();
  const ranked=members.slice().sort((a,b)=>{

@@ -772,8 +772,9 @@ finished in the spring must not stop counting in the autumn). `POST /me/quran` a
 somebody else's behalf.
 
 **Qur'on · jamoa** on the ranking page shows each person's sura, ayah, total ayahs and
-this week's reading. It stands where the *Qazo daftari · jamoa* board used to — Sardor
-asked for that one to come off, and this answers the same "who is where" for reading.
+this week's reading. The *Qazo daftari · jamoa* board it replaced came off on Sardor's
+call; this answers the same "who is where" for reading. It sits **directly under the
+week's champion**, above the breakdown and the duel — also his placement.
 
 ## Doiralar
 
