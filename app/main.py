@@ -51,6 +51,9 @@ from app.models import (
     KpiTargets,
     MedicineCreate,
     PromiseCreate,
+    QuranDoneCreate,
+    QuranReadCreate,
+    SURA_AYAHS,
     TodoCreate,
     ZikrCreate,
     StartBall,
@@ -825,6 +828,41 @@ async def make_promise(
     await repository.make_promise(
         request.app.state.pool, session.member_id, body.oy, body.lvl,
         body.promised, Date.today(),
+    )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- qur'on
+@app.post(f"{API_PREFIX}/me/quran")
+async def add_quran_read(
+    body: QuranReadCreate, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Record how far you read. Only for yourself — reading is not something anybody
+    can log on somebody else's behalf."""
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi uchun bu bo'lim yo'q", 403)
+    if body.ayah > SURA_AYAHS[body.sura - 1]:
+        raise _error(
+            "no_such_ayah",
+            f"{body.sura}-surada {SURA_AYAHS[body.sura - 1]} oyat bor",
+            status.HTTP_400_BAD_REQUEST,
+        )
+    await repository.add_quran_read(
+        request.app.state.pool, session.member_id, body.sura, body.ayah, body.day
+    )
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/me/quran/done")
+async def finish_sura(
+    body: QuranDoneCreate, request: Request, on: bool = True,
+    session: Session = Depends(require_session),
+) -> dict:
+    """A sura finished — worth five points on the day it was finished."""
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi uchun bu bo'lim yo'q", 403)
+    await repository.finish_sura(
+        request.app.state.pool, session.member_id, body.sura, body.day, on
     )
     return {"ok": True}
 

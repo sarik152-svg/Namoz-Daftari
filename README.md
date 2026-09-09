@@ -84,6 +84,8 @@ the first success, so the typing happens once.
 | POST | `.../khatm/{kid}/juz/{n}` | inside that family | Take a free juz |
 | POST | `.../khatm/{kid}/juz/{n}/done` | whoever took it | Mark it read |
 | DELETE | `.../khatm/{kid}/juz/{n}` | whoever took it | Give it back, if unread |
+| POST | `/api/v1/me/quran` | yourself only | How far you read: sura and ayah |
+| POST | `/api/v1/me/quran/done?on=` | yourself only | A sura finished, +5 ball |
 
 Errors always come back as `{"error": {"code": "...", "message": "..."}}`.
 
@@ -722,8 +724,53 @@ inflates a prayer debt:
 | Each note written | +0.5 |
 | Each book finished | +5 |
 
-Only closed days are scored; the current day is shown but never penalised. Every 4
-points of book debt opens one make-up task: 30 pages plus a note.
+Only closed days are scored; the current day is shown but never penalised.
+
+That table is printed at the **bottom of Nishon**, not on Kitob. It is read once and
+then known, and the reading page is for the books. The make-up task that used to open
+every 4 points of book debt — 30 pages and a note — is **gone**: Sardor took it out, and
+`K_TASK_AT` / `K_TASK_BET` went with it. Debt still shows in the ranking's breakdown;
+nothing on the book page punishes any more.
+
+## Qur'on — where you are, not whether you read
+
+The old panel asked one question, "did you read today", and a tick answered it. It could
+not answer the question that was actually wanted: *who is where, and how much are they
+reading*. So the tick is gone and a place is recorded instead — **which sura, and up to
+which ayah**.
+
+Two tables, and neither stores a score:
+
+- `quran_reads` is an append-only log: on this day, this member reached ayah N of sura S.
+  Where somebody is now is the **highest** ayah they have logged, and how much they read
+  on a day is the **step** between that day's furthest point and everything before it.
+  Storing a position instead would answer where they are and nothing about how they got
+  there.
+- `quran_done` records a sura finished, **on the day it was finished**, so the five
+  points it is worth (`QURON_BALL`) land in the week, the month and the year that
+  actually contain it. Finishing it twice keeps the first day — `ON CONFLICT DO NOTHING`.
+
+Going backwards is refused in the client: re-reading Fotiha is reading, but it is not
+new ground, and letting a 3 overwrite a 7 would make "how much did you read" lie. The
+server refuses an ayah the sura does not have — `SURA_AYAHS` in `app/models.py` holds all
+114 lengths (6236 ayahs, the Kufan count the Uzbek mus'haf uses) — because the column
+bound alone is 286, the length of the longest sura, so a 100 typed into Fotiha would
+otherwise sit in the log for ever and read as a sura finished fourteen times.
+
+The points are added **outside** the prayer loop in `prayerRange`. This is the subtle
+part: the loop starts at a member's first prayer record and charges a penalty for every
+unmarked prayer after it, so if a finished sura opened that window, somebody who only
+reads Qur'an would collect a prayer debt for reading. A sura is scored on its own day,
+and the prayer ledger stays shut until there are prayers in it.
+
+`GET /state` carries `quran` (120 days) and `quran_done` (never windowed — a sura
+finished in the spring must not stop counting in the autumn). `POST /me/quran` and
+`POST /me/quran/done?on=` take no member id: reading is not something anybody can log on
+somebody else's behalf.
+
+**Qur'on · jamoa** on the ranking page shows each person's sura, ayah, total ayahs and
+this week's reading. It stands where the *Qazo daftari · jamoa* board used to — Sardor
+asked for that one to come off, and this answers the same "who is where" for reading.
 
 ## Doiralar
 

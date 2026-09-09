@@ -154,7 +154,7 @@ const amalBajarilgan=(u,wk)=>Object.keys((u&&u.days)||{})
   .some(d=>d>=wk[0]&&d<=wk[1]&&u.days[d].amal);
 
 const BET_NORMA=10;
-const K_KAM=0.5,K_NOL=1,K_NOTE=0.5,K_DONE=5,K_TASK_AT=4,K_TASK_BET=30;
+const K_KAM=0.5,K_NOL=1,K_NOTE=0.5,K_DONE=5;
 
 const CITIES=[
  {n:"Toshkent",lat:41.2995,lng:69.2401,tz:5,asr:2,fa:18,ia:18},
@@ -420,6 +420,7 @@ async function pull(){
    calls=j.calls||[];khatm=j.khatm||null;duels=j.duels||[];
    deeds=j.deeds||[];rewards=j.rewards||[];skills=j.skills||[];
    medicines=j.medicines||[];doses=j.doses||[];promises=j.promises||[];
+   quran=j.quran||[];quranDone=j.quran_done||[];
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -490,6 +491,8 @@ let medicines=[],doses=[],doriMsg="",doriErr=false;
 let zikrs=[],zikrMarks=[],todos=[],todoMarks=[],shaxsiyMsg="",shaxsiyErr=false;
 /* Va'dalar — ataylab ochiq: ismi yonidagi belgi shuni aytadi. */
 let promises=[];
+/* Qur'on: o'qilgan oyatlar jurnali va tugatilgan suralar. */
+let quran=[],quranDone=[],quronMsg="",quronErr=false;
 const DORI_KECHIKISH=30;
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
@@ -634,7 +637,8 @@ function prayerRange(u,m,a,z){
  const ochiq={};PRAYERS.forEach(p=>ochiq[p.k]=liveDay(p.k,c));
  /* Hisob a'zo daftar tuta boshlagan kundan boshlanadi — score() dagidek. Aks holda
     guruhga keyin qo'shilgan odam o'zi yo'q kunlar uchun jarima olib qolardi. */
- const boshi=Object.keys(days).sort()[0];
+ const kunlar=Object.keys(days).sort();
+ const boshi=kunlar[0];
  /* Haftalik vazifa haftaga bitta. Belgi kunga yoziladi, lekin ball haftaniki, va
     ilgari belgilangan HAR BIR kunga +2 berilardi — ikki marta bosilgani ikki barobar
     to'lardi. Endi har haftaning eng birinchi belgilangan kuni sanaladi, qolganlari
@@ -647,7 +651,13 @@ function prayerRange(u,m,a,z){
     qolib ketgan, endi uzilgan qazolar (plyus). Ikkalasi butunlay boshqa narsa,
     shuning uchun nomi ham boshqa: bittasini ikkinchisi bilan chalkashtirish shu
     yerda eng oson qilinadigan xato. */
- const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,amal:0,amalYoq:0,boshlangich:0,ball:0};
+ const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,amal:0,amalYoq:0,boshlangich:0,quron:0,ball:0};
+ /* Tugatilgan sura tugatilgan kuniga yoziladi, shunda u o'z haftasi, oyi va yiliga
+    tushadi. Sanog'i namoz siklidan tashqarida: sura namoz daftarini ochmasligi
+    kerak, aks holda faqat Qur'on o'qiyotgan odamga belgilanmagan namozlar uchun
+    jarima yozilib ketardi. */
+ (quranDone||[]).forEach(d=>{
+  if(d.member_id===(m&&m.id)&&d.day>=a&&d.day<=z){o.quron++;o.ball+=QURON_BALL}});
  /* Keyin qo'shilgan odamning ochilish bali. U namoz emas va namoz sifatida
     sanalmaydi — o'z qatorida turadi. Sanasi bor, shuning uchun o'zi tegishli
     hafta, oy va yilda bir martadan kiradi, keyin qaytmaydi. */
@@ -886,7 +896,8 @@ const TARKIB=[
  {n:"Eski qazo",k:"eski"},
  {n:"Haftalik vazifa",k:"amal"},
  {n:"Vazifa qolgan",k:"amalYoq"},
- {n:"Boshlang'ich",k:"boshlangich"}
+ {n:"Boshlang'ich",k:"boshlangich"},
+ {n:"Tugatilgan sura",k:"quron"}
 ];
 function ballTarkib(m,o,k){
  const c=cfgNow(m);
@@ -898,6 +909,7 @@ function ballTarkib(m,o,k){
  if(k==="amal")return o.amal*AMAL_BALL;
  if(k==="amalYoq")return o.amalYoq*-AMAL_JARIMA;
  if(k==="boshlangich")return o.boshlangich;
+ if(k==="quron")return o.quron*QURON_BALL;
  return 0}
 
 function ballTarkibView(a,z){
@@ -1021,6 +1033,61 @@ function oilaBallView(a,z,nom){
        x.o.bad?" \u00B7 "+x.o.bad+" o'qilmagan":""}</div>`}
   </div>`});
  return h+`</div>`}
+
+/* ══════════════ QUR'ON ══════════════ */
+/* 114 sura va har birining oyatlari soni (Kufa sanog'i). Ro'yxat shu yerda turadi,
+   bazada emas: u o'zgarmaydigan narsa, va uni saqlash faqat ikkita nusxa yaratardi. */
+const SURALAR=[
+ ["Fotiha",7],["Baqara",286],["Oli Imron",200],["Niso",176],
+ ["Moida",120],["An\'om",165],["A\'rof",206],["Anfol",75],
+ ["Tavba",129],["Yunus",109],["Hud",123],["Yusuf",111],
+ ["Ra\'d",43],["Ibrohim",52],["Hijr",99],["Nahl",128],
+ ["Isro",111],["Kahf",110],["Maryam",98],["Toho",135],
+ ["Anbiyo",112],["Haj",78],["Mu\'minun",118],["Nur",64],
+ ["Furqon",77],["Shuaro",227],["Naml",93],["Qasas",88],
+ ["Ankabut",69],["Rum",60],["Luqmon",34],["Sajda",30],
+ ["Ahzob",73],["Saba",54],["Fotir",45],["Yosin",83],
+ ["Soffot",182],["Sod",88],["Zumar",75],["G\'ofir",85],
+ ["Fussilat",54],["Sho\'ro",53],["Zuxruf",89],["Duxon",59],
+ ["Josiya",37],["Ahqof",35],["Muhammad",38],["Fath",29],
+ ["Hujurot",18],["Qof",45],["Zoriyot",60],["Tur",49],
+ ["Najm",62],["Qamar",55],["Rahmon",78],["Voqea",96],
+ ["Hadid",29],["Mujodala",22],["Hashr",24],["Mumtahana",13],
+ ["Saff",14],["Juma",11],["Munofiqun",11],["Tag\'obun",18],
+ ["Taloq",12],["Tahrim",12],["Mulk",30],["Qalam",52],
+ ["Haqqa",52],["Maorij",44],["Nuh",28],["Jin",28],
+ ["Muzzammil",20],["Muddassir",56],["Qiyoma",40],["Inson",31],
+ ["Mursalot",50],["Naba",40],["Noziot",46],["Abasa",42],
+ ["Takvir",29],["Infitor",19],["Mutaffifin",36],["Inshiqoq",25],
+ ["Buruj",22],["Toriq",17],["A\'lo",19],["G\'oshiya",26],
+ ["Fajr",30],["Balad",20],["Shams",15],["Layl",21],
+ ["Zuho",11],["Sharh",8],["Tiyn",8],["Alaq",19],
+ ["Qadr",5],["Bayyina",8],["Zalzala",8],["Odiyot",11],
+ ["Qoria",11],["Takosur",8],["Asr",3],["Humaza",9],
+ ["Fil",5],["Quraysh",4],["Moun",7],["Kavsar",3],
+ ["Kofirun",6],["Nasr",3],["Masad",5],["Ixlos",4],
+ ["Falaq",5],["Nos",6]
+].map((x,i)=>({n:i+1,nom:x[0],oyat:x[1]}));
+const QURON_BALL=5;
+const suraOyat=n=>{const x=SURALAR[n-1];return x?x.oyat:0};
+const suraNomi=n=>{const x=SURALAR[n-1];return x?x.nom:String(n)};
+/* Odamning har suradagi eng uzoq borgan joyi. */
+function quronOrni(id){
+ const o={};
+ (quran||[]).forEach(q=>{if(q.member_id===id&&(!o[q.sura]||q.ayah>o[q.sura]))o[q.sura]=q.ayah});
+ return o}
+const suraTugagan=(id,n)=>(quranDone||[]).some(d=>d.member_id===id&&d.sura===n);
+const quronTugatgani=id=>(quranDone||[]).filter(d=>d.member_id===id).length;
+/* Bir kunda qancha o'qilgani — o'sha kungi eng uzoq nuqtadan oldingi holatgacha. */
+function quronKunlik(id,ds){
+ const oldin={},bugun={};
+ (quran||[]).forEach(q=>{
+  if(q.member_id!==id)return;
+  if(q.day<ds){if(!oldin[q.sura]||q.ayah>oldin[q.sura])oldin[q.sura]=q.ayah}
+  else if(q.day===ds){if(!bugun[q.sura]||q.ayah>bugun[q.sura])bugun[q.sura]=q.ayah}});
+ let n=0;
+ Object.keys(bugun).forEach(k=>{n+=Math.max(0,bugun[k]-(oldin[k]||0))});
+ return n}
 
 /* ══════════════ ZIKR VA KUNLIK VAZIFA ══════════════ */
 const zikrBelgilangan=(id,ds)=>(zikrMarks||[]).some(m=>m.zikr_id===id&&m.day===ds);
@@ -1858,6 +1925,33 @@ const A={
    await A.loadRoster();await pull();render()}
   catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
 /* ────────── DORILAR ────────── */
+ /* ────────── QUR'ON ────────── */
+ suraTanlov:1,
+ setSura(n){const v=+n;if(v>=1&&v<=114)A.suraTanlov=v;quronMsg="";render()},
+ async addQuran(){
+  const el=document.getElementById("q_ayah");
+  const oyat=Math.round(Number((el&&el.value)||""));
+  const jami=suraOyat(A.suraTanlov);
+  if(!isFinite(oyat)||oyat<1||oyat>jami){
+   quronMsg="1 dan "+jami+" gacha oyat raqamini yozing";quronErr=true;render();return}
+  /* Ortga qaytish yozilmaydi: turgan joyi eng uzoq borgan oyati, va oldingi
+     kunning yozuvini o'chirib yuborish "qancha o'qidi" hisobini buzardi. */
+  const hozir=quronOrni(me)[A.suraTanlov]||0;
+  if(oyat<=hozir){
+   quronMsg="Siz allaqachon "+hozir+"-oyatgacha o'qigansiz";quronErr=true;render();return}
+  try{
+   await api("/me/quran",{method:"POST",
+     body:JSON.stringify({sura:A.suraTanlov,ayah:oyat,day:todayFor(myCfg())})});
+   quronMsg="";quronErr=false;await pull();
+  }catch(e){quronMsg=e.message||"Saqlab bo'lmadi";quronErr=true}
+  render()},
+ async finishSura(on){
+  try{
+   await api("/me/quran/done?on="+(on?"true":"false"),{method:"POST",
+     body:JSON.stringify({sura:A.suraTanlov,day:todayFor(myCfg())})});
+   quronMsg="";quronErr=false;await pull();
+  }catch(e){quronMsg=e.message||"Saqlab bo'lmadi";quronErr=true}
+  render()},
  /* ────────── ZIKR VA KUNLIK VAZIFA ────────── */
  zikrOchiq:false,todoOchiq:false,todoTakroriy:true,
  zikrForm(on){A.zikrOchiq=!!on;shaxsiyMsg="";shaxsiyErr=false;render()},
@@ -2651,6 +2745,43 @@ function bolalarPanel(cfg){
   h+=`</div>`}
  return h+`</div>`}
 
+/* Qur'on. "O'qidim" degan belgi o'rniga: qaysi surada, qaysi oyatgacha. Keyingi
+   safar o'sha joydan davom etadi, chunki turgan joyi eng uzoq borgan oyati.
+   Surani tugatgani uchun +5 ball, tugatilgan kuniga yoziladi. */
+function quronPanel(cfg){
+ const td=todayFor(cfg),orin=quronOrni(me);
+ const n=A.suraTanlov,jami=suraOyat(n),hozir=orin[n]||0;
+ const tugagan=suraTugagan(me,n);
+ const bugun=quronKunlik(me,td),tugatilgan=quronTugatgani(me);
+ /* Davom etadigan sura: eng oxirgi qo'l urilgani, aks holda birinchisi. */
+ const pct=jami?Math.min(100,Math.round(hozir/jami*100)):0;
+ return `<div class="panel p14 mt14">
+  <div class="flex between center">
+   <div><div class="eyebrow">Qur'on</div>
+    <div class="muted small" style="margin-top:3px">${tugatilgan} / 114 sura tugatilgan${
+      bugun?" \u00B7 bugun "+bugun+" oyat":""}</div></div>
+   <div style="font-size:22px;${tugatilgan?"":"opacity:.25;filter:grayscale(1)"}">\u{1F4D6}</div></div>
+  <div style="margin-top:12px">
+   <select id="q_sura" class="input" onchange="A.setSura(this.value)">${
+    SURALAR.map(x=>`<option value="${x.n}"${x.n===n?" selected":""}>${x.n}. ${esc(x.nom)} \u00B7 ${
+      x.oyat} oyat${suraTugagan(me,x.n)?" \u2713":""}</option>`).join("")}</select>
+   <div class="flex between center" style="margin-top:10px">
+    <span class="muted small">Hozir: <b class="brass">${hozir}</b> / ${jami} oyat</span>
+    ${tugagan?`<span class="jade tiny">\u2713 tugatilgan \u00B7 +${QURON_BALL} ball</span>`:""}</div>
+   <div class="bar" style="margin-top:6px"><div style="width:${pct}%;background:${
+     tugagan?"var(--brass)":"var(--jade)"}"></div></div>
+   <div class="flex gap2" style="margin-top:10px">
+    <input id="q_ayah" class="input" type="number" min="1" max="${jami}" style="flex:1"
+      placeholder="qaysi oyatgacha o'qidingiz?">
+    <button class="btn btn-green" onclick="A.addQuran()">Saqlash</button></div>
+   ${quronMsg?`<div class="${quronErr?"clay":"jade"} small" style="margin-top:8px">${esc(quronMsg)}</div>`:""}
+   ${hozir>=jami&&!tugagan
+    ?`<button class="btn btn-gold btn-wide" style="margin-top:10px" onclick="A.finishSura(true)">\u2713 Surani tugatdim \u00B7 +${QURON_BALL} ball</button>`
+    :tugagan?`<button class="link" style="font-size:11px;margin-top:8px" onclick="A.finishSura(false)">tugatilgan belgisini olib tashlash</button>`
+    :`<div class="muted tiny" style="margin-top:8px;line-height:1.55">Sura oxiriga
+      yetganingizda "tugatdim" tugmasi chiqadi \u2014 har bir sura +${QURON_BALL} ball.</div>`}
+  </div></div>`}
+
 /* Haftalik vazifa. Bir hafta — bitta amal, bitta belgi. Ataylab sodda: ro'yxat
    ham, bosqich ham, muddat tanlash ham yo'q — bajardingizmi yoki yo'qmi. */
 function amalPanel(cfg){
@@ -2837,12 +2968,7 @@ function todayTab(){
     :isT?"Vaqti o'tdi — bugun qazo qilsangiz −0,25, ertaga qolsa −1"
     :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)"}</div>`}
   h+=`</div>`});
- /* Qur'on qatori namozlardan keyin darrov turadi — u ham kunlik belgi. */
- h+=`<div class="panel p14 mt14 flex between center">
-   <div><div style="font-family:var(--serif);font-size:16px">Bugun Qur'on o'qidim</div>
-   <div class="muted small">Oz bo'lsa ham — davomiysi afzal</div></div>
-   <button class="mbtn" style="${day.quran?"background:var(--jade);border-color:transparent;color:#0D1220":""}"
-     onclick="A.field('quran',${day.quran?"false":"true"})">✓</button></div>`;
+ h+=quronPanel(cfg);
  h+=amalPanel(cfg);
  h+=bolalarPanel(cfg);
  h+=qazoPanel(day,isT);
@@ -2943,8 +3069,9 @@ function statsTab(){
  /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
  ch+=ballTarkibView(rng[0],rng[1]);
  ch+=duelView();
+ ch+=quronJamoaView();
  /* Taqqoslash — foizlar va o'rinlar. Oilada ko'rsatilmaydi. */
- if(isFamily())return ch+oilaTahlilView()+qazoJamoaView();
+ if(isFamily())return ch+oilaTahlilView();
  const ranked=members.slice().sort((a,b)=>{
   const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
@@ -2987,32 +3114,48 @@ function statsTab(){
    <div class="bar"><div style="width:${prog*100}%;background:var(--jade)"></div></div>
   </div>`});
  h+=`</div>`;
- h+=qazoJamoaView();
  return h}
 
-/* Kim qaysi qazo namozlarini uzayotgani. Ataylab tartiblanmaydi va taqqoslanmaydi:
-   eski qazo — har kimning o'z hisobi, poyga emas. Shuning uchun o'rin ham, foiz ham
-   yo'q, faqat kim nimani uzayotgani ko'rinib turadi. */
-function qazoJamoaView(){
- const kimdir=members.some(m=>{
-  const u=data[m.id]||blank();
-  return Object.keys(u.days||{}).some(d=>qazoOf(u.days[d])>0)});
- if(!kimdir)return "";
- let h=`<div class="panel p14 mb14"><div class="eyebrow">Qazo daftari · jamoa</div>
-  <p class="muted small" style="margin:7px 0 12px;line-height:1.6">Kim qaysi eski qazo
-   namozlarini uzayotgani. Bu poyga emas — o'rin ham, taqqoslash ham yo'q.</p>`;
- members.forEach(m=>{
-  const u=data[m.id]||blank(),days=u.days||{};
-  const per={};QAZO_VAQT.forEach(k=>per[k]=0);
-  Object.keys(days).forEach(d=>{const q=(days[d]||{}).qazo||{};
-   QAZO_VAQT.forEach(k=>per[k]+=q[k]||0)});
-  const jami=QAZO_VAQT.reduce((n,k)=>n+per[k],0);
-  const satr=QAZO_VAQT.filter(k=>per[k]>0).map(k=>PR(k)+" "+per[k]).join(" \u00B7 ");
-  h+=`<div style="padding:8px 0;border-top:1px solid var(--line)">
+/* Kim qaysi surada va qancha o'qiyapti. Sardor buni so'radi: o'qish yolg'iz ish,
+   lekin qayerda ekanini ko'rish bir-birini tortadi. O'rin ham, foiz ham yo'q —
+   tugatilgan suralar allaqachon reytingda, bu yerda faqat kim qayerdaligi. */
+function quronJami(id){
+ const o=quronOrni(id);
+ return Object.keys(o).reduce((n,k)=>n+o[k],0)}
+/* Oxirgi qo'l urilgan sura — hozir davom etilayotgani. Yozuvlar kun bo'yicha
+   tartiblangan holda keladi, shuning uchun oxirgisi eng yangisi. */
+function quronOxirgi(id){
+ let oxir=null;
+ (quran||[]).forEach(q=>{if(q.member_id===id)oxir=q});
+ return oxir}
+function quronHafta(id,td){
+ const wk=weekRange(td);
+ let n=0,d=wk[0];
+ for(let i=0;i<7&&d<=wk[1];i++){n+=quronKunlik(id,d);d=shift(d,1)}
+ return n}
+function quronJamoaView(){
+ const td=todayFor(myCfg());
+ const bor=members.filter(m=>quronJami(m.id)>0||quronTugatgani(m.id)>0);
+ if(!bor.length)return "";
+ const eng=Math.max.apply(null,bor.map(m=>quronHafta(m.id,td)).concat([1]));
+ let h=`<div class="panel p14 mb14"><div class="eyebrow">Qur'on \u00B7 jamoa</div>
+  <p class="muted small" style="margin:7px 0 12px;line-height:1.6">Kim qaysi surada,
+   qaysi oyatda va shu hafta qancha o'qidi. Har bir tugatilgan sura \u2014
+   +${QURON_BALL} ball.</p>`;
+ bor.sort((a,b)=>quronTugatgani(b.id)-quronTugatgani(a.id)||quronJami(b.id)-quronJami(a.id));
+ bor.forEach(m=>{
+  const oxir=quronOxirgi(m.id),hafta=quronHafta(m.id,td);
+  const joy=oxir?`${oxir.sura}. ${esc(suraNomi(oxir.sura))} \u00B7 ${
+    quronOrni(m.id)[oxir.sura]||oxir.ayah}/${suraOyat(oxir.sura)} oyat`:"hali boshlanmagan";
+  h+=`<div style="padding:9px 0;border-top:1px solid var(--line)">
    <div class="flex between center">
     <span style="font-size:12.5px;color:${colorOf(m.id)}">${esc(first(m.name))}</span>
-    <span class="${jami?"jade":"muted"} small">${jami?jami+" ta":"hali boshlanmagan"}</span></div>
-   ${satr?`<div class="muted tiny" style="margin-top:3px">${satr}</div>`:""}</div>`});
+    <span class="${quronTugatgani(m.id)?"jade":"muted"} small">${
+      quronTugatgani(m.id)} sura tugatilgan</span></div>
+   <div class="muted tiny" style="margin-top:3px">${joy} \u00B7 jami ${quronJami(m.id)} oyat</div>
+   <div class="bar" style="margin-top:6px"><div style="width:${
+     Math.round(hafta/eng*100)}%;background:var(--jade)"></div></div>
+   <div class="muted tiny" style="margin-top:3px">shu hafta ${hafta} oyat</div></div>`});
  return h+`</div>`}
 
 /* Har haftaning o'z topshirig'i. "Hammamiz uchun" ahdi joyida qoladi — bu uning
@@ -3474,7 +3617,7 @@ function bookCard(b,td){
 
 function booksMineView(){
  const cfg=myCfg(),td=todayFor(cfg),u=data[me],bs=(u.books||[]).slice();
- const k=bookScore(u,cfg),jazo=Math.max(0,Math.floor(k.debt/K_TASK_AT));
+ const k=bookScore(u,cfg);
  bs.sort((a,b)=>(a.finished?1:0)-(b.finished?1:0)||(a.started<b.started?1:-1));
  let h=`<div class="eyebrow">Kitob daftari</div>
  <h2 style="font-size:24px;margin:6px 0 12px">O'qiyotganlarim</h2>`+bookSwitch();
@@ -3483,24 +3626,11 @@ function booksMineView(){
   <div class="panel stat"><b class="brass">${k.notes}</b><i>Zametka</i></div>
   <div class="panel stat"><b class="${k.debt>0?"clay":"jade"}">${k.debt>0?"−"+fmt(k.debt):"+"+fmt(-k.debt)}</b><i>${k.debt>0?"Kitob qarzi":"Zaxira"}</i></div>
  </div>
- <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
-  <div><span class="jade">Kuniga ${BET_NORMA} bet va undan ko'p</span> — 0 ball</div>
-  <div><span class="brass">Kam o'qilgan kun</span> — −${fmt(K_KAM)}</div>
-  <div><span class="clay">Umuman o'qilmagan kun</span> — −${fmt(K_NOL)}</div>
-  <div><span class="jade">Har bir zametka</span> — +${fmt(K_NOTE)} · <span class="jade">tugatilgan kitob</span> — +${K_DONE}</div>
-  <div class="tiny" style="margin-top:6px">Kitob bali namoz balidan alohida yuritiladi.</div>
- </div></div>`;
+`;
  if(k.streak>0)h+=`<div class="panel p14 mb14 flex between center" style="border-color:#C9A22744">
    <div><div class="eyebrow">Ketma-ket normani bajardingiz</div>
     <div class="muted small" style="margin-top:3px">Uzmang — tezlik shundan chiqadi</div></div>
    <div class="brass" style="font-family:var(--serif);font-size:26px">${k.streak} kun</div></div>`;
- if(jazo>0)h+=`<div class="panel p18 mb14" style="border-color:#C9584B66">
-   <div class="clay" style="font-family:var(--serif);font-size:20px">Jazo vazifasi</div>
-   <p class="muted" style="font-size:12.5px;margin:6px 0 0;line-height:1.7">Kitob qarzi ${fmt(k.debt)} ball.
-    <b>${jazo} ta</b> qo'shimcha vazifa ochiq — har biri <b>${K_TASK_BET} bet</b> o'qish va
-    <b>1 ta zametka</b> yozish. Zametka yozganingizda qarz ${fmt(K_NOTE)} ballga kamayadi,
-    kitobni tugatsangiz ${K_DONE} ballga.</p>
-   <div class="muted tiny" style="margin-top:8px">O'qilmagan kunlar: ${k.nol} · kam o'qilgan: ${k.kam} · norma bajarilgan: ${k.toliq}</div></div>`;
  h+=`<div class="panel p14 mb14"><div class="eyebrow">Yangi kitob</div>
   <input id="b_title" class="input" placeholder="Kitob nomi" style="margin-top:9px">
   <input id="b_author" class="input" placeholder="Muallif" style="margin-top:8px">
@@ -3637,6 +3767,16 @@ function nishonTab(){
  /* Qoidalar va jazo pog'onalari shu yerda: ular ham nishonlar kabi o'qib
     qo'yiladigan narsa, kunlik ish emas. */
  h+=isChild(me)?"":jazoQoida();
+ /* Kitob qoidalari ham shu yerda: ular Kitob sahifasida har kuni ko'zga tashlanib
+    turishi shart emas, bir marta o'qib qo'yiladigan narsa. */
+ h+=`<div class="panel p14 mb14"><div class="eyebrow">Kitob bali</div>
+  <div class="muted" style="font-size:12px;line-height:1.75;margin-top:8px">
+   <div><span class="jade">Kuniga ${BET_NORMA} bet va undan ko'p</span> — 0 ball</div>
+   <div><span class="brass">Kam o'qilgan kun</span> — −${fmt(K_KAM)}</div>
+   <div><span class="clay">Umuman o'qilmagan kun</span> — −${fmt(K_NOL)}</div>
+   <div><span class="jade">Har bir zametka</span> — +${fmt(K_NOTE)} · <span class="jade">tugatilgan kitob</span> — +${K_DONE}</div>
+   <div class="tiny" style="margin-top:6px">Kitob bali namoz balidan alohida yuritiladi \u2014
+    reytingga ham, namoz qarziga ham qo'shilmaydi.</div></div></div>`;
  return h+`<div style="height:16px"></div>`}
 
 /* Doira almashtirgichi. Bitta doira bo'lsa ko'rsatilmaydi — tanlanadigan narsa

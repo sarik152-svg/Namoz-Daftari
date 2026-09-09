@@ -382,6 +382,126 @@ async def test_a_stranger_does_not_set_a_reward_goal(api, connection):
     assert response.status_code == 403
 
 
+# ---------------------------------------------------------------- qur'on
+@pytest.mark.asyncio
+async def test_reading_is_logged_for_the_caller_and_nobody_else(api, connection):
+    """The body carries no member id, so there is none to point at somebody else."""
+    headers = as_session(connection, member_id="behruz")
+    async with api as client:
+        response = await client.post(
+            "/api/v1/me/quran",
+            json={"sura": 1, "ayah": 5, "day": "2026-09-09"}, headers=headers,
+        )
+    assert response.status_code == 200
+    assert connection.args_for("INSERT INTO quran_reads")[0] == "behruz"
+
+
+@pytest.mark.asyncio
+async def test_an_ayah_the_sura_does_not_have_is_refused(api, connection):
+    """Fotiha has seven. A 100 typed into it would sit in the log for ever and read
+    as a sura finished several times over. 286 is the longest sura, so the field
+    bound alone lets this through — the length of *this* sura is the real limit."""
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/me/quran",
+            json={"sura": 1, "ayah": 100, "day": "2026-09-09"}, headers=headers,
+        )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "no_such_ayah"
+    assert not connection.issued("INSERT INTO quran_reads")
+
+
+@pytest.mark.asyncio
+async def test_the_longest_sura_still_fits(api, connection):
+    """Baqara's 286 is the ceiling on the column, so the boundary matters."""
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/me/quran",
+            json={"sura": 2, "ayah": 286, "day": "2026-09-09"}, headers=headers,
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_finishing_a_sura_keeps_the_first_day(api, connection):
+    """Pressing it twice is not a second finish — the five points belong to the week
+    the sura was actually finished in."""
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/me/quran/done",
+            json={"sura": 36, "day": "2026-09-09"}, headers=headers,
+        )
+    assert response.status_code == 200
+    sent = " ".join(connection.sql)
+    assert "INSERT INTO quran_done" in sent
+    assert "DO NOTHING" in sent
+
+
+@pytest.mark.asyncio
+async def test_a_finish_can_be_taken_back(api, connection):
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/me/quran/done?on=false",
+            json={"sura": 36, "day": "2026-09-09"}, headers=headers,
+        )
+    assert response.status_code == 200
+    assert connection.issued("DELETE FROM quran_done")
+
+
+@pytest.mark.asyncio
+async def test_an_admin_session_does_not_read_on_anybody_behalf(api, connection):
+    headers = as_session(connection, member_id=None, is_admin=True)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/me/quran",
+            json={"sura": 1, "ayah": 5, "day": "2026-09-09"}, headers=headers,
+        )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_state_carries_the_reading_and_the_finished_suras(api, connection):
+    headers = as_session(connection)
+    connection.scalars["FROM circle_members WHERE circle_id"] = True
+    connection.rows["FROM members m"] = [MEMBER_JSON]
+    for table in ("day_records", "bonuses", "tasks", "books", "places"):
+        connection.rows[f"FROM {table}"] = []
+    connection.rows["FROM quran_reads q"] = [
+        {"member_id": "sardor", "sura": 1, "ayah": 5, "day": Date(2026, 9, 8)}
+    ]
+    connection.rows["FROM quran_done d"] = [
+        {"member_id": "sardor", "sura": 114, "day": Date(2026, 9, 7)}
+    ]
+    async with api as client:
+        response = await client.get("/api/v1/state?circle=2", headers=headers)
+    body = response.json()
+    assert body["quran"] == [
+        {"member_id": "sardor", "sura": 1, "ayah": 5, "day": "2026-09-08"}
+    ]
+    assert body["quran_done"] == [
+        {"member_id": "sardor", "sura": 114, "day": "2026-09-07"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_finished_suras_are_not_windowed(api, connection):
+    """The reading log ages out at four months; what was finished must not, or the
+    count of finished suras would shrink on its own."""
+    headers = as_session(connection)
+    connection.scalars["FROM circle_members WHERE circle_id"] = True
+    connection.rows["FROM members m"] = [MEMBER_JSON]
+    for table in ("day_records", "bonuses", "tasks", "books", "places"):
+        connection.rows[f"FROM {table}"] = []
+    async with api as client:
+        await client.get("/api/v1/state?circle=2", headers=headers)
+    done = next(q for q in connection.sql if "FROM quran_done" in q)
+    assert "day >=" not in done
+
+
 # ---------------------------------------------------------------- shaxsiy
 @pytest.mark.asyncio
 async def test_private_things_are_read_by_member_and_never_by_circle(api, connection):

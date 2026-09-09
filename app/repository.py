@@ -28,6 +28,8 @@ from app.models import (
     MedicineDose,
     Private,
     Promise,
+    QuranDone,
+    QuranRead,
     Todo,
     Zikr,
     Duel,
@@ -398,6 +400,8 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         medicines=await fetch_medicines(pool, circle_id),
         doses=await fetch_doses(pool, circle_id),
         promises=await fetch_promises(pool, circle_id),
+        quran=await fetch_quran(pool, circle_id),
+        quran_done=await fetch_quran_done(pool, circle_id),
     )
 
 
@@ -599,6 +603,82 @@ async def fetch_promises(pool: asyncpg.Pool, circle_id: int) -> list[Promise]:
             circle_id,
         )
     return [Promise(**dict(row)) for row in rows]
+
+
+async def fetch_quran(pool: asyncpg.Pool, circle_id: int) -> list[QuranRead]:
+    """The circle's reading log, four months back.
+
+    The window is on the log, not on where people are: the furthest ayah anybody
+    reached is derived from `quran_done` and from the highest entry still in view, so
+    a sura finished in the spring does not disappear from the count when its entries
+    age out. What the window costs is only the day-by-day detail of old reading.
+    """
+    since = datetime.now(timezone.utc).date() - timedelta(days=120)
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT q.member_id, q.sura, q.ayah, q.day FROM quran_reads q
+              JOIN circle_members cm ON cm.member_id = q.member_id
+             WHERE cm.circle_id = $1 AND q.day >= $2
+             ORDER BY q.day, q.id
+            """,
+            circle_id, since,
+        )
+    return [QuranRead(**dict(row)) for row in rows]
+
+
+async def fetch_quran_done(pool: asyncpg.Pool, circle_id: int) -> list[QuranDone]:
+    """Finished suras are never windowed: each one is worth points forever and is the
+    only record that a sura was completed at all."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT d.member_id, d.sura, d.day FROM quran_done d
+              JOIN circle_members cm ON cm.member_id = d.member_id
+             WHERE cm.circle_id = $1
+             ORDER BY d.sura
+            """,
+            circle_id,
+        )
+    return [QuranDone(**dict(row)) for row in rows]
+
+
+async def add_quran_read(
+    pool: asyncpg.Pool, member_id: str, sura: int, ayah: int, day: Date
+) -> None:
+    """Append one reading. Nothing is overwritten and nothing is checked against what
+    came before: going back over a sura is reading too, and the highest entry is
+    still where the reader has got to."""
+    async with pool.acquire() as connection:
+        await connection.execute(
+            "INSERT INTO quran_reads (member_id, sura, ayah, day) VALUES ($1, $2, $3, $4)",
+            member_id, sura, ayah, day,
+        )
+
+
+async def finish_sura(
+    pool: asyncpg.Pool, member_id: str, sura: int, day: Date, on: bool
+) -> None:
+    """Mark a sura finished, or take the mark back.
+
+    Finishing it again keeps the first day: the five points belong to the week the
+    sura was actually finished in, and pressing the button twice is not a second
+    finish.
+    """
+    async with pool.acquire() as connection:
+        if on:
+            await connection.execute(
+                """
+                INSERT INTO quran_done (member_id, sura, day) VALUES ($1, $2, $3)
+                ON CONFLICT (member_id, sura) DO NOTHING
+                """,
+                member_id, sura, day,
+            )
+        else:
+            await connection.execute(
+                "DELETE FROM quran_done WHERE member_id = $1 AND sura = $2",
+                member_id, sura,
+            )
 
 
 async def make_promise(
