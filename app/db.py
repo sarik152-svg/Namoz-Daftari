@@ -33,10 +33,22 @@ async def create_pool(settings: Settings) -> asyncpg.Pool:
     )
 
 
+def _log_notice(_connection, message) -> None:
+    """Put a migration's RAISE NOTICE into the log.
+
+    asyncpg hands server notices to a listener and drops them otherwise, so a
+    migration that counted what it had just corrected reported into a void — which
+    is exactly when you want to hear from it, because the only Postgres this project
+    has is the live one and a migration is the only way to ask it anything.
+    """
+    logger.info("SQL: %s", getattr(message, "message", message))
+
+
 async def run_migrations(pool: asyncpg.Pool, directory: Path = MIGRATIONS_DIR) -> list[str]:
     """Apply every unapplied .sql file in name order. Returns what it applied."""
     applied: list[str] = []
     async with pool.acquire() as connection:
+        connection.add_log_listener(_log_notice)
         await connection.execute(_MIGRATION_TABLE)
         done = {
             row["filename"] for row in await connection.fetch("SELECT filename FROM schema_migrations")
@@ -51,4 +63,5 @@ async def run_migrations(pool: asyncpg.Pool, directory: Path = MIGRATIONS_DIR) -
                 )
             applied.append(path.name)
             logger.info("Applied migration %s", path.name)
+        connection.remove_log_listener(_log_notice)
     return applied
