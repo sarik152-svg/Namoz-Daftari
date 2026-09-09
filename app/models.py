@@ -712,6 +712,80 @@ class RewardGoal(BaseModel):
     reward_goal: int = Field(ge=10, le=10_000)
 
 
+# ---------------------------------------------------------------- shaxsiy
+class Zikr(BaseModel):
+    """One zikr a member keeps: what it is, what it means, how many times."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    name: str = Field(min_length=1, max_length=120)
+    meaning: str = Field(default="", max_length=400)
+    count: int = Field(ge=1, le=100_000)
+
+
+class ZikrCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=120)
+    meaning: str = Field(default="", max_length=400)
+    count: int = Field(ge=1, le=100_000)
+
+
+class Todo(BaseModel):
+    """A personal task. Repeating ones are done or not done today; a one-off is done
+    once and carries the day it is wanted by."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    text: str = Field(min_length=1, max_length=300)
+    repeating: bool = False
+    due: Date | None = None
+    done_at: Date | None = None
+
+
+class TodoCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=300)
+    repeating: bool = False
+    due: Date | None = None
+
+    @model_validator(mode="after")
+    def _shape(self) -> "TodoCreate":
+        if self.repeating and self.due is not None:
+            raise ValueError("a repeating task has no deadline; it is wanted every day")
+        return self
+
+
+class Marked(BaseModel):
+    """Which day a repeating thing was done on."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    zikr_id: int | None = None
+    todo_id: int | None = None
+    day: Date
+
+
+class Private(BaseModel):
+    """Everything that belongs to the caller alone. Never part of `/state`."""
+
+    zikrs: list[Zikr] = Field(default_factory=list)
+    zikr_marks: list[Marked] = Field(default_factory=list)
+    todos: list[Todo] = Field(default_factory=list)
+    todo_marks: list[Marked] = Field(default_factory=list)
+
+    def to_wire(self) -> dict:
+        return {
+            "zikrs": [z.model_dump(mode="json") for z in self.zikrs],
+            "zikr_marks": [m.model_dump(mode="json", exclude_none=True) for m in self.zikr_marks],
+            "todos": [t.model_dump(mode="json") for t in self.todos],
+            "todo_marks": [m.model_dump(mode="json", exclude_none=True) for m in self.todo_marks],
+        }
+
+
 # ---------------------------------------------------------------- dorilar
 class Medicine(BaseModel):
     """A course: who takes what, at which hours, over which days.

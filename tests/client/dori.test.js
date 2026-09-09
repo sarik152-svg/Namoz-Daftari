@@ -88,7 +88,7 @@ module.exports = {
     const h = c.html;
     assert.ok(h.includes("Dorilar"), "expected the medicines section");
     assert.ok(h.indexOf("Kunning sunnati") < h.indexOf("Dorilar"), "after the sunnah");
-    assert.ok(h.indexOf("Dorilar") < h.indexOf("Ball va vazifa"), "before the task block");
+    assert.ok(h.indexOf("Dorilar") < h.indexOf("Vazifa yo'q"), "before the penance block");
 
     const dostlar = client("2026-09-07T09:20:00Z",
       { circles: [{ ...OILA, kind: "friends", name: "Do'stlar" }] });

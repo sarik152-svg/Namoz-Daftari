@@ -382,6 +382,50 @@ async def test_a_stranger_does_not_set_a_reward_goal(api, connection):
     assert response.status_code == 403
 
 
+# ---------------------------------------------------------------- shaxsiy
+@pytest.mark.asyncio
+async def test_private_things_are_read_by_member_and_never_by_circle(api, connection):
+    """The point of these is that a circle does not see them. If this query ever
+    widens to a circle, the feature has quietly become the opposite of itself."""
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.get("/api/v1/me/private", headers=headers)
+    assert response.status_code == 200
+    sent = " ".join(connection.sql)
+    assert "FROM zikrs WHERE member_id" in sent
+    assert "circle" not in sent.lower(), "a private list must not be fetched by circle"
+
+
+@pytest.mark.asyncio
+async def test_an_admin_session_has_no_private_list(api, connection):
+    """Admin is not a person here, so there is no 'own' list to hand back."""
+    headers = as_session(connection, member_id=None, is_admin=True)
+    async with api as client:
+        response = await client.get("/api/v1/me/private", headers=headers)
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_zikr_is_deleted_only_by_its_owner(api, connection):
+    headers = as_session(connection, member_id="behruz")
+    connection.rows["DELETE FROM zikrs"] = []
+    async with api as client:
+        response = await client.delete("/api/v1/me/zikrs/5", headers=headers)
+    assert response.status_code == 403
+    assert connection.args_for("DELETE FROM zikrs")[1] == "behruz"
+
+
+@pytest.mark.asyncio
+async def test_a_repeating_task_may_not_carry_a_deadline(api, connection):
+    headers = as_session(connection)
+    async with api as client:
+        response = await client.post(
+            "/api/v1/me/todos", headers=headers,
+            json={"text": "Har kuni", "repeating": True, "due": "2026-09-20"},
+        )
+    assert response.status_code == 422
+
+
 @pytest.mark.asyncio
 async def test_admin_password_is_checked(api, connection):
     async with api as client:

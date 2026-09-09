@@ -72,7 +72,7 @@ module.exports = {
 
     client.A.setTab("sunnat");
     assert.ok(
-      !client.html.includes("Ball va vazifa"),
+      !client.html.includes("Vazifa yo'q") && !client.html.includes("Vazifa tushdi"),
       "the penalty work is what frightens a child off the app"
     );
     assert.ok(client.html.includes("Kunning sunnati"), "the sunnah itself stays");
@@ -83,7 +83,10 @@ module.exports = {
     await client.A.boot();
 
     assert.ok(!client.html.includes("Yulduzchalar"));
+    /* The rules moved to Nishon; what stays on Sunnat is the penance itself. */
     client.A.setTab("sunnat");
+    assert.ok(client.html.includes("Vazifa yo'q") || client.html.includes("Vazifa tushdi"));
+    client.A.setTab("nishon");
     assert.ok(client.html.includes("Ball va vazifa"));
   },
 

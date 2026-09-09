@@ -50,6 +50,8 @@ from app.models import (
     DoseCreate,
     KpiTargets,
     MedicineCreate,
+    TodoCreate,
+    ZikrCreate,
     StartBall,
     QazoDebt,
     RewardGoal,
@@ -807,6 +809,89 @@ async def set_reward_goal(
             )
     if not await repository.set_reward_goal(pool, member_id, body.reward_goal):
         raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- shaxsiy
+def _me(session: Session) -> str:
+    """The caller as a member. These routes are about one person and have no id in
+    the path on purpose: there is then no id to get wrong, and no way to ask for
+    somebody else's."""
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi uchun bu bo'lim yo'q", 403)
+    return session.member_id
+
+
+@app.get(f"{API_PREFIX}/me/private")
+async def my_private(
+    request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Zikrs and personal tasks. Deliberately outside `/state`, which carries a whole
+    circle to every phone in it — what somebody recites, and what is on their own
+    list, is not the family's business."""
+    private = await repository.fetch_private(request.app.state.pool, _me(session))
+    return private.to_wire()
+
+
+@app.post(f"{API_PREFIX}/me/zikrs", status_code=201)
+async def add_zikr(
+    body: ZikrCreate, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    zikr = await repository.add_zikr(
+        request.app.state.pool, _me(session), body.name, body.meaning, body.count
+    )
+    return zikr.model_dump(mode="json")
+
+
+@app.delete(f"{API_PREFIX}/me/zikrs/{{zikr_id}}")
+async def drop_zikr(
+    zikr_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    if not await repository.delete_zikr(request.app.state.pool, zikr_id, _me(session)):
+        raise _error("not_yours", "Bu sizniki emas", status.HTTP_403_FORBIDDEN)
+    return {"ok": True}
+
+
+@app.put(f"{API_PREFIX}/me/zikrs/{{zikr_id}}/day/{{day}}")
+async def mark_zikr(
+    zikr_id: int, day: Date, request: Request, on: bool = True,
+    session: Session = Depends(require_session),
+) -> dict:
+    if not await repository.mark_zikr(
+        request.app.state.pool, zikr_id, _me(session), day, on
+    ):
+        raise _error("not_yours", "Bu sizniki emas", status.HTTP_403_FORBIDDEN)
+    return {"ok": True}
+
+
+@app.post(f"{API_PREFIX}/me/todos", status_code=201)
+async def add_todo(
+    body: TodoCreate, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    todo = await repository.add_todo(
+        request.app.state.pool, _me(session), body.text, body.repeating, body.due
+    )
+    return todo.model_dump(mode="json")
+
+
+@app.delete(f"{API_PREFIX}/me/todos/{{todo_id}}")
+async def drop_todo(
+    todo_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    if not await repository.delete_todo(request.app.state.pool, todo_id, _me(session)):
+        raise _error("not_yours", "Bu sizniki emas", status.HTTP_403_FORBIDDEN)
+    return {"ok": True}
+
+
+@app.put(f"{API_PREFIX}/me/todos/{{todo_id}}/day/{{day}}")
+async def mark_todo(
+    todo_id: int, day: Date, request: Request, on: bool = True,
+    session: Session = Depends(require_session),
+) -> dict:
+    if not await repository.mark_todo(
+        request.app.state.pool, todo_id, _me(session), day, on
+    ):
+        raise _error("not_yours", "Bu sizniki emas", status.HTTP_403_FORBIDDEN)
     return {"ok": True}
 
 

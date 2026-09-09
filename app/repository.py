@@ -24,7 +24,11 @@ from app.models import (
     ChildReward,
     ChildSkill,
     Medicine,
+    Marked,
     MedicineDose,
+    Private,
+    Todo,
+    Zikr,
     Duel,
     DuelMember,
     Bonus,
@@ -579,6 +583,157 @@ async def set_reward_goal(pool: asyncpg.Pool, member_id: str, goal: int) -> bool
             member_id, goal,
         )
     return row is not None
+
+
+# ---------------------------------------------------------------- shaxsiy
+async def fetch_private(pool: asyncpg.Pool, member_id: str) -> Private:
+    """Everything that belongs to one member alone.
+
+    Read by member id and nothing else: this is the query that must never widen to a
+    circle, because the whole point is that a circle does not see it.
+    """
+    async with pool.acquire() as connection:
+        zikr_rows = await connection.fetch(
+            "SELECT id, name, meaning, count FROM zikrs WHERE member_id = $1 ORDER BY id",
+            member_id,
+        )
+        zikr_marks = await connection.fetch(
+            """
+            SELECT k.zikr_id, k.day FROM zikr_marks k
+              JOIN zikrs z ON z.id = k.zikr_id
+             WHERE z.member_id = $1 AND k.day >= CURRENT_DATE - 60
+            """,
+            member_id,
+        )
+        todo_rows = await connection.fetch(
+            """
+            SELECT id, text, repeating, due, done_at FROM todos
+             WHERE member_id = $1 ORDER BY id
+            """,
+            member_id,
+        )
+        todo_marks = await connection.fetch(
+            """
+            SELECT k.todo_id, k.day FROM todo_marks k
+              JOIN todos t ON t.id = k.todo_id
+             WHERE t.member_id = $1 AND k.day >= CURRENT_DATE - 60
+            """,
+            member_id,
+        )
+    return Private(
+        zikrs=[Zikr(**dict(r)) for r in zikr_rows],
+        zikr_marks=[Marked(**dict(r)) for r in zikr_marks],
+        todos=[Todo(**dict(r)) for r in todo_rows],
+        todo_marks=[Marked(**dict(r)) for r in todo_marks],
+    )
+
+
+async def add_zikr(
+    pool: asyncpg.Pool, member_id: str, name: str, meaning: str, count: int
+) -> Zikr:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO zikrs (member_id, name, meaning, count) VALUES ($1, $2, $3, $4)
+            RETURNING id, name, meaning, count
+            """,
+            member_id, name, meaning, count,
+        )
+    return Zikr(**dict(row))
+
+
+async def delete_zikr(pool: asyncpg.Pool, zikr_id: int, member_id: str) -> bool:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "DELETE FROM zikrs WHERE id = $1 AND member_id = $2 RETURNING id",
+            zikr_id, member_id,
+        )
+    return row is not None
+
+
+async def mark_zikr(
+    pool: asyncpg.Pool, zikr_id: int, member_id: str, day: Date, on: bool
+) -> bool:
+    """Owned-by check lives in the SQL: a member may only ever mark their own."""
+    async with pool.acquire() as connection:
+        if on:
+            row = await connection.fetchrow(
+                """
+                INSERT INTO zikr_marks (zikr_id, day)
+                SELECT $1, $3 FROM zikrs WHERE id = $1 AND member_id = $2
+                ON CONFLICT DO NOTHING
+                RETURNING zikr_id
+                """,
+                zikr_id, member_id, day,
+            )
+            if row is not None:
+                return True
+            return bool(await connection.fetchval(
+                "SELECT true AS ok FROM zikrs WHERE id = $1 AND member_id = $2",
+                zikr_id, member_id,
+            ))
+        row = await connection.fetchrow(
+            """
+            DELETE FROM zikr_marks k USING zikrs z
+             WHERE k.zikr_id = $1 AND k.day = $3 AND z.id = k.zikr_id AND z.member_id = $2
+             RETURNING k.zikr_id
+            """,
+            zikr_id, member_id, day,
+        )
+        return row is not None
+
+
+async def add_todo(
+    pool: asyncpg.Pool, member_id: str, text: str, repeating: bool, due: Date | None
+) -> Todo:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO todos (member_id, text, repeating, due)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, text, repeating, due, done_at
+            """,
+            member_id, text, repeating, due,
+        )
+    return Todo(**dict(row))
+
+
+async def delete_todo(pool: asyncpg.Pool, todo_id: int, member_id: str) -> bool:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "DELETE FROM todos WHERE id = $1 AND member_id = $2 RETURNING id",
+            todo_id, member_id,
+        )
+    return row is not None
+
+
+async def mark_todo(
+    pool: asyncpg.Pool, todo_id: int, member_id: str, day: Date, on: bool
+) -> bool:
+    """A repeating task is ticked per day; a one-off carries the day it was finished.
+    Which of the two it is decides where the tick goes."""
+    async with pool.acquire() as connection, connection.transaction():
+        row = await connection.fetchrow(
+            "SELECT repeating FROM todos WHERE id = $1 AND member_id = $2",
+            todo_id, member_id,
+        )
+        if row is None:
+            return False
+        if row["repeating"]:
+            if on:
+                await connection.execute(
+                    "INSERT INTO todo_marks (todo_id, day) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    todo_id, day,
+                )
+            else:
+                await connection.execute(
+                    "DELETE FROM todo_marks WHERE todo_id = $1 AND day = $2", todo_id, day
+                )
+        else:
+            await connection.execute(
+                "UPDATE todos SET done_at = $2 WHERE id = $1", todo_id, day if on else None
+            )
+    return True
 
 
 # ---------------------------------------------------------------- dorilar

@@ -262,6 +262,21 @@ never disagrees with the records underneath it.
 Friends keep the podium exactly as it was. `Ball qayerdan` stays for both: it explains a
 number rather than ranking anybody.
 
+## Zikrlar va kunlik vazifalar — one person's, and nobody else's
+
+Zikrs on the Sunnat page (name, meaning, how many times, ticked once a day) and a
+personal task list at the foot of Bugun: repeating ones asked for every day, one-offs
+carrying the day they are wanted by.
+
+**Neither travels in `/state`.** That response carries a whole circle to every phone in
+it, and what somebody chose to recite, or wrote on their own list, is not the family's
+business. They are read from `GET /me/private`, which takes no id in the path — there is
+then no id to get wrong and no way to ask for anybody else's. Every write is scoped the
+same way, in the SQL rather than in a check that can be forgotten.
+
+**Neither carries points.** This is a notebook, not a score, and a test pins the day
+total at zero however many of them are ticked.
+
 ## Dorilar — a family's medicine schedule
 
 On the Sunnat page, between the day's sunnah and the terms of the agreement, and only in

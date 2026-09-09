@@ -139,7 +139,8 @@ module.exports = {
       } } },
     });
     await c.A.go("app");
-    c.A.setTab("sunnat");
+    /* The debt figure moved to Nishon with the rules it belongs to. */
+    c.A.setTab("nishon");
     assert.ok(c.html.includes("Shu oydagi qarz"), "the debt is a monthly figure now");
     assert.ok(!c.html.includes("Qarzni kamaytirgani"), "nothing reduces it any more");
   },

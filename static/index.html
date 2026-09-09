@@ -484,6 +484,10 @@ let deeds=[],rewards=[],skills=[],deedMsg="",deedErr=false;
    o'qish paytida solishtirib chiqariladi, saqlanmaydi: shunda kechikish chegarasi
    keyin o'zgarsa, tarixni qayta yozish shart bo'lmaydi. */
 let medicines=[],doses=[],doriMsg="",doriErr=false;
+/* Zikrlar va kunlik vazifalar — faqat o'ziga. Ular /state bilan kelmaydi: u butun
+   doirani har bir telefonga tashiydi, kim nima zikr qilgani va o'z ro'yxatiga nima
+   yozgani esa oilaning ishi emas. Ball ham bermaydi — bu daftar, hisob emas. */
+let zikrs=[],zikrMarks=[],todos=[],todoMarks=[],shaxsiyMsg="",shaxsiyErr=false;
 const DORI_KECHIKISH=30;
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
@@ -975,6 +979,12 @@ function oilaBallView(a,z,nom){
   </div>`});
  return h+`</div>`}
 
+/* ══════════════ ZIKR VA KUNLIK VAZIFA ══════════════ */
+const zikrBelgilangan=(id,ds)=>(zikrMarks||[]).some(m=>m.zikr_id===id&&m.day===ds);
+const todoBelgilangan=(t,ds)=>t.repeating
+  ?(todoMarks||[]).some(m=>m.todo_id===t.id&&m.day===ds)
+  :!!t.done_at;
+
 /* ══════════════ DORILAR ══════════════ */
 /* Bir kunning dozalari va har birining holati:
      vaqtida    — belgilangan soatdan keyin 30 daqiqa ichida ichilgan
@@ -1413,7 +1423,8 @@ const A={
      me=who.member_id;isAdmin=who.is_admin;
      LS.set("nd_me",me);LS.set("nd_admin",isAdmin);
      if(isAdmin){screen="admin"}
-     else{screen="app";await A.loadCircles();await pull();if(M(me))date=todayFor(myCfg())}
+     else{screen="app";await A.loadCircles();await pull();await A.loadPrivate();
+      if(M(me))date=todayFor(myCfg())}
    }catch(e){forgetSession()}
   }
   render();
@@ -1449,7 +1460,8 @@ const A={
    token=j.token;isAdmin=false;LS.set("nd_token",token);LS.set("nd_admin",false);
    me=id;LS.set("nd_me",id);LS.set("nd_login",id);data={};LS.set("nd_data",data);
    screen="app";loginErr="";
-   await A.loadCircles();await pull();if(M(me))date=todayFor(myCfg());render();
+   await A.loadCircles();await pull();await A.loadPrivate();
+   if(M(me))date=todayFor(myCfg());render();
   }catch(e){
    loginErr=e.status===429?"Juda ko'p urinish - biroz kuting":"Login yoki PIN noto'g'ri";render()}},
  async doAdminLogin(){
@@ -1687,7 +1699,7 @@ const A={
    document.getElementById("p_cur").value="";document.getElementById("p_new").value="";
   }catch(e){box.textContent=e.message||"O'zgartirib bo'lmadi";box.className="clay small"}},
  pick(id){me=id;LS.set("nd_me",id);screen="app";pinFor=null;render()},
- async refresh(){await pull();render()},
+ async refresh(){await pull();await A.loadPrivate();render()},
  async pushDayFor(d){await pushDay(me,d)},
  async mark(pk,how,ds){
   /* Ro'yxatda yo'q vaqt belgilanmaydi. Tahajjud olib tashlangach, eski telefon
@@ -1788,6 +1800,68 @@ const A={
        start_day:n?todayFor(myCfg()):null})});
    await A.loadRoster();await pull();render()}
   catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+/* ────────── DORILAR ────────── */
+ /* ────────── ZIKR VA KUNLIK VAZIFA ────────── */
+ zikrOchiq:false,todoOchiq:false,todoTakroriy:true,
+ zikrForm(on){A.zikrOchiq=!!on;shaxsiyMsg="";shaxsiyErr=false;render()},
+ todoForm(on){A.todoOchiq=!!on;shaxsiyMsg="";shaxsiyErr=false;render()},
+ setTodoKind(t){A.todoTakroriy=!!t;render()},
+ /* Shaxsiy ro'yxat /state bilan kelmaydi — u butun doiraga tarqaladi. */
+ async loadPrivate(){
+  if(!loggedIn())return;
+  try{
+   const j=await api("/me/private");
+   zikrs=j.zikrs||[];zikrMarks=j.zikr_marks||[];
+   todos=j.todos||[];todoMarks=j.todo_marks||[];
+  }catch(e){}},
+ async addZikr(){
+  const val=id=>{const el=document.getElementById(id);return ((el&&el.value)||"").trim()};
+  const name=val("z_name"),meaning=val("z_meaning");
+  const count=Math.round(Number(val("z_count")));
+  if(!name){shaxsiyMsg="Zikr nomini yozing";shaxsiyErr=true;render();return}
+  if(!isFinite(count)||count<1||count>100000){
+   shaxsiyMsg="Nechi marta ekanini yozing";shaxsiyErr=true;render();return}
+  try{
+   await api("/me/zikrs",{method:"POST",
+     body:JSON.stringify({name:name,meaning:meaning,count:count})});
+   A.zikrOchiq=false;shaxsiyMsg="";shaxsiyErr=false;await A.loadPrivate();
+  }catch(e){shaxsiyMsg=e.message||"Qo'shib bo'lmadi";shaxsiyErr=true}
+  render()},
+ async dropZikr(id){
+  if(!confirm("Bu zikr ro'yxatdan o'chirilsinmi?"))return;
+  try{await api("/me/zikrs/"+encodeURIComponent(id),{method:"DELETE"});await A.loadPrivate()}
+  catch(e){shaxsiyMsg=e.message||"O'chirib bo'lmadi";shaxsiyErr=true}
+  render()},
+ async markZikr(id,on){
+  try{
+   await api("/me/zikrs/"+encodeURIComponent(id)+"/day/"
+     +encodeURIComponent(todayFor(myCfg()))+"?on="+(on?"true":"false"),{method:"PUT"});
+   await A.loadPrivate()}
+  catch(e){shaxsiyMsg=e.message||"Belgilab bo'lmadi";shaxsiyErr=true}
+  render()},
+ async addTodo(){
+  const val=id=>{const el=document.getElementById(id);return ((el&&el.value)||"").trim()};
+  const text=val("t_text");
+  if(!text){shaxsiyMsg="Nima qilish kerakligini yozing";shaxsiyErr=true;render();return}
+  /* Takroriy vazifada muddat bo'lmaydi: u har kuni so'raladi. */
+  const due=A.todoTakroriy?null:(val("t_due")||null);
+  try{
+   await api("/me/todos",{method:"POST",
+     body:JSON.stringify({text:text,repeating:!!A.todoTakroriy,due:due})});
+   A.todoOchiq=false;shaxsiyMsg="";shaxsiyErr=false;await A.loadPrivate();
+  }catch(e){shaxsiyMsg=e.message||"Qo'shib bo'lmadi";shaxsiyErr=true}
+  render()},
+ async dropTodo(id){
+  try{await api("/me/todos/"+encodeURIComponent(id),{method:"DELETE"});await A.loadPrivate()}
+  catch(e){shaxsiyMsg=e.message||"O'chirib bo'lmadi";shaxsiyErr=true}
+  render()},
+ async markTodo(id,on){
+  try{
+   await api("/me/todos/"+encodeURIComponent(id)+"/day/"
+     +encodeURIComponent(todayFor(myCfg()))+"?on="+(on?"true":"false"),{method:"PUT"});
+   await A.loadPrivate()}
+  catch(e){shaxsiyMsg=e.message||"Belgilab bo'lmadi";shaxsiyErr=true}
+  render()},
  /* ────────── DORILAR ────────── */
  doriOchiq:false,doriKim:null,
  doriForm(on){A.doriOchiq=!!on;doriMsg="";doriErr=false;render()},
@@ -2699,6 +2773,7 @@ function todayTab(){
    <div class="muted small">Oz bo'lsa ham — davomiysi afzal</div></div>
    <button class="mbtn" style="${day.quran?"background:var(--jade);border-color:transparent;color:#0D1220":""}"
      onclick="A.field('quran',${day.quran?"false":"true"})">✓</button></div>`;
+ h+=todoPanel();
  return h}
 
 /* ────────── STATISTIKA ────────── */
@@ -2904,8 +2979,99 @@ function sunnatTab(){
    <div class="eyebrow">Bugungi mashq</div>
    <p class="muted" style="font-size:13px;margin:5px 0 0">${esc(s.a)}</p></div></div>
  ${doriPanel()}
- ${isChild(me)?"":`<div style="height:18px"></div>`+taskTab()}
+ ${zikrPanel()}
+ ${isChild(me)?"":`<div style="height:18px"></div>`+vazifaBloki()}
  <div style="height:16px"></div>`}
+
+/* Zikrlar — Sunnat sahifasida, faqat o'ziga ko'rinadi. Nomi, ma'nosi va nechi
+   marta aytilishi; kuniga bir marta belgilanadi. Ball bermaydi. */
+function zikrPanel(){
+ const td=todayFor(myCfg());
+ let h=`<div style="height:18px"></div>
+  <div class="panel p14"><div class="flex between center">
+   <div><div class="eyebrow">Zikrlar</div>
+    <div class="muted small" style="margin-top:3px">Faqat sizga ko'rinadi</div></div>
+   <button class="btn" style="font-size:11px" onclick="A.zikrForm(${A.zikrOchiq?"false":"true"})">${
+     A.zikrOchiq?"Yopish":"+ Zikr qo'shish"}</button></div>`;
+ if(A.zikrOchiq){
+  h+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="label" style="margin-top:0">Zikr</div>
+   <input id="z_name" class="input" maxlength="120" placeholder="masalan: Subhanalloh">
+   <div class="label">Ma'nosi</div>
+   <input id="z_meaning" class="input" maxlength="400" placeholder="Alloh pokdir">
+   <div class="label">Nechi marta</div>
+   <input id="z_count" class="input" type="number" min="1" max="100000" placeholder="33">
+   <button class="btn btn-green btn-wide" style="margin-top:12px" onclick="A.addZikr()">Qo'shish</button>
+  </div>`}
+ if(shaxsiyMsg)h+=`<div class="${shaxsiyErr?"clay":"jade"} small" style="margin-top:9px">${esc(shaxsiyMsg)}</div>`;
+ if(!(zikrs||[]).length&&!A.zikrOchiq){
+  h+=`<p class="muted small" style="margin:11px 0 0;line-height:1.6">Hozircha zikr
+   qo'shilmagan. Qo'shsangiz, har kuni shu yerdan belgilab borasiz.</p>`}
+ (zikrs||[]).forEach(z=>{
+  const bor=zikrBelgilangan(z.id,td);
+  h+=`<div class="panel p14" style="margin-top:11px;border-color:${bor?"#4CAF8B66":"var(--line)"}">
+   <div class="flex between center gap3">
+    <div style="min-width:0">
+     <div style="font-family:var(--serif);font-size:16px">${esc(z.name)}
+      <span class="chip">${z.count} marta</span></div>
+     ${z.meaning?`<div class="muted small" style="margin-top:4px;line-height:1.55">${esc(z.meaning)}</div>`:""}</div>
+    <button class="mbtn" style="${bor?"background:var(--jade);border-color:transparent;color:#08140F":""}"
+      onclick="A.markZikr(${z.id},${bor?"false":"true"})">\u2713</button></div>
+   <button class="link" style="font-size:11px;margin-top:8px" onclick="A.dropZikr(${z.id})">o'chirish</button>
+  </div>`});
+ return h+`</div>`}
+
+/* Kunlik vazifalar — Bugun sahifasining eng pastida, faqat o'ziga. Takroriysi har
+   kuni so'raladi, bittaligiga muddat qo'yiladi. Bu yerda ball ham, jarima ham yo'q:
+   bu shunchaki ro'yxat. */
+function todoPanel(){
+ const td=todayFor(myCfg());
+ const takroriy=(todos||[]).filter(t=>t.repeating);
+ const birlik=(todos||[]).filter(t=>!t.repeating&&!t.done_at)
+   .sort((a,b)=>String(a.due||"9999").localeCompare(String(b.due||"9999")));
+ const bajarilgan=(todos||[]).filter(t=>!t.repeating&&t.done_at).slice(-3);
+ let h=`<div class="panel p14 mt14"><div class="flex between center">
+   <div><div class="eyebrow">Kunlik vazifalar</div>
+    <div class="muted small" style="margin-top:3px">Faqat sizga ko'rinadi \u00B7 ball bermaydi</div></div>
+   <button class="btn" style="font-size:11px" onclick="A.todoForm(${A.todoOchiq?"false":"true"})">${
+     A.todoOchiq?"Yopish":"+ Qo'shish"}</button></div>`;
+ if(A.todoOchiq){
+  const on="background:var(--brass);color:#0D1220;border-color:transparent;font-weight:600";
+  h+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="flex gap2 mb10">
+    <button class="btn" style="flex:1;${A.todoTakroriy?on:""}" onclick="A.setTodoKind(true)">Har kuni</button>
+    <button class="btn" style="flex:1;${A.todoTakroriy?"":on}" onclick="A.setTodoKind(false)">Bir martalik</button></div>
+   <input id="t_text" class="input" maxlength="300" placeholder="Nima qilish kerak?">
+   ${A.todoTakroriy?`<div class="muted tiny" style="margin-top:7px">Har kuni so'raladi, muddat kerak emas.</div>`
+    :`<div class="label">Qachongacha</div>
+      <input id="t_due" class="input" type="date">`}
+   <button class="btn btn-green btn-wide" style="margin-top:12px" onclick="A.addTodo()">Qo'shish</button>
+  </div>`}
+ const qator=(t,ds)=>{
+  const bor=todoBelgilangan(t,ds);
+  const kech=!t.repeating&&t.due&&t.due<td&&!t.done_at;
+  return `<div class="flex between center" style="padding:8px 0;border-top:1px solid var(--line)">
+   <span style="font-size:13px;min-width:0;${bor?"opacity:.5;text-decoration:line-through":""}">
+    ${esc(t.text)}
+    <span class="muted tiny">\u00B7 ${t.repeating?"har kuni"
+      :t.due?(kech?`<span class="clay">${pretty(t.due)} — muddati o'tdi</span>`:pretty(t.due))
+      :"muddatsiz"}</span></span>
+   <span class="flex center gap2">
+    <button class="mbtn" style="${bor?"background:var(--jade);border-color:transparent;color:#08140F":""}"
+      onclick="A.markTodo(${t.id},${bor?"false":"true"})">\u2713</button>
+    <button class="link" style="font-size:11px" onclick="A.dropTodo(${t.id})">\u00D7</button></span>
+  </div>`};
+ if(!todos||!todos.length){
+  if(!A.todoOchiq)h+=`<p class="muted small" style="margin:11px 0 0;line-height:1.6">Ro'yxat bo'sh.
+   Har kuni takrorlanadigan ish ham, muddatli bitta ish ham qo'shsangiz bo'ladi.</p>`;
+ }else{
+  h+=`<div style="margin-top:10px">`;
+  takroriy.forEach(t=>{h+=qator(t,td)});
+  birlik.forEach(t=>{h+=qator(t,td)});
+  bajarilgan.forEach(t=>{h+=qator(t,td)});
+  h+=`</div>`}
+ return h+`</div>`}
+
 
 /* ────────── DORILAR ────────── */
 /* Oila birga dori ichadi: kim nimani, qaysi soatlarda, qachongacha. Kurs — reja,
@@ -3024,9 +3190,11 @@ function doriPanel(){
  return h+`</div>`}
 
 /* ────────── VAZIFA ────────── */
-function taskTab(){
- const cfg=myCfg(),s=score(data[me],cfg,isChild(me)),owed=vazifaQarzi(data[me],M(me));
- let h=`<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
+/* Qoidalar, jazo pog'onalari va qarz ko'rsatkichlari — Nishon sahifasida.
+   Ular kunlik ish emas, bir marta o'qib qo'yiladigan narsa. */
+function jazoQoida(){
+ const s=score(data[me],myCfg(),isChild(me));
+ return `<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
  <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
   <div><span class="jade">Vaqtida o'qilsa</span> — qarz yozilmaydi</div>
   <div><span class="brass">Vaqti o'tib, o'sha kun ichida qazo qilinsa</span> — ${fmt(P_QAZO)} qarz</div>
@@ -3045,7 +3213,15 @@ function taskTab(){
  <div class="grid2 mb14">
   <div class="panel stat"><b class="${s.debt>0?"clay":"jade"}">${fmt(s.debt)}</b><i>Shu oydagi qarz</i></div>
   <div class="panel stat"><b class="jade">${s.tozaOy}</b><i>Toza oy</i></div>
- </div>`;
+ </div>`}
+
+/* Faol jazo vazifasi — Sunnat sahifasida qoladi: uni bajarish kunlik ish,
+   qoidalar va pog'onalar esa Nishon sahifasiga ko'chdi. Jamoaning qarzi bu
+   yerdan olib tashlandi — u boshqalarning hisobi, o'z vazifangiz emas. */
+function vazifaBloki(){
+ const cfg=myCfg(),owed=vazifaQarzi(data[me],M(me));
+ const s=score(data[me],cfg,isChild(me));
+ let h="";
  if(owed){
   const j=owed.jazo,shuOy=owed.oy===todayFor(cfg).slice(0,7);
   let sw="";for(let i=0;i<j.rak;i++)sw+=`<button class="sw ${i<A.rak?"on":""}" onclick="A.setRak(${i+1})"></button>`;
@@ -3080,15 +3256,6 @@ function taskTab(){
    <p class="muted" style="font-size:13px;margin-top:6px">${keyingi
      ?"Yana "+fmt(keyingi.ball-s.debt)+" ball qarz yig'ilsa "+keyingi.rak+" rakat va "+keyingi.tas+" tasbeh tushadi."
      :"Qarzingiz yo'q."}</p></div>`}
- h+=`<div class="panel p14 mt14"><div class="eyebrow">Jamoa holati</div><div class="mt12">`;
- members.filter(m=>m.id!==me).forEach(m=>{const o=score(data[m.id],cfgNow(m),!!m.is_child);
-  h+=`<div style="padding:7px 0;border-bottom:1px solid var(--line)">
-   <div style="font-size:12.5px;color:${colorOf(m.id)};margin-bottom:3px">${esc(first(m.name))} ${vazifaBelgi(m)}</div>
-   <div class="row"><span>Shu oy qarzi / uzilgan qazo</span><span class="muted">${fmt(o.debt)} · ${o.eski}</span></div>
-   <div class="row">${m.is_child
-     ?`<span>Yulduzcha</span><span class="brass">\u2B50 ${o.stars}</span>`
-     :`<span>Shu oy qarzi</span><span class="${o.debt>0?"clay":"jade"}">${fmt(o.debt)}</span>`}</div></div>`});
- h+=`</div></div>`;
  return h}
 
 /* ────────── KITOB ────────── */
@@ -3383,6 +3550,9 @@ function nishonTab(){
     <div class="muted small" style="flex-shrink:0">${val} / ${x.kerak}</div></div>
    <div class="bar" style="margin-top:9px"><div style="width:${pct}%;background:var(--brass)"></div></div>
   </div>`});
+ /* Qoidalar va jazo pog'onalari shu yerda: ular ham nishonlar kabi o'qib
+    qo'yiladigan narsa, kunlik ish emas. */
+ h+=isChild(me)?"":jazoQoida();
  return h+`<div style="height:16px"></div>`}
 
 /* Doira almashtirgichi. Bitta doira bo'lsa ko'rsatilmaydi — tanlanadigan narsa
