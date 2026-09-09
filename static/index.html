@@ -1024,6 +1024,20 @@ function oilaBallView(a,z,nom){
 
 /* ══════════════ ZIKR VA KUNLIK VAZIFA ══════════════ */
 const zikrBelgilangan=(id,ds)=>(zikrMarks||[]).some(m=>m.zikr_id===id&&m.day===ds);
+/* Anchadan beri belgilanmayotgan takroriy vazifalar. Maqsad — koyish emas,
+   eslatish: boshqa ishga berilib ketilganda ro'yxatdagi bittasi jimgina tushib
+   qoladi va uni hech kim aytmaydi. Bir kunlik tanaffus hayot, uch kun esa e'tibordan
+   qolgani. Hech qachon belgilanmagani yozilgan kunidan sanaladi. */
+const UNUTILDI=3;
+function todoUnutilgan(){
+ const td=todayFor(myCfg());
+ return (todos||[]).filter(t=>t.repeating).map(t=>{
+  const kunlar=(todoMarks||[]).filter(m=>m.todo_id===t.id&&m.day<=td)
+    .map(m=>m.day).sort();
+  const oxirgi=kunlar.length?kunlar[kunlar.length-1]:null;
+  return{t:t,oxirgi:oxirgi,kun:Math.max(0,daysBetween(oxirgi||t.created||td,td))}})
+  .filter(x=>x.kun>=UNUTILDI).sort((a,b)=>b.kun-a.kun)}
+
 const todoBelgilangan=(t,ds)=>t.repeating
   ?(todoMarks||[]).some(m=>m.todo_id===t.id&&m.day===ds)
   :!!t.done_at;
@@ -2823,15 +2837,16 @@ function todayTab(){
     :isT?"Vaqti o'tdi — bugun qazo qilsangiz −0,25, ertaga qolsa −1"
     :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)"}</div>`}
   h+=`</div>`});
- h+=amalPanel(cfg);
- h+=bolalarPanel(cfg);
- h+=qazoPanel(day,isT);
+ /* Qur'on qatori namozlardan keyin darrov turadi — u ham kunlik belgi. */
  h+=`<div class="panel p14 mt14 flex between center">
    <div><div style="font-family:var(--serif);font-size:16px">Bugun Qur'on o'qidim</div>
    <div class="muted small">Oz bo'lsa ham — davomiysi afzal</div></div>
    <button class="mbtn" style="${day.quran?"background:var(--jade);border-color:transparent;color:#0D1220":""}"
      onclick="A.field('quran',${day.quran?"false":"true"})">✓</button></div>`;
- h+=todoPanel();
+ h+=amalPanel(cfg);
+ h+=bolalarPanel(cfg);
+ h+=qazoPanel(day,isT);
+  h+=todoPanel();
  return h}
 
 /* ────────── STATISTIKA ────────── */
@@ -3127,6 +3142,17 @@ function todoPanel(){
   takroriy.forEach(t=>{h+=qator(t,td)});
   birlik.forEach(t=>{h+=qator(t,td)});
   bajarilgan.forEach(t=>{h+=qator(t,td)});
+  h+=`</div>`}
+ const unut=todoUnutilgan();
+ if(unut.length){
+  h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="eyebrow" style="color:var(--clay)">E'tibordan qolgan</div>
+   <p class="muted tiny" style="margin:6px 0 9px;line-height:1.55">Boshqa ishga
+    berilib ketilganda ro'yxatdagi bittasi jimgina tushib qoladi. Bular o'sha.</p>`;
+  unut.forEach(x=>{
+   h+=`<div class="flex between center" style="padding:5px 0;font-size:12.5px">
+    <span>${esc(x.t.text)}</span>
+    <span class="clay">${x.kun} kun${x.oxirgi?"":" — hech qachon"}</span></div>`});
   h+=`</div>`}
  return h+`</div>`}
 

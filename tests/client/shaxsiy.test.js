@@ -6,14 +6,15 @@ const SARDOR = { id: "sardor", name: "Sardor Valixanov", city: "Toshkent",
   lat: 41.2995, lng: 69.2401, tz: 5, asr: 2, fa: 18, ia: 18 };
 const blank = () => ({ days: {}, bonuses: [], tasks: [], books: [], places: [] });
 const ZIKR = { id: 1, name: "Subhanalloh", meaning: "Alloh pokdir", count: 33 };
-const TAKRORIY = { id: 1, text: "Ertalab yugurish", repeating: true, due: null, done_at: null };
+const TAKRORIY = { id: 1, text: "Ertalab yugurish", repeating: true, due: null,
+  done_at: null, created: "2026-09-01" };
 const BIRLIK = { id: 2, text: "Hujjatni topshirish", repeating: false,
-  due: "2026-09-12", done_at: null };
+  due: "2026-09-12", done_at: null, created: "2026-09-01" };
 
 function client(private_ = {}) {
   const loaded = loadClient({
     at: "2026-09-09T07:00:00Z",
-    expose: ["zikrs", "todos"],
+    expose: ["zikrs", "todos", "todoUnutilgan"],
     routes: {
       "/me/private": { zikrs: [], zikr_marks: [], todos: [], todo_marks: [], ...private_ },
       "/me/zikrs": ZIKR,
@@ -128,5 +129,52 @@ module.exports = {
     await c.A.go("app");
     const found = c.html.match(/<b class="[^"]*">([^<]*)<\/b><i>Shu kun bali<\/i>/);
     assert.strictEqual(found[1], "0", "ticking them moves no score at all");
+  },
+
+  /* ------------------------------------------------ unutilganlar */
+  async "a repeating task nobody has ticked for days is surfaced"(assert) {
+    const c = client({ todos: [TAKRORIY], todo_marks: [{ todo_id: 1, day: "2026-09-05" }] });
+    await c.A.loadPrivate();
+    const u = c.todoUnutilgan();
+    assert.strictEqual(u.length, 1);
+    assert.strictEqual(u[0].kun, 4, "last done on the fifth, and today is the ninth");
+  },
+
+  async "one done today or yesterday is not nagged about"(assert) {
+    const c = client({ todos: [TAKRORIY], todo_marks: [{ todo_id: 1, day: "2026-09-08" }] });
+    await c.A.loadPrivate();
+    assert.strictEqual(c.todoUnutilgan().length, 0, "a day's gap is life, not neglect");
+  },
+
+  async "one never ticked is counted from the day it was written down"(assert) {
+    const c = client({ todos: [TAKRORIY], todo_marks: [] });
+    await c.A.loadPrivate();
+    assert.strictEqual(c.todoUnutilgan()[0].kun, 8, "written on the first, never done");
+  },
+
+  async "a one-off is not in this list — it has its own deadline"(assert) {
+    const c = client({ todos: [BIRLIK], todo_marks: [] });
+    await c.A.loadPrivate();
+    assert.strictEqual(c.todoUnutilgan().length, 0);
+  },
+
+  async "the longest neglected comes first"(assert) {
+    const ikki = { ...TAKRORIY, id: 3, text: "Kitob o'qish", created: "2026-09-01" };
+    const c = client({ todos: [TAKRORIY, ikki],
+      todo_marks: [{ todo_id: 1, day: "2026-09-05" }] });
+    await c.A.loadPrivate();
+    const u = c.todoUnutilgan();
+    assert.strictEqual(u[0].t.id, 3, "eight days beats four");
+    assert.strictEqual(u[1].t.id, 1);
+  },
+
+  async "it shows under the list, as a reminder rather than a scolding"(assert) {
+    const c = client({ todos: [TAKRORIY], todo_marks: [] });
+    await c.A.loadPrivate();
+    await c.A.go("app");
+    const h = c.html;
+    assert.ok(h.includes("E'tibordan qolgan"), "expected the reminder block");
+    assert.ok(h.indexOf("Kunlik vazifalar") < h.indexOf("E'tibordan qolgan"), "below the list");
+    assert.ok(h.includes("8 kun"), "with how long it has been");
   },
 };

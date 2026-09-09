@@ -778,6 +778,9 @@ class Todo(BaseModel):
     repeating: bool = False
     due: Date | None = None
     done_at: Date | None = None
+    # The day it was written down. A repeating task nobody has ever ticked is
+    # neglected from here rather than from nowhere.
+    created: Date
 
 
 class TodoCreate(BaseModel):

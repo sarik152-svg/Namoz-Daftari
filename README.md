@@ -297,6 +297,12 @@ same way, in the SQL rather than in a check that can be forgotten.
 **Neither carries points.** This is a notebook, not a score, and a test pins the day
 total at zero however many of them are ticked.
 
+Under the list, **E'tibordan qolgan**: repeating tasks nobody has ticked for three days
+or more, longest first, one never ticked counted from the day it was written down. When
+attention goes elsewhere one item quietly falls off a list and nothing says so — this is
+the thing that says so. Three days rather than one, because a day's gap is life rather
+than neglect, and a reminder that fires every day is one nobody reads.
+
 ## Dorilar — a family's medicine schedule
 
 On the Sunnat page, between the day's sunnah and the terms of the agreement, and only in

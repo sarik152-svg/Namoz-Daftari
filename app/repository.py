@@ -642,8 +642,8 @@ async def fetch_private(pool: asyncpg.Pool, member_id: str) -> Private:
         )
         todo_rows = await connection.fetch(
             """
-            SELECT id, text, repeating, due, done_at FROM todos
-             WHERE member_id = $1 ORDER BY id
+            SELECT id, text, repeating, due, done_at, created_at::date AS created
+              FROM todos WHERE member_id = $1 ORDER BY id
             """,
             member_id,
         )
@@ -726,7 +726,7 @@ async def add_todo(
             """
             INSERT INTO todos (member_id, text, repeating, due)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, text, repeating, due, done_at
+            RETURNING id, text, repeating, due, done_at, created_at::date AS created
             """,
             member_id, text, repeating, due,
         )
