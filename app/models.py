@@ -712,6 +712,41 @@ class RewardGoal(BaseModel):
     reward_goal: int = Field(ge=10, le=10_000)
 
 
+# ---------------------------------------------------------------- va'da
+class Promise(BaseModel):
+    """When somebody said they would do their penance.
+
+    `promised` NULL is "never": an honest refusal, which cannot be broken and so
+    never becomes a lie. A date that passes with the task still owed does.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: str
+    oy: str = Field(max_length=7)
+    lvl: int = Field(ge=1, le=3)
+    promised: Date | None = None
+
+    _check_member = field_validator("member_id")(_validate_member_id)
+
+    @field_validator("oy")
+    @classmethod
+    def _month(cls, value: str) -> str:
+        if not re.match(r"^\d{4}-(0[1-9]|1[0-2])$", value):
+            raise ValueError("oy must be YYYY-MM")
+        return value
+
+
+class PromiseCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    oy: str = Field(max_length=7)
+    lvl: int = Field(ge=1, le=3)
+    promised: Date | None = None
+
+    _month = field_validator("oy")(Promise._month.__func__)
+
+
 # ---------------------------------------------------------------- shaxsiy
 class Zikr(BaseModel):
     """One zikr a member keeps: what it is, what it means, how many times."""
@@ -956,6 +991,8 @@ class GroupState(BaseModel):
     skills: list[ChildSkill] = Field(default_factory=list)
     medicines: list[Medicine] = Field(default_factory=list)
     doses: list[MedicineDose] = Field(default_factory=list)
+    # Public on purpose: a promise made to the circle is what the chip reports.
+    promises: list[Promise] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -969,4 +1006,5 @@ class GroupState(BaseModel):
             "skills": [s.model_dump(mode="json") for s in self.skills],
             "medicines": [m.model_dump(mode="json") for m in self.medicines],
             "doses": [d.model_dump(mode="json") for d in self.doses],
+            "promises": [p.model_dump(mode="json") for p in self.promises],
         }

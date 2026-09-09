@@ -27,6 +27,7 @@ from app.models import (
     Marked,
     MedicineDose,
     Private,
+    Promise,
     Todo,
     Zikr,
     Duel,
@@ -396,6 +397,7 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         skills=await fetch_child_skills(pool, circle_id),
         medicines=await fetch_medicines(pool, circle_id),
         doses=await fetch_doses(pool, circle_id),
+        promises=await fetch_promises(pool, circle_id),
     )
 
 
@@ -583,6 +585,39 @@ async def set_reward_goal(pool: asyncpg.Pool, member_id: str, goal: int) -> bool
             member_id, goal,
         )
     return row is not None
+
+
+# ---------------------------------------------------------------- va'da
+async def fetch_promises(pool: asyncpg.Pool, circle_id: int) -> list[Promise]:
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT p.member_id, p.oy, p.lvl, p.promised FROM task_promises p
+              JOIN circle_members cm ON cm.member_id = p.member_id
+             WHERE cm.circle_id = $1
+            """,
+            circle_id,
+        )
+    return [Promise(**dict(row)) for row in rows]
+
+
+async def make_promise(
+    pool: asyncpg.Pool, member_id: str, oy: str, lvl: int, promised: Date | None,
+    today: Date,
+) -> None:
+    """One promise per month's task. Saying it again replaces the last word, which is
+    what happens when the debt grows into a bigger tier and the question returns."""
+    async with pool.acquire() as connection:
+        await connection.execute(
+            """
+            INSERT INTO task_promises (member_id, oy, lvl, promised, made_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (member_id, oy)
+            DO UPDATE SET lvl = EXCLUDED.lvl, promised = EXCLUDED.promised,
+                          made_at = EXCLUDED.made_at
+            """,
+            member_id, oy, lvl, promised, today,
+        )
 
 
 # ---------------------------------------------------------------- shaxsiy

@@ -262,6 +262,25 @@ never disagrees with the records underneath it.
 Friends keep the podium exactly as it was. `Ball qayerdan` stays for both: it explains a
 number rather than ranking anybody.
 
+## Va'da — the chip has one more state
+
+Somebody who opens the app owing a penance is asked, by name, when they will do it:
+today, tomorrow, this week, or never. The answer is a promise made to the circle, so it
+is public and travels in `/state`.
+
+**Owing and lying are different things and the chip says which.** A day named and let
+pass with the task still owed turns ⚠ VAZIFA into **⚠ ALDOQCHI**, in red, everywhere
+names appear — the podium, the comparison cards, the team lists.
+
+**"Never" can never be broken.** It is an honest refusal: the debt still shows, but the
+word does not, and the chip stays VAZIFA. Punishing somebody for saying plainly that they
+will not do something would only teach them to promise a date they do not mean.
+
+The promise is keyed to the month's task and the tier it was made for, so a debt growing
+into a bigger tier is a new task and the question comes back. Doing the task clears both
+marks at once, broken word or not — the mark is for what is owed, not a record kept
+against somebody.
+
 ## Zikrlar va kunlik vazifalar — one person's, and nobody else's
 
 Zikrs on the Sunnat page (name, meaning, how many times, ticked once a day) and a

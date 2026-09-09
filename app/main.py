@@ -50,6 +50,7 @@ from app.models import (
     DoseCreate,
     KpiTargets,
     MedicineCreate,
+    PromiseCreate,
     TodoCreate,
     ZikrCreate,
     StartBall,
@@ -809,6 +810,22 @@ async def set_reward_goal(
             )
     if not await repository.set_reward_goal(pool, member_id, body.reward_goal):
         raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- va'da
+@app.post(f"{API_PREFIX}/me/promise")
+async def make_promise(
+    body: PromiseCreate, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    """Say when you will do your penance. Only for yourself: a promise somebody else
+    made on your behalf is not a promise."""
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi va'da bermaydi", 403)
+    await repository.make_promise(
+        request.app.state.pool, session.member_id, body.oy, body.lvl,
+        body.promised, Date.today(),
+    )
     return {"ok": True}
 
 

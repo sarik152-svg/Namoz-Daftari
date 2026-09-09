@@ -419,7 +419,7 @@ async function pull(){
    members=j.members;data={};
    calls=j.calls||[];khatm=j.khatm||null;duels=j.duels||[];
    deeds=j.deeds||[];rewards=j.rewards||[];skills=j.skills||[];
-   medicines=j.medicines||[];doses=j.doses||[];
+   medicines=j.medicines||[];doses=j.doses||[];promises=j.promises||[];
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -488,6 +488,8 @@ let medicines=[],doses=[],doriMsg="",doriErr=false;
    doirani har bir telefonga tashiydi, kim nima zikr qilgani va o'z ro'yxatiga nima
    yozgani esa oilaning ishi emas. Ball ham bermaydi — bu daftar, hisob emas. */
 let zikrs=[],zikrMarks=[],todos=[],todoMarks=[],shaxsiyMsg="",shaxsiyErr=false;
+/* Va'dalar — ataylab ochiq: ismi yonidagi belgi shuni aytadi. */
+let promises=[];
 const DORI_KECHIKISH=30;
 
 members.forEach(m=>{if(!data[m.id])data[m.id]=blank()});
@@ -755,11 +757,50 @@ function vazifaQarzi(u,m){
      jazo:JAZO[kerak-1]}}
  return null}
 
+/* Vazifasi bor odamning so'zi qanday turgani:
+     yo'q      — hali so'ralmagan, savol chiqadi
+     vada      — kun aytilgan va hali kelmagan, yoki "hech qachon" deyilgan
+     aldoqchi  — aytilgan kun o'tdi, vazifa esa hamon bajarilmagan
+   "Hech qachon" — halol rad javobi. Uni buzib bo'lmaydi, shuning uchun u hech
+   qachon yolg'onga aylanmaydi: qarz turadi, so'z esa buzilmaydi. */
+function vadaHolat(m){
+ const owed=vazifaQarzi(data[m.id],m);
+ if(!owed)return "yoq";
+ const v=(promises||[]).find(p=>p.member_id===m.id&&p.oy===owed.oy&&p.lvl>=owed.daraja);
+ if(!v)return "yoq";
+ if(!v.promised)return "vada";
+ return v.promised<todayFor(cfgNow(m))?"aldoqchi":"vada"}
+
+/* Vazifasi bor, lekin hali so'z bermagan odamdan ilovaga kirganda so'raladi. Ismi
+   bilan, chunki bu doiraga berilayotgan so'z — o'ziga emas. */
+function vadaSavoli(){
+ const m=M(me);
+ if(!m||m.is_child)return "";
+ const owed=vazifaQarzi(data[me],m);
+ if(!owed||vadaHolat(m)!=="yoq")return "";
+ const j=owed.jazo;
+ return `<div class="panel p18 mb14" style="border-color:#C9584B;background:#2A1A1A">
+  <div class="clay" style="font-family:var(--serif);font-size:22px">${esc(first(m.name))},
+   vazifangizni qachon bajarasiz?</div>
+  <p class="muted" style="font-size:12.5px;margin:8px 0 14px;line-height:1.65">${
+    j.rak} rakat nafl va ${j.tas} tasbeh. Aytgan kuningizda bajarmasangiz, ismingiz
+   yonida butun doiraga <b class="clay">ALDOQCHI</b> deb chiqadi.</p>
+  <div class="flex gap2" style="flex-wrap:wrap">
+   <button class="btn" style="flex:1;min-width:80px" onclick="A.promise('bugun')">Bugun</button>
+   <button class="btn" style="flex:1;min-width:80px" onclick="A.promise('ertaga')">Ertaga</button>
+   <button class="btn" style="flex:1;min-width:96px" onclick="A.promise('hafta')">Shu hafta</button>
+   <button class="btn" style="flex:1;min-width:104px" onclick="A.promise('hech')">Hech qachon</button>
+  </div>
+  <p class="muted tiny" style="margin:10px 0 0;line-height:1.55">"Hech qachon" —
+   halol javob. Qarz turadi, lekin so'z buzilmaydi.</p></div>`}
+
 /* Doiradagi hamma ko'radigan belgi. Ataylab ko'zga tashlanadi: vazifa tushgan odam
    uni bajarmaguncha ismining yonida turadi. */
 function vazifaBelgi(m){
- return vazifaQarzi(data[m.id],m)
-  ?`<span class="chip" style="border-color:#C9584B88;color:var(--clay)">\u26A0 VAZIFA</span>`:""}
+ if(!vazifaQarzi(data[m.id],m))return "";
+ return vadaHolat(m)==="aldoqchi"
+  ?`<span class="chip" style="border-color:#C9584B;color:#fff;background:var(--clay)">\u26A0 ALDOQCHI</span>`
+  :`<span class="chip" style="border-color:#C9584B88;color:var(--clay)">\u26A0 VAZIFA</span>`}
 
 /* ══════════════ YIL ══════════════ */
 /* Oy g'olibi — o'sha oy TUGAGANDA birinchi o'ringa chiqqan odam. Hech qayerda
@@ -1905,6 +1946,21 @@ const A={
      {method:"DELETE"});
    await pull()}
   catch(e){doriMsg=e.message||"Olib tashlab bo'lmadi";doriErr=true}
+  render()},
+ /* So'z faqat o'ziniki: birov nomidan berilgan va'da va'da emas. */
+ async promise(qachon){
+  const m=M(me),owed=vazifaQarzi(data[me],m);
+  if(!owed)return;
+  const td=todayFor(myCfg());
+  const kun=qachon==="bugun"?td
+   :qachon==="ertaga"?shift(td,1)
+   :qachon==="hafta"?weekRange(td)[1]
+   :null;
+  try{
+   await api("/me/promise",{method:"POST",
+     body:JSON.stringify({oy:owed.oy,lvl:owed.daraja,promised:kun})});
+   await pull();
+  }catch(e){alert(e.message||"Saqlanmadi")}
   render()},
  async setKpi(id){
   const m=(members||[]).find(x=>x.id===id)||{};
@@ -3607,6 +3663,7 @@ function render(){
     sahifasining tagida turadi. Eski telefonda saqlanib qolgan tanlov shu yerga
     olib boriladi, aks holda ekran bo'sh chiqardi. */
  if(tab==="task")tab="sunnat";
+ h+=vadaSavoli();
  h+= tab==="today"?todayTab():tab==="stats"?statsTab():tab==="sunnat"?sunnatTab():tab==="book"?bookTab():tab==="nishon"?nishonTab():todayTab();
  h+=`<div class="tabbar"><div>
   <button class="${tab==="today"?"on":""}" onclick="A.setTab('today')"><span>📋</span>Bugun</button>
