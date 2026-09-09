@@ -76,12 +76,15 @@ module.exports = {
     assert.ok(!c.vazifaBelgi(SARDOR).includes(">⚠ VAZIFA<"));
   },
 
-  "'never' is honest, so it can never be broken"(assert) {
-    /* A refusal is not a lie. The debt still shows; the word does not. */
+  "'never' says so on the chip, and is never a lie"(assert) {
+    /* A refusal is not a lie, and it is not a pending task either — it is its own
+       answer, so it gets its own word. */
     const c = client(vada(null));
-    assert.strictEqual(c.vadaHolat(SARDOR), "vada");
-    assert.ok(c.vazifaBelgi(SARDOR).includes("VAZIFA"));
-    assert.ok(!c.vazifaBelgi(SARDOR).includes("ALDOQCHI"));
+    assert.strictEqual(c.vadaHolat(SARDOR), "hech");
+    const belgi = c.vazifaBelgi(SARDOR);
+    assert.ok(belgi.includes("HECH QACHON"), "the answer they gave: " + belgi);
+    assert.ok(!belgi.includes("ALDOQCHI"), "refusing plainly is not lying");
+    assert.ok(!/>\u26A0 VAZIFA</.test(belgi), "and it is no longer just a pending task");
   },
 
   "doing the task clears the mark, broken word or not"(assert) {
@@ -91,6 +94,10 @@ module.exports = {
       tasks: [{ d: "2026-09-09", rak: 12, tas: 500, lvl: 1, oy: "2026-09" }] };
     c.setState({ data: { sardor: done, behruz: blank() } });
     assert.strictEqual(c.vazifaBelgi(SARDOR), "", "no debt, no mark of any kind");
+    const kechikkan = client(vada(null));
+    kechikkan.setState({ data: { sardor: done, behruz: blank() } });
+    assert.strictEqual(kechikkan.vazifaBelgi(SARDOR), "",
+      "and doing it after saying never clears that too");
   },
 
   async "answering sends the day it was promised for"(assert) {

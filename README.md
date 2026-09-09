@@ -272,9 +272,10 @@ is public and travels in `/state`.
 pass with the task still owed turns ⚠ VAZIFA into **⚠ ALDOQCHI**, in red, everywhere
 names appear — the podium, the comparison cards, the team lists.
 
-**"Never" can never be broken.** It is an honest refusal: the debt still shows, but the
-word does not, and the chip stays VAZIFA. Punishing somebody for saying plainly that they
-will not do something would only teach them to promise a date they do not mean.
+**"Never" gets its own word: HECH QACHON**, in grey. It is an honest refusal and cannot
+be broken, so it never becomes ALDOQCHI — punishing somebody for saying plainly that they
+will not do a thing would only teach them to promise a date they do not mean. But it is
+not a pending task either, so it does not read VAZIFA: it says what they answered.
 
 The promise is keyed to the month's task and the tier it was made for, so a debt growing
 into a bigger tier is a new task and the question comes back. Doing the task clears both

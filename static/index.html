@@ -759,16 +759,17 @@ function vazifaQarzi(u,m){
 
 /* Vazifasi bor odamning so'zi qanday turgani:
      yo'q      — hali so'ralmagan, savol chiqadi
-     vada      — kun aytilgan va hali kelmagan, yoki "hech qachon" deyilgan
+     vada      — kun aytilgan va hali kelmagan
+     hech      — "hech qachon" deyilgan
      aldoqchi  — aytilgan kun o'tdi, vazifa esa hamon bajarilmagan
-   "Hech qachon" — halol rad javobi. Uni buzib bo'lmaydi, shuning uchun u hech
-   qachon yolg'onga aylanmaydi: qarz turadi, so'z esa buzilmaydi. */
+   "Hech qachon" — halol rad javobi va o'z javobi: uni buzib bo'lmaydi, shuning uchun
+   u hech qachon yolg'onga aylanmaydi, lekin kutilayotgan vazifa ham emas. */
 function vadaHolat(m){
  const owed=vazifaQarzi(data[m.id],m);
  if(!owed)return "yoq";
  const v=(promises||[]).find(p=>p.member_id===m.id&&p.oy===owed.oy&&p.lvl>=owed.daraja);
  if(!v)return "yoq";
- if(!v.promised)return "vada";
+ if(!v.promised)return "hech";
  return v.promised<todayFor(cfgNow(m))?"aldoqchi":"vada"}
 
 /* Vazifasi bor, lekin hali so'z bermagan odamdan ilovaga kirganda so'raladi. Ismi
@@ -798,9 +799,10 @@ function vadaSavoli(){
    uni bajarmaguncha ismining yonida turadi. */
 function vazifaBelgi(m){
  if(!vazifaQarzi(data[m.id],m))return "";
- return vadaHolat(m)==="aldoqchi"
-  ?`<span class="chip" style="border-color:#C9584B;color:#fff;background:var(--clay)">\u26A0 ALDOQCHI</span>`
-  :`<span class="chip" style="border-color:#C9584B88;color:var(--clay)">\u26A0 VAZIFA</span>`}
+ const h=vadaHolat(m);
+ if(h==="aldoqchi")return `<span class="chip" style="border-color:#C9584B;color:#fff;background:var(--clay)">\u26A0 ALDOQCHI</span>`;
+ if(h==="hech")return `<span class="chip" style="border-color:#8895AE88;color:var(--mut)">HECH QACHON</span>`;
+ return `<span class="chip" style="border-color:#C9584B88;color:var(--clay)">\u26A0 VAZIFA</span>`}
 
 /* ══════════════ YIL ══════════════ */
 /* Oy g'olibi — o'sha oy TUGAGANDA birinchi o'ringa chiqqan odam. Hech qayerda
