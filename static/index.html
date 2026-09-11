@@ -178,6 +178,10 @@ const CITIES=[
  {n:"Jidda",lat:21.543,lng:39.173,tz:3,asr:1,fa:18.5,ia:18.5},
  {n:"Riyod",lat:24.713,lng:46.675,tz:3,asr:1,fa:18.5,ia:18.5},
  {n:"Doha",lat:25.286,lng:51.531,tz:3,asr:1,fa:18,ia:18},
+ {n:"Qohira",lat:30.0444,lng:31.2357,tz:2,dst:"misr",asr:2,fa:19.5,ia:17.5},
+ {n:"Iskandariya",lat:31.2001,lng:29.9187,tz:2,dst:"misr",asr:2,fa:19.5,ia:17.5},
+ {n:"Sharm ash-Shayx",lat:27.9158,lng:34.33,tz:2,dst:"misr",asr:2,fa:19.5,ia:17.5},
+ {n:"Hurg'ada",lat:27.2579,lng:33.8116,tz:2,dst:"misr",asr:2,fa:19.5,ia:17.5},
  {n:"Istanbul",lat:41.008,lng:28.978,tz:3,asr:2,fa:18,ia:17},
  {n:"Moskva",lat:55.756,lng:37.617,tz:3,asr:2,fa:18,ia:17},
  {n:"Almati",lat:43.238,lng:76.889,tz:5,asr:2,fa:18,ia:18},
@@ -185,9 +189,9 @@ const CITIES=[
  {n:"Dushanbe",lat:38.56,lng:68.787,tz:5,asr:2,fa:18,ia:18},
  {n:"Kuala-Lumpur",lat:3.139,lng:101.687,tz:8,asr:1,fa:20,ia:18},
  {n:"Seul",lat:37.567,lng:126.978,tz:9,asr:2,fa:18,ia:17},
- {n:"London",lat:51.507,lng:-0.128,tz:1,asr:2,fa:18,ia:17},
- {n:"Berlin",lat:52.52,lng:13.405,tz:2,asr:2,fa:18,ia:17},
- {n:"Nyu-York",lat:40.713,lng:-74.006,tz:-4,asr:2,fa:18,ia:17}
+ {n:"London",lat:51.507,lng:-0.128,tz:0,dst:"yevropa",asr:2,fa:18,ia:17},
+ {n:"Berlin",lat:52.52,lng:13.405,tz:1,dst:"yevropa",asr:2,fa:18,ia:17},
+ {n:"Nyu-York",lat:40.713,lng:-74.006,tz:-5,dst:"amerika",asr:2,fa:18,ia:17}
 ];
 /* Bo'sh: bu ro'yxat sahifa manbasida turadi va uni ochgan har kim o'qiy oladi.
    Haqiqiy a'zolar /state dan keladi. */
@@ -551,14 +555,53 @@ const M=id=>members.find(x=>x.id===id)||members[0];
    yoziladi: «shu kundan boshlab — mana bu shaharda». Shunda boshqa shaharga
    ko'chish o'tgan kunlarning vaqtlarini qayta yozib yubormaydi. */
 const placesOf=m=>((data[m.id]&&data[m.id].places)||[]);
+/* Yozgi vaqt. Ro'yxatdagi `tz` — QISHKI siljish; yozda soati oldinga suriladigan
+   shaharlarda ustiga bir soat qo'shiladi. Sana bo'yicha hisoblanadi, chunki o'tgan
+   kun ham o'sha kundagi soat bilan baholanishi kerak: oktyabrda yozilgan namozni
+   dekabrdagi siljish bilan o'lchash uni bir soatga surib yuborardi.
+   Shahar nomi yozuvda turadi, qoida esa shu yerda — bazada yangi ustun kerak emas. */
+const oyKun=ds=>({y:+ds.slice(0,4),m:+ds.slice(5,7),d:+ds.slice(8,10)});
+/* Oyning n-chi `dow` kuni; n<0 bo'lsa oxirgisi. Yakshanba = 0. */
+function dowKun(y,m,dow,n){
+ if(n<0){
+  const oxir=new Date(Date.UTC(y,m,0));
+  return oxir.getUTCDate()-((oxir.getUTCDay()-dow+7)%7)}
+ const birinchi=new Date(Date.UTC(y,m-1,1));
+ return 1+((dow-birinchi.getUTCDay()+7)%7)+(n-1)*7}
+const oraliqda=(ds,boshY,boshM,boshD,oxirY,oxirM,oxirD)=>{
+ const t=ds;
+ const p=n=>String(n).padStart(2,"0");
+ const a=boshY+"-"+p(boshM)+"-"+p(boshD),z=oxirY+"-"+p(oxirM)+"-"+p(oxirD);
+ return t>=a&&t<z};
+const DST={
+ /* Yevropa: martning oxirgi yakshanbasidan oktyabrning oxirgi yakshanbasigacha. */
+ yevropa:ds=>{const k=oyKun(ds);
+  return oraliqda(ds,k.y,3,dowKun(k.y,3,0,-1),k.y,10,dowKun(k.y,10,0,-1))},
+ /* Misr: aprelning oxirgi jumasidan oktyabrning oxirgi payshanbasigacha. */
+ misr:ds=>{const k=oyKun(ds);
+  return oraliqda(ds,k.y,4,dowKun(k.y,4,5,-1),k.y,10,dowKun(k.y,10,4,-1))},
+ /* AQSh: martning ikkinchi yakshanbasidan noyabrning birinchi yakshanbasigacha. */
+ amerika:ds=>{const k=oyKun(ds);
+  return oraliqda(ds,k.y,3,dowKun(k.y,3,0,2),k.y,11,dowKun(k.y,11,0,1))}
+};
+const shaharQoida=nom=>{const c=CITIES.find(x=>x.n===nom);return c&&c.dst?DST[c.dst]:null};
+function yozgiVaqt(c,ds){
+ const q=shaharQoida(c&&c.city);
+ if(!q||!q(ds))return c;
+ return Object.assign({},c,{tz:(c.tz||0)+1})}
+
 function cfgAt(m,ds){
  let best=null;
  placesOf(m).forEach(p=>{if(p.d<=ds&&(!best||p.d>=best.d))best=p});
- return best?Object.assign({},m,best):m}
+ return yozgiVaqt(best?Object.assign({},m,best):m,ds)}
 function cfgNow(m){
  let best=null;
  placesOf(m).forEach(p=>{if(!best||p.d>=best.d)best=p});
- return best?Object.assign({},m,best):m}
+ const c=best?Object.assign({},m,best):m;
+ /* Bugun qaysi kun ekanini bilish uchun ham siljish kerak, siljishni bilish uchun
+    esa kun — bir soatlik tugun. Yechim: kunni shaharning qishki soati bilan olamiz.
+    Farq faqat o'tish kechasining bir soatida bo'ladi va o'zi yo'qoladi. */
+ return yozgiVaqt(c,today(nowFor(c)))}
 const myCfg=()=>cfgNow(M(me));
 const colorOf=id=>PALETTE[Math.max(0,members.findIndex(m=>m.id===id))%PALETTE.length];
 

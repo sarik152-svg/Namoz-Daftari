@@ -688,6 +688,26 @@ has to be fixable by somebody, and admin is already the role that can do anythin
 
 ## Travel: which city a day is judged in
 
+**Yozgi vaqt (2026-09-11).** Sardor went to Egypt and the app kept judging him by
+Tashkent's clock: a Maghrib prayed on time in Cairo is, on Tashkent's clock, past
+even Isha — so it was written down as a qazo. Egypt was not in the city list, so he
+could not tell the app where he was.
+
+Egypt is there now (Qohira, Iskandariya, Sharm ash-Shayx, Hurg'ada) with the
+Egyptian General Authority angles, fa 19.5 / ia 17.5, and Hanafi asr like the rest
+of the list. With it came summer time, which the app had never handled: London,
+Berlin and New York were stored on their *summer* offsets and were therefore an hour
+out for half of every year.
+
+A city now carries its **winter** offset plus a rule — `yevropa`, `misr`, `amerika` —
+and `cfgAt` adds the hour **by the date being judged**, not by today. That last part
+is the whole point: a prayer logged in September has to keep September's offset when
+it is read back in December, or an entire autumn shifts by an hour. The rule lives in
+the city list in the page source; nothing new is stored per member, so a member's
+saved `tz` stays the plain winter number it always was.
+
+
+
 Members move between cities, and prayer times have to follow the city they are actually
 in. Overwriting `members.city` would have silently rewritten the schedule of every past
 day, so the city is a **dated list** instead — `places`, one entry per move, meaning
