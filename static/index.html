@@ -3264,13 +3264,11 @@ function statsTab(){
   ?oilaBallView(rng[0],rng[1],yil?"Bu yil":oy?"Bu oy":"Bu hafta")
   :podium(yil?"Yil qahramoni":oy?"Oy qahramoni":"Hafta qahramoni",
     rng[0],rng[1],periodDone(rng[1],cfg));
- /* Qur'on qahramondan keyin turadi — Sardor shu yerni ko'rsatgan. */
- ch+=quronJamoaView();
  /* Duel kursi bilan taqqoslash orasida turadi — Sardor shu yerni ko'rsatgan. */
  ch+=ballTarkibView(rng[0],rng[1]);
  ch+=duelView();
  /* Taqqoslash — foizlar va o'rinlar. Oilada ko'rsatilmaydi. */
- if(isFamily())return ch+oilaTahlilView();
+ if(isFamily())return ch+oilaTahlilView()+quronJamoaView();
  const ranked=members.slice().sort((a,b)=>{
   const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
@@ -3297,6 +3295,8 @@ function statsTab(){
         <span class="${s.debt>0?"clay":"jade"}">${fmt(s.debt)}</span>`}</div>
   </div>`});
  h+=`</div>`;
+ /* Qur'on taqqoslashdan KEYIN turadi — Sardor shu yerni ko'rsatgan (2026-09-12). */
+ h+=quronJamoaView();
  h+=oilaTahlilView();
  /* strike */
  /* Strike endi mukofot bermaydi — qarzni hech narsa kamaytirmaydi. Ketma-ket

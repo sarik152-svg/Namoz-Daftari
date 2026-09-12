@@ -874,8 +874,8 @@ not a promise.
 this week's reading, and **which suras they have finished, by name** — the count on
 its own left the question "which ones?" answerable only from the database. The list
 is in mus'haf order and cuts off after eight with "va yana N ta". The *Qazo daftari · jamoa* board it replaced came off on Sardor's
-call; this answers the same "who is where" for reading. It sits **directly under the
-week's champion**, above the breakdown and the duel — also his placement.
+call; this answers the same "who is where" for reading. It sits **below Taqqoslash**, near the
+foot of the page — also his placement (moved there on 2026-09-12).
 
 ## Doiralar
 

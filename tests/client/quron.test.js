@@ -234,12 +234,11 @@ module.exports = {
     const h = c.html;
     assert.ok(h.includes("Qur'on · jamoa"), "expected the reading board");
     assert.ok(!h.includes("Qazo daftari · jamoa"), "the qazo board was removed");
-    /* Sardor put it directly under the week's champion, above the breakdown
-       and the duel. */
-    assert.ok(h.indexOf("Hafta qahramoni") < h.indexOf("Qur'on · jamoa"),
-      "after the champion");
-    assert.ok(h.indexOf("Qur'on · jamoa") < h.indexOf("Ball qayerdan"),
-      "and before the breakdown");
+    /* Moved down on 2026-09-12: below Taqqoslash, where Sardor wanted it. */
+    assert.ok(h.indexOf("Taqqoslash") < h.indexOf("Qur'on · jamoa"),
+      "after the comparison");
+    assert.ok(h.indexOf("Ball qayerdan") < h.indexOf("Qur'on · jamoa"),
+      "and below the breakdown and the duel");
   },
 
   /* ------------------------------------------------- ko'chirilgan bo'limlar */
