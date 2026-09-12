@@ -18,7 +18,8 @@ function client(patch = {}, at = "2026-09-09T07:00:00Z") {
              "quronHafta", "quronJamoaView", "prayerRange", "SURALAR",
              "QURON_BALL", "suraOyat", "quronYigma", "quronKetma",
              "nishonStat", "NISHONLAR", "haftaJamoa", "HAFTALIK",
-             "jamoaQuron", "jamoaQuronView", "quronSurat", "QURON_OYAT"],
+             "jamoaQuron", "jamoaQuronView", "quronSurat", "QURON_OYAT",
+             "quronSuralari"],
     routes: {
       "/me/quran": { ok: true },
       "/me/quran/done?on=true": { ok: true },
@@ -459,5 +460,53 @@ module.exports = {
     const c = client();
     await c.A.go("app");
     assert.ok(!c.html.includes("xatmga yana"), "nothing to project from");
+  },
+
+  /* ------------------------------------------------- qaysi sura tugatilgan */
+  "the finished suras are named, in the order of the mus'haf"(assert) {
+    /* The count alone left Sardor asking "which ones?", and answering meant going
+       to the database. */
+    const c = client({ quranDone: [
+      { member_id: "behruz", sura: 112, day: "2026-09-10" },
+      { member_id: "behruz", sura: 1, day: "2026-09-09" },
+    ]});
+    assert.strictEqual(JSON.stringify(c.quronSuralari("behruz")),
+      JSON.stringify(["Fotiha", "Ixlos"]), "by sura number, not by date finished");
+  },
+
+  "a long list is cut short rather than filling the screen"(assert) {
+    const c = client({ quranDone: Array.from({ length: 12 }, (_, i) =>
+      ({ member_id: "sardor", sura: i + 1, day: "2026-09-09" })) });
+    const ro = c.quronSuralari("sardor");
+    assert.strictEqual(ro.length, 9, "eight names and a tail");
+    assert.strictEqual(ro[0], "Fotiha");
+    assert.strictEqual(ro[8], "va yana 4 ta");
+  },
+
+  "somebody who has finished nothing gets no list"(assert) {
+    assert.strictEqual(client().quronSuralari("sardor").length, 0);
+  },
+
+  "the board names them beside each person"(assert) {
+    const c = client({
+      quran: [oqidi("behruz", 2, 117, "2026-09-11")],
+      quranDone: [
+        { member_id: "behruz", sura: 1, day: "2026-09-09" },
+        { member_id: "behruz", sura: 112, day: "2026-09-10" },
+      ],
+    });
+    const h = c.quronJamoaView();
+    assert.ok(h.includes("Fotiha, Ixlos"), "expected both names on his row");
+    assert.ok(h.includes("2 sura tugatilgan"), "and the count still");
+    assert.ok(h.includes("Baqara"), "with what he is reading now");
+  },
+
+  async "your own finished suras are named on Bugun"(assert) {
+    const c = client({ quranDone: [
+      { member_id: "sardor", sura: 1, day: "2026-09-09" },
+      { member_id: "sardor", sura: 36, day: "2026-09-10" },
+    ]});
+    await c.A.go("app");
+    assert.ok(c.html.includes("Fotiha, Yosin"), "expected them under the panel");
   },
 };

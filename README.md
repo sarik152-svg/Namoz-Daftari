@@ -870,8 +870,10 @@ as the book's remaining-days estimate, for the same reason. A pace measured only
 the days somebody opened the Qur'an would flatter, and the estimate is a measurement,
 not a promise.
 
-**Qur'on · jamoa** on the ranking page shows each person's sura, ayah, total ayahs and
-this week's reading. The *Qazo daftari · jamoa* board it replaced came off on Sardor's
+**Qur'on · jamoa** on the ranking page shows each person's sura, ayah, total ayahs,
+this week's reading, and **which suras they have finished, by name** — the count on
+its own left the question "which ones?" answerable only from the database. The list
+is in mus'haf order and cuts off after eight with "va yana N ta". The *Qazo daftari · jamoa* board it replaced came off on Sardor's
 call; this answers the same "who is where" for reading. It sits **directly under the
 week's champion**, above the breakdown and the duel — also his placement.
 

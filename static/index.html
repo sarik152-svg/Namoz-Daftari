@@ -2941,14 +2941,16 @@ function quronPanel(cfg){
  const bugun=quronKunlik(me,td),tugatilgan=quronTugatgani(me);
  /* Kitobdagi «yana necha kun» hisobining Qur'ondagi ko'rinishi. Va'da emas —
     shu sur'at saqlansa degani, va tashlab qo'yilgan kun uni uzaytiradi. */
- const surat=quronSurat(me,td);
+ const surat=quronSurat(me,td),meniki=quronSuralari(me);
  /* Davom etadigan sura: eng oxirgi qo'l urilgani, aks holda birinchisi. */
  const pct=jami?Math.min(100,Math.round(hozir/jami*100)):0;
  return `<div class="panel p14 mt14">
   <div class="flex between center">
    <div><div class="eyebrow">Qur'on</div>
     <div class="muted small" style="margin-top:3px">${tugatilgan} / 114 sura tugatilgan${
-      bugun?" \u00B7 bugun "+bugun+" oyat":""}</div></div>
+      bugun?" \u00B7 bugun "+bugun+" oyat":""}</div>
+    ${meniki.length?`<div class="jade tiny" style="margin-top:3px">\u2713 ${
+      esc(meniki.join(", "))}</div>`:""}</div>
    <div style="font-size:22px;${tugatilgan?"":"opacity:.25;filter:grayscale(1)"}">\u{1F4D6}</div></div>
   <div style="margin-top:12px">
    <select id="q_sura" class="input" onchange="A.setSura(this.value)">${
@@ -3317,6 +3319,17 @@ function statsTab(){
    lekin qayerda ekanini ko'rish bir-birini tortadi. O'rin ham, foiz ham yo'q —
    tugatilgan suralar allaqachon reytingda, bu yerda faqat kim qayerdaligi. */
 const quronJami=id=>quronYigma(id).oyat;
+/* Qaysi suralarni tugatgani — nomi bilan. Sardor so'radi: sonini ko'rib «qaysi
+   surani?» degan savol qoladi, va unga javob berish uchun har safar bazaga
+   qarashga to'g'ri kelardi. Mushaf tartibida, uzun ro'yxat qisqartiriladi. */
+const QURON_KORSAT=8;
+function quronSuralari(id,cheklov){
+ const c=cheklov||QURON_KORSAT;
+ const nomlar=(quranDone||[]).filter(d=>d.member_id===id)
+   .map(d=>d.sura).sort((a,b)=>a-b).map(n=>suraNomi(n));
+ return nomlar.length>c
+  ?nomlar.slice(0,c).concat(["va yana "+(nomlar.length-c)+" ta"])
+  :nomlar}
 /* Oxirgi qo'l urilgan sura — hozir davom etilayotgani. Yozuvlar kun bo'yicha
    tartiblangan holda keladi, shuning uchun oxirgisi eng yangisi. */
 function quronOxirgi(id){
@@ -3339,7 +3352,7 @@ function quronJamoaView(){
    +${QURON_BALL} ball.</p>`;
  bor.sort((a,b)=>quronTugatgani(b.id)-quronTugatgani(a.id)||quronJami(b.id)-quronJami(a.id));
  bor.forEach(m=>{
-  const oxir=quronOxirgi(m.id),hafta=quronHafta(m.id,td);
+  const oxir=quronOxirgi(m.id),hafta=quronHafta(m.id,td),tugagan=quronSuralari(m.id);
   const joy=oxir?`${oxir.sura}. ${esc(suraNomi(oxir.sura))} \u00B7 ${
     quronOrni(m.id)[oxir.sura]||oxir.ayah}/${suraOyat(oxir.sura)} oyat`:"hali boshlanmagan";
   h+=`<div style="padding:9px 0;border-top:1px solid var(--line)">
@@ -3348,6 +3361,8 @@ function quronJamoaView(){
     <span class="${quronTugatgani(m.id)?"jade":"muted"} small">${
       quronTugatgani(m.id)} sura tugatilgan</span></div>
    <div class="muted tiny" style="margin-top:3px">${joy} \u00B7 jami ${quronJami(m.id)} oyat</div>
+   ${tugagan.length?`<div class="jade tiny" style="margin-top:3px">\u2713 ${
+     esc(tugagan.join(", "))}</div>`:""}
    <div class="bar" style="margin-top:6px"><div style="width:${
      Math.round(hafta/eng*100)}%;background:var(--jade)"></div></div>
    <div class="muted tiny" style="margin-top:3px">shu hafta ${hafta} oyat</div></div>`});
