@@ -9,12 +9,17 @@ const BEHRUZ = mk("behruz", "Behruz Qurbonov");
 const blank = () => ({ days: {}, bonuses: [], tasks: [], books: [], places: [] });
 const FARD = ["bomdod", "peshin", "asr", "shom", "xufton"];
 /* Five points owed in September: enough for the first tier. */
-const qarzdor = () => {
+const qarzdor = (jarima = 5) => {
   const days = {};
+  let qoldi = jarima;
   let d = new Date("2026-09-01T12:00:00");
   for (let i = 0; i < 8; i += 1) {
     const ds = d.toISOString().slice(0, 10);
-    days[ds] = Object.fromEntries(FARD.map((k, j) => [k, { s: i === 2 && j < 5 ? "missed" : "ontime" }]));
+    days[ds] = Object.fromEntries(FARD.map((k) => {
+      const oqilmagan = qoldi > 0;
+      if (oqilmagan) qoldi -= 1;
+      return [k, { s: oqilmagan ? "missed" : "ontime" }];
+    }));
     d = new Date(d.getTime() + 86400000);
   }
   return { ...blank(), days };
@@ -22,7 +27,7 @@ const qarzdor = () => {
 
 function client(promises = [], at = "2026-09-09T07:00:00Z") {
   const loaded = loadClient({
-    at, expose: ["vazifaQarzi", "vadaHolat", "vazifaBelgi"],
+    at, expose: ["vazifaQarzi", "vadaHolat", "vazifaBelgi", "JAZO"],
     routes: { "/me/promise": { ok: true }, "/me/private":
       { zikrs: [], zikr_marks: [], todos: [], todo_marks: [] } },
   });
@@ -112,5 +117,44 @@ module.exports = {
 
     await c.A.promise("hech");
     assert.strictEqual(c.calls.filter(x => x.path === "/me/promise").pop().body.promised, null);
+  },
+
+  /* --------------------------------------------------------- tasbeh sanoq */
+  async "the counter goes as far as the task asks, not 500"(assert) {
+    /* It stopped at 500 while the second and third tiers ask for 1000 and 2000, so
+       "Bajardim" could never light up and the task could not be closed at all.
+       Sardor hit exactly this. */
+    const c = client();
+    c.setState({ data: { sardor: qarzdor(7), behruz: blank() } });
+    await c.A.go("app");
+    c.A.setTab("sunnat");
+    const owed = c.vazifaQarzi(c.__me(), SARDOR);
+    assert.strictEqual(owed.daraja, 2, "seven points is the second tier");
+    assert.strictEqual(owed.jazo.tas, 1000);
+    for (let i = 0; i < 12; i += 1) c.A.addTas(100);
+    assert.strictEqual(c.A.tas, 1000, "it reaches what the tier asks and stops there");
+  },
+
+  async "and the whole task can then be finished"(assert) {
+    const c = client();
+    c.setState({ data: { sardor: qarzdor(7), behruz: blank() } });
+    await c.A.go("app");
+    c.A.setTab("sunnat");
+    const owed = c.vazifaQarzi(c.__me(), SARDOR);
+    c.A.setRak(owed.jazo.rak);
+    for (let i = 0; i < 12; i += 1) c.A.addTas(100);
+    assert.ok(c.html.includes("A.finishTask()"), "the button is live");
+    await c.A.finishTask();
+    assert.strictEqual(c.vazifaQarzi(c.__me(), SARDOR), null, "the task is closed");
+    assert.strictEqual(c.A.tas, 0, "and the counter is cleared");
+  },
+
+  async "counting more than the task asks is not possible"(assert) {
+    const c = client();
+    c.setState({ data: { sardor: qarzdor(5), behruz: blank() } });
+    await c.A.go("app");
+    c.A.setTab("sunnat");
+    for (let i = 0; i < 20; i += 1) c.A.addTas(100);
+    assert.strictEqual(c.A.tas, 500, "the first tier asks for five hundred");
   },
 };

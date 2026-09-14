@@ -2055,10 +2055,26 @@ const A={
   const day=Object.assign({},(data[me].days||{})[date]||{});day[f]=v;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
   render();await pushDay(me,date)},
- rak:0,tas:0,
- setRak(n){A.rak=(n===A.rak)?n-1:n;render()},
- addTas(n){A.tas=Math.max(0,Math.min(500,A.tas+n));render()},
- resetTas(){A.tas=0;render()},
+ rak:0,tas:0,tasKalit:null,
+ /* Sanoq 500 da to'xtab qolardi — ikkinchi va uchinchi pog'onada esa 1000 va 2000
+    tasbeh kerak, ya'ni «Bajardim» tugmasi hech qachon yonmasdi va vazifani yopib
+    bo'lmasdi. Sardor shuni aytdi. Chegara endi shu vazifaning o'z soni. */
+ tasKerak(){
+  const owed=vazifaQarzi(data[me],M(me));
+  return owed?owed.jazo.tas:JAZO[JAZO.length-1].tas},
+ setRak(n){A.rak=(n===A.rak)?n-1:n;A.tasSaqla();render()},
+ addTas(n){A.tas=Math.max(0,Math.min(A.tasKerak(),A.tas+n));A.tasSaqla();render()},
+ resetTas(){A.tas=0;A.tasSaqla();render()},
+ /* 2000 tasbehni sanab turib sahifa yangilansa, boshidan boshlash — jazoning
+    ustiga jazo. Sanoq telefonda saqlanadi va o'sha vazifaga bog'lanadi: vazifa
+    o'zgarsa yoki bajarilsa, nolga tushadi. */
+ tasSaqla(){LS.set("nd_tas",{k:A.tasKalit,m:me,rak:A.rak,tas:A.tas})},
+ tasTikla(owed){
+  const k=owed?(me+"|"+owed.oy+"|"+owed.daraja):null;
+  if(A.tasKalit===k)return;
+  A.tasKalit=k;
+  const v=LS.get("nd_tas",null);
+  if(k&&v&&v.k===k){A.rak=v.rak||0;A.tas=v.tas||0}else{A.rak=0;A.tas=0}},
 
 
  /* ────────── BOLALAR ────────── */
@@ -2370,7 +2386,8 @@ const A={
   if(!owed)return;
   data[me]=Object.assign({},data[me],{tasks:((data[me].tasks)||[]).concat([
     {d:todayFor(myCfg()),rak:owed.jazo.rak,tas:owed.jazo.tas,lvl:owed.daraja,oy:owed.oy}])});
-  A.rak=0;A.tas=0;render();await pushData(me);render()},
+  A.rak=0;A.tas=0;A.tasKalit=null;LS.set("nd_tas",null);
+  render();await pushData(me);render()},
  /* ────────── KITOB ────────── */
  bookView:"mine",bookOpenId:null,bookErr:"",
  setBookView(v){A.bookView=v;A.bookErr="";window.scrollTo(0,0);render()},
@@ -3660,6 +3677,8 @@ function jazoQoida(){
 function vazifaBloki(){
  const cfg=myCfg(),owed=vazifaQarzi(data[me],M(me));
  const s=score(data[me],cfg,isChild(me));
+ /* Ochilgan vazifaga tegishli sanoqni tiklaydi (yoki boshqa vazifa bo'lsa — nol). */
+ A.tasTikla(owed);
  let h="";
  if(owed){
   const j=owed.jazo,shuOy=owed.oy===todayFor(cfg).slice(0,7);
