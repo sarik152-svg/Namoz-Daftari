@@ -562,6 +562,12 @@ only effect was halving the debt — so the strike panel is now streak informati
 **Three steps of penance**, by how much is owed: 5 points → 12 rakats and 500 tasbih,
 7 → 20 and 1000, 10 → 26 and 2000. `JAZO` holds them and `jazoDaraja` picks the step.
 
+The tasbih counter was capped at **500** while the second and third steps ask for 1000
+and 2000, so **Bajardim** never lit up and those tasks could not be closed at all —
+Sardor hit it (2026-09-14). The cap is the step's own number now, and the count is
+kept in `localStorage` against that task: counting two thousand and losing it to a
+page reload is a penance on top of the penance. Finishing the task clears it.
+
 **The debt resets on the first of the month; an unfinished task does not.** `score`
 keeps `oylar` — a penalty column per month — and `vazifaQarzi` walks it oldest first,
 comparing each month's required step against the highest `lvl` recorded in `tasks` for
