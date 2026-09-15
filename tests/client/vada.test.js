@@ -125,11 +125,11 @@ module.exports = {
        "Bajardim" could never light up and the task could not be closed at all.
        Sardor hit exactly this. */
     const c = client();
-    c.setState({ data: { sardor: qarzdor(7), behruz: blank() } });
+    c.setState({ data: { sardor: qarzdor(12), behruz: blank() } });
     await c.A.go("app");
     c.A.setTab("sunnat");
     const owed = c.vazifaQarzi(c.__me(), SARDOR);
-    assert.strictEqual(owed.daraja, 2, "seven points is the second tier");
+    assert.strictEqual(owed.daraja, 2, "twelve points is the second step");
     assert.strictEqual(owed.jazo.tas, 1000);
     for (let i = 0; i < 12; i += 1) c.A.addTas(100);
     assert.strictEqual(c.A.tas, 1000, "it reaches what the tier asks and stops there");
@@ -137,7 +137,7 @@ module.exports = {
 
   async "and the whole task can then be finished"(assert) {
     const c = client();
-    c.setState({ data: { sardor: qarzdor(7), behruz: blank() } });
+    c.setState({ data: { sardor: qarzdor(12), behruz: blank() } });
     await c.A.go("app");
     c.A.setTab("sunnat");
     const owed = c.vazifaQarzi(c.__me(), SARDOR);

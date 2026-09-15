@@ -87,21 +87,24 @@ module.exports = {
 
   "the punishment grows in three steps"(assert) {
     const c = client();
+    /* Sardor raised the steps on 2026-09-15: 5 / 12 / 20, not 5 / 7 / 10. The
+       second and third came round too fast. */
     assert.strictEqual(c.jazoDaraja(4.75), 0, "under five, nothing is due");
     assert.strictEqual(c.jazoDaraja(5), 1);
-    assert.strictEqual(c.jazoDaraja(6.5), 1);
-    assert.strictEqual(c.jazoDaraja(7), 2);
-    assert.strictEqual(c.jazoDaraja(10), 3);
+    assert.strictEqual(c.jazoDaraja(11.5), 1, "seven is still only the first step now");
+    assert.strictEqual(c.jazoDaraja(12), 2);
+    assert.strictEqual(c.jazoDaraja(19.75), 2);
+    assert.strictEqual(c.jazoDaraja(20), 3);
     assert.strictEqual(c.jazoDaraja(40), 3, "three is as far as it goes");
     assert.strictEqual(JSON.stringify(c.JAZO.map(j => [j.ball, j.rak, j.tas])),
-      JSON.stringify([[5, 12, 500], [7, 20, 1000], [10, 26, 2000]]));
+      JSON.stringify([[5, 12, 500], [12, 20, 1000], [20, 26, 2000]]));
   },
 
   "a task is owed until it is ticked off"(assert) {
     const c = client();
-    const u = owing(7);
+    const u = owing(12);
     const owed = c.vazifaQarzi(u, SARDOR);
-    assert.ok(owed, "seven points is a task");
+    assert.ok(owed, "twelve points is the second step");
     assert.strictEqual(owed.daraja, 2);
     assert.strictEqual(owed.oy, "2026-08");
 
@@ -114,7 +117,7 @@ module.exports = {
   "growing past the next step owes the bigger task"(assert) {
     const c = client();
     const owed = c.vazifaQarzi(
-      { ...owing(10), tasks: [{ d: "2026-08-25", rak: 12, tas: 500, lvl: 1, oy: "2026-08" }] },
+      { ...owing(20), tasks: [{ d: "2026-08-25", rak: 12, tas: 500, lvl: 1, oy: "2026-08" }] },
       SARDOR);
     assert.ok(owed, "the debt has outgrown the task already done");
     assert.strictEqual(owed.daraja, 3);

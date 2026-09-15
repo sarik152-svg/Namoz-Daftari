@@ -83,7 +83,10 @@ const P_QAZO=0.25,P_MISS=1,STREAK_STEP=10;
    kamaytirmaydi: na jamoat, na uzilgan qazo, na bajarilgan vazifa.
    Vazifa qarzni to'lamaydi — u jazoning o'zi. Qarz esa har oy boshida noldan
    boshlanadi, bajarilmagan vazifa esa keyingi oyga ham o'tib boradi. */
-const JAZO=[{ball:5,rak:12,tas:500},{ball:7,rak:20,tas:1000},{ball:10,rak:26,tas:2000}];
+/* Pog'onalar Sardorning qarori: 2026-09-15 da 5/7/10 dan 5/12/20 ga ko'tarildi.
+   Ikkinchi va uchinchi pog'ona juda tez kelib qolardi — endi ular haqiqatan
+   ko'p qarz yig'ilgandagina ochiladi. Rakat va tasbeh soni o'zgarmadi. */
+const JAZO=[{ball:5,rak:12,tas:500},{ball:12,rak:20,tas:1000},{ball:20,rak:26,tas:2000}];
 const jazoDaraja=qarz=>{let n=0;JAZO.forEach((j,i)=>{if(qarz>=j.ball)n=i+1});return n};
 /* Kitob qoidalari. Ball namoz balidan ALOHIDA yuritiladi — ikkalasi bir
    hisobga qo'shilsa, o'qimagan kun namoz qarzini oshirib yuborardi. */
