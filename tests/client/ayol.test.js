@@ -1,5 +1,5 @@
-/* Ayollar rejimi. A prayer caught up the same day earns a quarter point instead of
-   costing one. On time and left-until-tomorrow are judged as anybody's. */
+/* Ayollar rejimi. A prayer caught up before the next Fajr earns a full point.
+   On time and left-until-tomorrow are judged as anybody's. */
 const { loadClient } = require("./harness");
 
 const SARDOR = {
@@ -29,9 +29,31 @@ module.exports = {
   "catching a prayer up the same day earns instead of costing"(assert) {
     const c = client();
     const o = oneDay(c, ZUHRA, { peshin: { s: "qazo", t: "20:10" } });
-    assert.strictEqual(o.ball, c.AYOL_BALL);
+    assert.strictEqual(o.ball, 1);
     assert.strictEqual(o.qazo, 1, "it is still a caught-up prayer, not an on-time one");
     assert.strictEqual(o.ontime, 0, "and it must not be counted as prayed on time");
+  },
+
+  async "Peshin Asr and Shom caught up after midnight earn one point each"(assert) {
+    const c = loadClient({
+      at: "2026-08-22T19:20:00Z", // 00:20 the next day in Toshkent, before Fajr.
+      expose: ["prayerRange", "belgiBall"],
+      routes: { "/members/zuhra/days/2026-08-22": { ok: true } },
+    });
+    c.setState({
+      members: [ZUHRA], data: { zuhra: blank() },
+      me: "zuhra", date: "2026-08-23", token: "tok", isAdmin: false,
+    });
+    for (const k of ["peshin", "asr", "shom"]) {
+      await c.A.mark(k, "pray");
+      const mark = c.__me().days["2026-08-22"][k];
+      assert.strictEqual(mark.s, "qazo", k + " stays a caught-up prayer on yesterday's record");
+      assert.strictEqual(c.belgiBall(ZUHRA, { k }, mark, mark.s), 1);
+    }
+    const o = c.prayerRange(c.__me(), ZUHRA, "2026-08-22", "2026-08-22");
+    assert.strictEqual(o.ball, 3);
+    assert.strictEqual(o.qazo, 3);
+    assert.strictEqual(o.bad, 0, "the day stays open until Fajr");
   },
 
   "the same mark still costs anybody else"(assert) {
@@ -63,6 +85,8 @@ module.exports = {
     const c = client({ data: { sardor: blank(), zuhra: withDay({ asr: { s: "qazo", t: "20:25" } }) } });
     await c.A.go("app");
     assert.ok(c.html.includes("AYOLLAR REJIMI"), "the card should say why it was not a penalty");
+    assert.ok(c.html.includes('+1 ball</span>'), "the caught-up prayer earns a full point on its card");
+    assert.ok(c.html.includes("keyingi bomdodgacha o'qisangiz +1 ball"), "the hint uses the same value and deadline");
     assert.ok(!c.html.includes("−0,25 ball"), "no quarter-point penalty should be shown");
   },
 

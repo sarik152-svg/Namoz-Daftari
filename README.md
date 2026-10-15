@@ -624,11 +624,11 @@ may refuse a challenge that has not started, and nobody can walk away from one t
 
 ## Ayollar rejimi
 
-A prayer caught up **the same day**, after its window, earns `AYOL_BALL` (0.25) instead
+A prayer caught up **before the next Fajr**, after its window, earns `AYOL_BALL` (1) instead
 of costing 0.25. Praying on time scores as it does for anybody; letting the day close
 with the prayer unsaid costs the same full point as it does for anybody.
 
-It is deliberately weaker than ish rejimi, and works differently: ish rejimi changes the
+It works differently from ish rejimi: ish rejimi changes the
 prayer's **status** (those three count as on time, so they reach the weekly goal, perfect
 days and streaks), while this one leaves the status alone and changes only its **value**.
 A caught-up prayer stays a caught-up prayer — it just stops being a debt. That is why the

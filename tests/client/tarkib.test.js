@@ -81,7 +81,7 @@ module.exports = {
     const c = client({ members: [SARDOR, ZUHRA], data: { sardor: span(), zuhra: span() } });
     const u = span({ "2026-08-25": { peshin: { s: "qazo" } } });
     const o = c.prayerRange(u, ZUHRA, "2026-08-24", "2026-08-30");
-    assert.ok(c.ballTarkib(ZUHRA, o, "qazo") > 0, "hers is a plus");
+    assert.strictEqual(c.ballTarkib(ZUHRA, o, "qazo"), 1, "hers earns one full point");
     assert.ok(c.ballTarkib(SARDOR, o, "qazo") < 0, "his is a minus");
     assert.strictEqual(Math.round(sum(c, ZUHRA, u) * 100) / 100, o.ball);
   },

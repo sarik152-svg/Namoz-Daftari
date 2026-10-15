@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Namoz Daftari database backup (03:15 Tashkent)
+
+[Timer]
+OnCalendar=*-*-* 22:15:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

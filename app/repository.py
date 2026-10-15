@@ -33,6 +33,9 @@ from app.models import (
     QuranStat,
     Todo,
     Zikr,
+    ZikrStat,
+    HaftaSanoq,
+    HaftaSanoqKun,
     Duel,
     DuelMember,
     Bonus,
@@ -55,7 +58,7 @@ from app.security import decrypt_pin, encrypt_pin, generate_pin, new_session_tok
 
 logger = logging.getLogger("namoz.repo")
 
-_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, qazo_debt, reward_goal, kpi_easy, kpi_mid, kpi_hard, start_ball, start_day"
+_MEMBER_COLUMNS = "id, name, city, lat, lng, tz, asr, fa, ia, is_child, work_shift, woman_mode, chopish, qazo_debt, reward_goal, kpi_easy, kpi_mid, kpi_hard, start_ball, start_day"
 _SEED_FIELD_COUNT = 9
 
 # asyncpg binds parameters by their Postgres type, so a DATE column needs a real
@@ -235,6 +238,16 @@ async def set_woman_mode(pool: asyncpg.Pool, member_id: str, woman_mode: bool) -
     return row is not None
 
 
+async def set_chopish(pool: asyncpg.Pool, member_id: str, chopish: bool) -> bool:
+    """Set the temporary task lock without changing the member's other modes."""
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "UPDATE members SET chopish = $2, updated_at = now() WHERE id = $1 RETURNING id",
+            member_id, chopish,
+        )
+    return row is not None
+
+
 async def set_qazo_debt(pool: asyncpg.Pool, member_id: str, qazo_debt: int) -> bool:
     """State how many prayers this member owes. False when there is no such member."""
     async with pool.acquire() as connection:
@@ -284,7 +297,7 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         member_rows = await connection.fetch(
             """
             SELECT m.id, m.name, m.city, m.lat, m.lng, m.tz, m.asr, m.fa,
-                   m.ia, m.is_child, m.work_shift, m.woman_mode, m.qazo_debt,
+                   m.ia, m.is_child, m.work_shift, m.woman_mode, m.chopish, m.qazo_debt,
                    m.reward_goal, m.kpi_easy, m.kpi_mid, m.kpi_hard,
                    m.start_ball, m.start_day
               FROM members m
@@ -301,7 +314,7 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
             "SELECT member_id, prayer, lvl, amt, day FROM bonuses ORDER BY id"
         )
         task_rows = await connection.fetch(
-            "SELECT member_id, day, rakats, tasbih FROM tasks ORDER BY id"
+            "SELECT member_id, day, rakats, tasbih, lvl, oy FROM tasks ORDER BY id"
         )
         book_rows = await connection.fetch(
             "SELECT member_id, book FROM books ORDER BY id"
@@ -353,7 +366,10 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
 
     tasks: dict[str, list[Task]] = defaultdict(list)
     for row in task_rows:
-        tasks[row["member_id"]].append(Task(d=row["day"], rak=row["rakats"], tas=row["tasbih"]))
+        tasks[row["member_id"]].append(Task(
+            d=row["day"], rak=row["rakats"], tas=row["tasbih"],
+            lvl=row["lvl"], oy=row["oy"],
+        ))
 
     books: dict[str, list[Book]] = defaultdict(list)
     for row in book_rows:
@@ -404,7 +420,36 @@ async def fetch_group_state(pool: asyncpg.Pool, circle_id: int) -> GroupState:
         quran=await fetch_quran(pool, circle_id),
         quran_done=await fetch_quran_done(pool, circle_id),
         quran_stats=await fetch_quran_stats(pool, circle_id),
+        zikr_stats=await fetch_zikr_stats(pool, circle_id),
     )
+
+
+async def fetch_zikr_stats(pool: asyncpg.Pool, circle_id: int) -> list[ZikrStat]:
+    """Return only completion totals, never the member's private zikr names."""
+    async with pool.acquire() as connection:
+        rows = await connection.fetch(
+            """
+            SELECT z.member_id,
+                   count(k.day)::int AS marks,
+                   count(DISTINCT k.day)::int AS days,
+                   coalesce(sum(CASE WHEN k.day IS NOT NULL THEN z.count ELSE 0 END), 0)::int
+                     AS repetitions,
+                   count(k.day) FILTER (WHERE k.day >= date_trunc('week', CURRENT_DATE)::date)::int
+                     AS week_marks,
+                   count(DISTINCT k.day) FILTER (WHERE k.day >= date_trunc('week', CURRENT_DATE)::date)::int
+                     AS week_days,
+                   coalesce(sum(CASE WHEN k.day >= date_trunc('week', CURRENT_DATE)::date
+                                      THEN z.count ELSE 0 END), 0)::int AS week_repetitions
+              FROM zikrs z
+              JOIN circle_members cm ON cm.member_id = z.member_id
+              LEFT JOIN zikr_marks k ON k.zikr_id = z.id
+             WHERE cm.circle_id = $1
+             GROUP BY z.member_id
+             ORDER BY z.member_id
+            """,
+            circle_id,
+        )
+    return [ZikrStat(**dict(row)) for row in rows]
 
 
 # ---------------------------------------------------------------- bolalar
@@ -770,11 +815,25 @@ async def fetch_private(pool: asyncpg.Pool, member_id: str) -> Private:
             """,
             member_id,
         )
+        hafta_sanoq_rows = await connection.fetch(
+            "SELECT id, name, target FROM hafta_sanoqlar WHERE member_id = $1 ORDER BY id",
+            member_id,
+        )
+        hafta_sanoq_kun_rows = await connection.fetch(
+            """
+            SELECT k.sanoq_id, k.day, k.amount FROM hafta_sanoq_kunlar k
+              JOIN hafta_sanoqlar s ON s.id = k.sanoq_id
+             WHERE s.member_id = $1 AND k.day >= CURRENT_DATE - 14
+            """,
+            member_id,
+        )
     return Private(
         zikrs=[Zikr(**dict(r)) for r in zikr_rows],
         zikr_marks=[Marked(**dict(r)) for r in zikr_marks],
         todos=[Todo(**dict(r)) for r in todo_rows],
         todo_marks=[Marked(**dict(r)) for r in todo_marks],
+        hafta_sanoqlar=[HaftaSanoq(**dict(r)) for r in hafta_sanoq_rows],
+        hafta_sanoq_kunlar=[HaftaSanoqKun(**dict(r)) for r in hafta_sanoq_kun_rows],
     )
 
 
@@ -886,10 +945,60 @@ async def mark_todo(
     return True
 
 
+# ---------------------------------------------------------------- haftalik sanoq
+async def add_hafta_sanoq(
+    pool: asyncpg.Pool, member_id: str, name: str, target: int
+) -> HaftaSanoq:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            """
+            INSERT INTO hafta_sanoqlar (member_id, name, target) VALUES ($1, $2, $3)
+            RETURNING id, name, target
+            """,
+            member_id, name, target,
+        )
+    return HaftaSanoq(**dict(row))
+
+
+async def delete_hafta_sanoq(pool: asyncpg.Pool, sanoq_id: int, member_id: str) -> bool:
+    async with pool.acquire() as connection:
+        row = await connection.fetchrow(
+            "DELETE FROM hafta_sanoqlar WHERE id = $1 AND member_id = $2 RETURNING id",
+            sanoq_id, member_id,
+        )
+    return row is not None
+
+
+async def set_hafta_sanoq_kun(
+    pool: asyncpg.Pool, sanoq_id: int, member_id: str, day: Date, amount: int
+) -> bool:
+    async with pool.acquire() as connection:
+        if amount <= 0:
+            await connection.execute(
+                """
+                DELETE FROM hafta_sanoq_kunlar k USING hafta_sanoqlar s
+                 WHERE k.sanoq_id = $1 AND k.day = $3 AND s.id = k.sanoq_id AND s.member_id = $2
+                """,
+                sanoq_id, member_id, day,
+            )
+            return bool(await connection.fetchval(
+                "SELECT true FROM hafta_sanoqlar WHERE id = $1 AND member_id = $2",
+                sanoq_id, member_id,
+            ))
+        row = await connection.fetchrow(
+            """
+            INSERT INTO hafta_sanoq_kunlar (sanoq_id, day, amount)
+            SELECT $1, $3, $4 FROM hafta_sanoqlar WHERE id = $1 AND member_id = $2
+            ON CONFLICT (sanoq_id, day) DO UPDATE SET amount = EXCLUDED.amount
+            RETURNING sanoq_id
+            """,
+            sanoq_id, member_id, day, amount,
+        )
+        return row is not None
+
+
 # ---------------------------------------------------------------- dorilar
 async def fetch_medicines(pool: asyncpg.Pool, circle_id: int) -> list[Medicine]:
-    """Courses that have not finished long ago. One that ended last month is history
-    nobody is reading; the doses stay, the plan drops off the screen."""
     async with pool.acquire() as connection:
         rows = await connection.fetch(
             """
@@ -1581,6 +1690,9 @@ async def replace_member_data(
     and places are ledgers the client owns outright, so those are replaced wholesale.
     """
     async with pool.acquire() as connection, connection.transaction():
+        # A phone may retry while another phone is pushing the same document. The
+        # old delete-then-insert sequence could interleave and duplicate tasks.
+        await connection.execute("SELECT pg_advisory_xact_lock(hashtext($1))", f"tasks:{member_id}")
         for day, record in data.days.items():
             when = Date.fromisoformat(day)
             entries = record.to_wire()
@@ -1601,9 +1713,17 @@ async def replace_member_data(
             )
         await connection.execute("DELETE FROM tasks WHERE member_id = $1", member_id)
         if data.tasks:
+            normalized = {}
+            for task in data.tasks:
+                lvl = task.lvl or ({(12, 500): 1, (20, 1000): 2, (26, 2000): 3}.get((task.rak, task.tas), 0))
+                oy = task.oy or task.d.isoformat()[:7]
+                normalized[(task.d, lvl, oy)] = (member_id, task.d, task.rak, task.tas, lvl, oy)
             await connection.executemany(
-                "INSERT INTO tasks (member_id, day, rakats, tasbih) VALUES ($1,$2,$3,$4)",
-                [(member_id, t.d, t.rak, t.tas) for t in data.tasks],
+                """INSERT INTO tasks (member_id, day, rakats, tasbih, lvl, oy)
+                   VALUES ($1,$2,$3,$4,$5,$6)
+                   ON CONFLICT (member_id, oy, lvl) DO UPDATE
+                   SET day=EXCLUDED.day, rakats=EXCLUDED.rakats, tasbih=EXCLUDED.tasbih""",
+                list(normalized.values()),
             )
         await connection.execute("DELETE FROM books WHERE member_id = $1", member_id)
         if data.books:

@@ -1,0 +1,10 @@
+[Unit]
+Description=Namoz Daftari verified database backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/usr/bin/bash /opt/namoz-daftari/ops/backup.sh

@@ -35,6 +35,7 @@ from app.models import (
     AdminLoginRequest,
     ChildDeedCreate,
     ChildFlag,
+    ChopishFlag,
     ChildRewardCreate,
     BonusAmounts,
     ChildSkillCreate,
@@ -56,6 +57,8 @@ from app.models import (
     SURA_AYAHS,
     TodoCreate,
     ZikrCreate,
+    HaftaSanoqCreate,
+    HaftaSanoqKunSet,
     StartBall,
     QazoDebt,
     RewardGoal,
@@ -608,6 +611,34 @@ async def set_woman_mode(
     return {"ok": True}
 
 
+@app.post(f"{API_PREFIX}/members/{{member_id}}/chopish")
+async def set_chopish(
+    member_id: str, body: ChopishFlag, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    """The circle owner turns the firm task lock on or off."""
+    pool: asyncpg.Pool = request.app.state.pool
+    if not session.is_admin:
+        if session.member_id is None or not await repository.owns_circle_containing(
+            pool, session.member_id, member_id
+        ):
+            raise _error("not_circle_owner", "Buni doira egasi belgilaydi", status.HTTP_403_FORBIDDEN)
+    if not await repository.set_chopish(pool, member_id, body.chopish):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True, "chopish": body.chopish}
+
+
+@app.post(f"{API_PREFIX}/members/{{member_id}}/chopish-complete")
+async def complete_chopish(
+    member_id: str, request: Request,
+    session: Session = Depends(require_owner_or_admin),
+) -> dict:
+    """A member may leave CHOPISH only through the task-completion action."""
+    if not await repository.set_chopish(request.app.state.pool, member_id, False):
+        raise _error("no_member", f"'{member_id}' topilmadi", status.HTTP_404_NOT_FOUND)
+    return {"ok": True, "chopish": False}
+
+
 @app.post(f"{API_PREFIX}/members/{{member_id}}/child")
 async def set_child(
     member_id: str, body: ChildFlag, request: Request,
@@ -950,6 +981,38 @@ async def mark_todo(
     return {"ok": True}
 
 
+# ---------------------------------------------------------------- haftalik sanoq
+@app.post(f"{API_PREFIX}/me/hafta-sanoqlar", status_code=201)
+async def add_hafta_sanoq(
+    body: HaftaSanoqCreate, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    sanoq = await repository.add_hafta_sanoq(
+        request.app.state.pool, _me(session), body.name, body.target
+    )
+    return sanoq.model_dump(mode="json")
+
+
+@app.delete(f"{API_PREFIX}/me/hafta-sanoqlar/{{sanoq_id}}")
+async def drop_hafta_sanoq(
+    sanoq_id: int, request: Request, session: Session = Depends(require_session)
+) -> dict:
+    if not await repository.delete_hafta_sanoq(request.app.state.pool, sanoq_id, _me(session)):
+        raise _error("not_yours", "Bu sizniki emas", status.HTTP_403_FORBIDDEN)
+    return {"ok": True}
+
+
+@app.put(f"{API_PREFIX}/me/hafta-sanoqlar/{{sanoq_id}}/day/{{day}}")
+async def set_hafta_sanoq_kun(
+    sanoq_id: int, day: Date, body: HaftaSanoqKunSet, request: Request,
+    session: Session = Depends(require_session),
+) -> dict:
+    if not await repository.set_hafta_sanoq_kun(
+        request.app.state.pool, sanoq_id, _me(session), day, body.amount
+    ):
+        raise _error("not_yours", "Bu sizniki emas", status.HTTP_403_FORBIDDEN)
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------- dorilar
 @app.post(f"{API_PREFIX}/circles/{{circle_id}}/medicines", status_code=201)
 async def add_medicine(
@@ -958,7 +1021,7 @@ async def add_medicine(
 ) -> dict:
     """Start a course: who, what, at which hours, for how many days."""
     pool: asyncpg.Pool = request.app.state.pool
-    await _require_family(request, session, circle_id)
+    await _require_circle(request, session, circle_id)
     if not await repository.is_circle_member(pool, circle_id, body.member_id):
         raise _error("not_in_circle", "Bu a'zo oilada emas", status.HTTP_404_NOT_FOUND)
     med = await repository.add_medicine(
@@ -972,10 +1035,10 @@ async def drop_medicine(
     medicine_id: int, request: Request, session: Session = Depends(require_session)
 ) -> dict:
     pool: asyncpg.Pool = request.app.state.pool
-    circle_id = await repository.circle_of_medicine(pool, medicine_id)
-    if circle_id is None:
+    if await repository.circle_of_medicine(pool, medicine_id) is None:
         raise _error("no_medicine", "Topilmadi", status.HTTP_404_NOT_FOUND)
-    await _require_family(request, session, circle_id)
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi uchun bu bo'lim yo'q", 403)
     await repository.delete_medicine(pool, medicine_id, circle_id)
     return {"ok": True}
 
@@ -988,10 +1051,10 @@ async def take_dose(
     """This dose went down, at this hour. Anybody in the family may mark it: giving a
     child their syrup is not something only the child can record."""
     pool: asyncpg.Pool = request.app.state.pool
-    circle_id = await repository.circle_of_medicine(pool, medicine_id)
-    if circle_id is None:
+    if await repository.circle_of_medicine(pool, medicine_id) is None:
         raise _error("no_medicine", "Topilmadi", status.HTTP_404_NOT_FOUND)
-    await _require_family(request, session, circle_id)
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi uchun bu bo'lim yo'q", 403)
     await repository.take_dose(pool, medicine_id, body.day, body.slot, body.taken)
     return {"ok": True}
 
@@ -1003,10 +1066,10 @@ async def untake_dose(
 ) -> dict:
     """Take back a mis-tap."""
     pool: asyncpg.Pool = request.app.state.pool
-    circle_id = await repository.circle_of_medicine(pool, medicine_id)
-    if circle_id is None:
+    if await repository.circle_of_medicine(pool, medicine_id) is None:
         raise _error("no_medicine", "Topilmadi", status.HTTP_404_NOT_FOUND)
-    await _require_family(request, session, circle_id)
+    if session.member_id is None:
+        raise _error("not_a_member", "Admin sessiyasi uchun bu bo'lim yo'q", 403)
     await repository.untake_dose(pool, medicine_id, day, slot)
     return {"ok": True}
 

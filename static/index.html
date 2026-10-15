@@ -78,7 +78,15 @@ textarea{line-height:1.6;resize:vertical}
    olib tashlandi — ular hech kimga to'g'ri kelmadi va tanlash imkoni yo'q, ya'ni
    navbat kimga tushsa o'shaniki bo'lardi. Qolganlari bir-biridan yetarlicha uzoq. */
 const PALETTE=["#C9A227","#4CAF8B","#6C8CD5","#E0885A","#58BFC9","#9BC95E","#C0864F","#A88FE0"];
-const P_QAZO=0.25,P_MISS=1,STREAK_STEP=10;
+const P_QAZO=0.5,P_MISS=1,STREAK_STEP=10;
+const SUNNAT_BALL=1;
+/* Bomdod is the hardest prayer for this circle to reach. Its reward
+   is deliberately separate from the ordinary four prayers. */
+/* Bomdodning asosiy shkalasi barcha kunlarda umumiy: vaqtida +1, qazo −0,5,
+   o'qilmasa −1. Alohida rag'bat faqat 7 kunlik seriya uchun beriladi. */
+const BOMDOD_HOME=1,BOMDOD_QAZO=0.5,BOMDOD_MISS=1;
+const bomdodYangi=()=>false;
+const BOMDOD_SERIYA=5;
 /* Qarz — o'qilmagan namoz uchun jazo, boshqa hech nima emas. Uni hech narsa
    kamaytirmaydi: na jamoat, na uzilgan qazo, na bajarilgan vazifa.
    Vazifa qarzni to'lamaydi — u jazoning o'zi. Qarz esa har oy boshida noldan
@@ -94,7 +102,7 @@ const jazoDaraja=qarz=>{let n=0;JAZO.forEach((j,i)=>{if(qarz>=j.ball)n=i+1});ret
    1,5 ball. Faqat VAQTIDA o'qilganiga beriladi. */
 const JAMOAT_BALL=0.5;
 /* Eski qazolar: yoshlikda o'qilmay qolgan namozlar. Bugungi namozni kechikib
-   o'qish («qazo» holati, −0,25) bilan hech qanday aloqasi yo'q — u minus, bu
+   o'qish («qazo» holati, −0,5) bilan hech qanday aloqasi yo'q — u minus, bu
    plyus. Shuning uchun ilovada ular hech qachon bir xil so'z bilan atalmaydi.
    Uzilgan qazo — savob, shuning uchun u reytingda sanaladi. */
 const QAZO_BALL=0.25,QAZO_MAX=20;
@@ -108,10 +116,9 @@ const QAZO_VAQT=["bomdod","peshin","asr","shom","xufton"];
 const ISH_VAQT=["peshin","asr","shom"];
 /* Ayollar rejimi. Vaqtida o'qilgani hammanikidek, kun yopilib ketgani ham
    hammanikidek −1. Faqat oradagi holat o'zgaradi: shu kun ichida kechikib
-   o'qilgani jarima emas, +0,25 ball. Ish rejimidan yengilroq — u bunday namozni
-   vaqtida deb sanaydi, bu esa uni o'z holicha qoldirib, faqat qarz bo'lishdan
-   to'xtatadi. */
-const AYOL_BALL=0.25;
+   o'qilgani jarima emas, +1 ball. Ish rejimi o'qilgan namozni vaqtida deb
+   sanaydi, bu esa uni o'z holicha qoldiradi. */
+const AYOL_BALL=1;
 const ayolRejimi=c=>!!(c&&c.woman_mode);
 const ishRejimi=c=>!!(c&&c.work_shift);
 /* `c` — a'zoning o'zi yoki cfgNow/cfgAt qaytargan nusxasi; ikkalasida ham bayroq bor. */
@@ -124,32 +131,102 @@ const qazoOf=day=>{const q=(day&&day.qazo)||{};
    lekin u bilan aralashmaydi: bajarilsa +2, hafta bajarilmay yopilsa −1.
    Qaysi amal ekani haftaning o'zidan chiqariladi, hech qayerda saqlanmaydi —
    nishonlar ham, haftalik jamoa topshirig'i ham shunday ishlaydi. */
-const AMAL_BALL=2,AMAL_JARIMA=1;
+const AMAL_BALL=7,AMAL_JARIMA=3;
+/* Har bir obyekt: n \u2014 qisqa sarlavha, t \u2014 to'liq arab matni, s \u2014 manba,
+   son \u2014 haftalik tavsiya soni (ko'rsatish uchun, majburiy emas). */
 const AMALLAR=[
- "Ota yoki onangizning oyoqlarini yuving",
- "Onangizga qo'ng'iroq qilib, uzoq gaplashing \u2014 shoshmasdan",
- "Otangiz bilan bir choy iching va uning yoshligidan so'rang",
- "Aka yoki ukangizdan xabar oling",
- "Opa yoki singlingizdan xabar oling",
- "Amakingiz yoki tog'angiznikiga boring",
- "Ammangiz yoki xolangizdan xabar oling",
- "Buvingiz yoki bobongizni yo'qlang",
- "Bir kasalning holidan xabar oling",
- "Sadaqa qiling \u2014 kim olganini bilmaydigan qilib",
- "Qo'shningizga bir tovoq ovqat eltib bering",
- "Qarindoshlaringizdan eng kam boradiganingiznikiga boring",
- "Bir yetim yoki beva ayoldan xabar oling",
- "Kimdandir ranjigan bo'lsangiz \u2014 kechiring va aytmang",
- "Bir kishidan uzr so'rang",
- "Farzandingiz bilan yolg'iz bir soat o'tkazing \u2014 telefonsiz",
- "Ustozingizdan yoki sizga yaxshilik qilgan kishidan xabar oling",
- "Bir kishiga bilganingizni o'rgating",
- "Masjidga yoki yo'lga tushib qolgan axlatni oling",
- "Bir kishining qarzini so'ramasdan uzib qo'ying yoki muhlat bering",
- "Uyingizdagi eng og'ir ishni aytmasdan qilib qo'ying",
- "Bir do'stingizni uyingizga taomga chaqiring"
+ 
+ 
+ {n:"Salavot Tunjina \u2014 4444 marta",son:4444,
+  t:"\u0410\u043b\u043b\u043e\u04b3\u0443\u043c\u043c\u0430 \u0441\u043e\u043b\u043b\u0438 \u044a\u0430\u043b\u0430 \u0441\u0430\u0439\u0439\u0438\u0434\u0438\u043d\u0430\u0430 \u041c\u0443\u04b3\u0430\u043c\u043c\u0430\u0434\u0438\u043d \u0441\u043e\u043b\u0430\u0430\u0442\u0430\u043d \u0442\u0443\u043d\u0436\u0438\u0439\u043d\u0430\u0430 \u0431\u0438\u04b3\u0430\u0430 \u043c\u0438\u043d \u0436\u0430\u043c\u0438\u0439\u044a\u0438\u043b \u0430\u04b3\u0432\u0430\u0430\u043b\u0438 \u0432\u0430\u043b \u0430\u0430\u0444\u0430\u0430\u0442\u0438 \u0432\u0430 \u0442\u0430\u049b\u0437\u0438\u0439 \u043b\u0430\u043d\u0430\u0430 \u0431\u0438\u04b3\u0430\u0430 \u0436\u0430\u043c\u0438\u0439\u044a\u0430\u043b \u04b3\u0430\u0430\u0436\u0430\u0430\u0442\u0438 \u0432\u0430 \u0442\u0443\u0442\u0430\u04b3\u04b3\u0438\u0440\u0443\u043d\u0430\u0430 \u0431\u0438\u04b3\u0430\u0430 \u043c\u0438\u043d \u0436\u0430\u043c\u0438\u0439\u044a\u0438\u0441 \u0441\u0430\u0439\u0439\u0438\u02bc\u0430\u0430\u0442\u0438 \u0432\u0430 \u0442\u0430\u0440\u0444\u0430\u044a\u0443\u043d\u0430\u0430 \u0431\u0438\u04b3\u0430\u0430 \u044a\u0438\u043d\u0434\u0430\u043a\u0430 \u0430\u044a\u043b\u0430\u0430\u0434 \u0434\u0430\u0440\u0430\u0436\u0430\u0430\u0442\u0438 \u0432\u0430 \u0442\u0443\u0431\u0430\u043b\u043b\u0438\u0493\u0443\u043d\u0430\u0430 \u0431\u0438\u04b3\u0430\u0430 \u0430\u049b\u0441\u043e\u043b \u0493\u043e\u043e\u0451\u0442\u0438 \u043c\u0438\u043d \u0436\u0430\u043c\u0438\u0439\u044a\u0438\u043b \u0445\u043e\u0439\u0440\u043e\u0442\u0438 \u0444\u0438\u043b \u04b3\u0430\u044f\u0442\u0438 \u0432\u0430 \u0431\u0430\u044a\u0434\u0430\u043b \u043c\u0430\u043c\u0430\u0430\u0442\u0438 \u0432\u0430 \u044a\u0430\u043b\u0430 \u043e\u043b\u0438\u04b3\u0438 \u0432\u0430 \u0441\u043e\u04b3\u0431\u0438\u04b3\u0438 \u0432\u0430 \u0441\u0430\u043b\u043b\u0438\u043c \u0442\u0430\u0441\u043b\u0438\u0439\u043c\u0430\u043d \u043a\u0430\u0441\u0438\u0439\u0440\u043e\u043d.",
+  s:"\u0422\u0430\u0440\u0438\u0439\u049b\u0430\u0442 \u0430\u04b3\u043b\u0438\u043d\u0438\u043d\u0433 \u0442\u0430\u0432\u0430\u0442\u0443\u0440 \u0431\u0438\u043b\u0430\u043d \u049b\u0430\u0431\u0443\u043b \u049b\u0438\u043b\u0433\u0430\u043d \u0441\u0430\u043b\u043e\u0432\u043e\u0442\u0438; \u0436\u0430\u043c\u043e\u0430\u0442 \u0431\u045e\u043b\u0438\u0431 4444 \u043c\u0430\u0440\u0442\u0430 \u045e\u049b\u0438\u043b\u0430\u0434\u0438.",
+  m:"Allohim, sayyidimiz Muhammadga shunday salavot yuborgil — bu salavot bilan bizni barcha qoʻrquv va ofatlardan qutqar, barcha ehtiyojlarimizni chiqar, barcha gunohlarimizdan toza qil, Huzuringda eng yuksak darajalarga koʻtar, va hayotimizda ham, vafotimizdan keyin ham barcha yaxshiliklarning muntahosiga yetkazgil."},
+ {n:"Salavoti Ibrohimiy — 3000 marta",son:3000,
+  t:"Allohumma solli 'ala Muhammadin wa 'ala oli Muhammadin kama sollayta 'ala Ibrohiyma wa 'ala oli Ibrohiyma innaka Hamidun Majid. Allohumma barik 'ala Muhammadin wa 'ala oli Muhammadin kama barakta 'ala Ibrohiyma wa 'ala oli Ibrohiyma innaka Hamidun Majid.",
+  s:"Buxoriy 3370, Muslim 406 — namozda o'qiladigan, Alloh Pag'ambariga salavot yuborishni amr qilgan oyatga javoban berilgan salavot.",
+  m:"Allohim, Muhammadga va uning oilasiga salavot yuborgil — Ibrohimga va uning oilasiga yuborgan salavoting kabi. Allohim, Muhammadga va uning oilasiga barakat bergil — Ibrohimga bergan baraking kabi. Albatta Sen maqtovli va ulug'san."},
+ {n:"Salavoti Munjiya — 3000 marta",son:3000,
+  t:"Allohumma solli 'ala Muhammadinin-nabiyyil ummiyyi wa 'ala olihi wa sallim tasliyman.",
+  s:"Ibn Hajar Asqaloniy — har kuni 10 marta o'qish buyurilgan; 3000 marta haftalik maqsad.",
+  m:"Allohim, ummi Payg'ambar Muhammadga va uning oilasiga salavot yuborgil va ularni salom bilan salam qilgil."},
+ {n:"Durudi Shoh — 3000 marta",son:3000,
+  t:"Allohumma solli 'ala Muhammadin wa 'ala oli Muhammad.",
+  s:"313 — Badr jangidagi muslimlar soni; 3000 marta haftalik maqsad mashovixlar amalidan.",
+  m:"Allohim, Muhammadga va uning oilasiga salavot yuborgil."},
+ {n:"Istighfor — 5000 marta",son:5000,
+  t:"Astag'firullo-hal 'aziymal laziy la ilaha illa Huwal Hayyul Qayyumu wa atubu ilayh.",
+  s:"Tirmiziy 3577 — gunohlarni yuvadigan eng kuchli istighfor; Payg'ambar kuniga 100 martadan ortiq aytardi.",
+  m:"Ulug' Allohdan mag'firat so'rayman — Undan o'zga iloh yo'q, U Tirik va Barqarordir — va Unga tavba qilaman."},
+ {n:"Laa ilaha illallohu — 5000 marta",son:5000,
+  t:"La ilaha illallohu wahdahu la sharika lah, lahul mulku wa lahul hamdu wa Huwa 'ala kulli shay'in Qadiyr.",
+  s:"Buxoriy 6403, Muslim 2691 — 100 marta aytgan 10 qul ozod qilgandek savob oladi va 100 ta yomonligi o'chiriladi.",
+  m:"Allohdan o'zga iloh yo'q, U yolg'iz, Unga sherik yo'q. Mulk Uniki, hamd Uniki. U hamma narsaga qodirdir."},
+ {n:"Subhanallohi wa bihamdihi — 5000 marta",son:5000,
+  t:"Subhanallohi wa bihamdihi subhanallohi-l 'aziym.",
+  s:"Buxoriy 6406, Muslim 2694 — 'Tilga yengil, mezonga og'ir, Rahmonga mahbub ikki kalima.'",
+  m:"Alloh pokdir va barcha maqtovlar Unga tegishli. Alloh ulug' va azimdir."},
+ {n:"Laa hawla wa laa quwwata — 5000 marta",son:5000,
+  t:"La hawla wa la quwwata illa billohi-l 'aliyyil 'aziym.",
+  s:"Buxoriy 6384, Muslim 2704 — 'Jannat xazinasidan bir xazina'; Abu Muso al-Ash'ariyga Payg'ambar o'rgatgan.",
+  m:"Kuch va quvvat faqat ulug' va azim Alloh bilan mumkin. Barcha ishda faqat Unga tayanish ifodasi."},
+ {n:"Yo Hayyu yo Qayyum — 3000 marta",son:3000,
+  t:"Ya Hayyu ya Qayyum, birahmatikas-tagiyth, aslih liy sha'niy kullahu wa la takilniy ila nafsiy tarfata 'ayn.",
+  s:"Hokim 1/545 — Fotima roziyallohu anhoga Payg'ambar o'rgatgan duo.",
+  m:"Ey Tirik, Ey Barqaror! Rahmatingdan madad so'rayman, barcha holimni isloh qil, meni bir lahzalik ko'z yumib ochguncha ham o'z holiga tashlab qo'yma."},
+ {n:"Hasbunallohu wa ni'mal vakiyl — 3000 marta",son:3000,
+  t:"Hasbunallohu wa ni'mal-vakiyl, ni'mal mawla wa ni'man-nasiyr.",
+  s:"Oli Imron 3:173 — Ibrohim alayhistalom otga tashlanganda va Payg'ambar Uhud urushidan keyin aytgan kalima.",
+  m:"Alloh bizga yetarlidir, ne'mat beruvchi vakil — ne'mat beruvchi hukmdor va ne'mat beruvchi yordamchidir."},
+ {n:"Laa ilaaha illa Anta subhoonaka — 3000 marta",son:3000,
+  t:"La ilaha illa Anta subhanaka inniy kuntu minaZ-Zolimiin.",
+  s:"Anbiyo 21:87 — Yunus alayhissalom baliq qornida aytgan duo; 40 marta aytilsa musibyatdan qutiladi (Hokim).",
+  m:"Senden o'zga iloh yo'q, Sen poksan, men zolimlardan bo'ldim."},
+ {n:"Allahu Akbar — 5000 marta",son:5000,
+  t:"Allohu Akbar, Allohu Akbar, la ilaha illallohu Allohu Akbar, Allohu Akbar wa lillohi-l hamd.",
+  s:"Zikrlar ichida eng fazilatlilardandan; tashri' takbiri ham shu shakldа yuritiladi.",
+  m:"Alloh barcha narsadan buyukdir. Allohdan o'zga iloh yo'q. Barcha maqtovlar Allohga tegishli."},
+ {n:"Sayyidol istighfor — 700 marta",son:700,
+  t:"Allohumma Anta Robbiy la ilaha illa Anta, xalaqtaniy wa ana 'abduka wa ana 'ala 'ahdika wa wa'dika mastato'tu. A'udzu bika min sharri ma sona'tu, abuu laka bini'matika 'alayya wa abuu bizambiy, fag'firliy fa-innahu la yag'firuZ-Zunuba illa Anta.",
+  s:"Buxoriy 6306 — 'Kim tong saharda aytibi o'sha kuni vafot etsa — jannat ahlidан.'",
+  m:"Allohim, Sen mening Rabbimsan, Senden o'zga iloh yo'q. Sen meni yaratding, men bandasman. Imkon qadar ahd va va'dangga sodiqman. Yomonliklarimdan Senga panoh tilayman. Ne'matingni iqror qilaman, gunohimni ham iqror qilaman. Meni mag'fir et — gunohlarni faqat Sen kechirasan."},
+ {n:"Subhanallahi wal hamdu lillahi — 5000 marta",son:5000,
+  t:"Subhanallohi wal hamdu lillahi wa la ilaha illallohu Allohu Akbar.",
+  s:"Muslim 2695 — 'Quyosh chiqqan dunyodan menga eng sevimli to'rt kalima'; Pag'ambar bularni tasbeh tortishni buyurdi.",
+  m:"Alloh pokdir, barcha hamdlar Allohga, Allohdan o'zga iloh yo'q, Alloh barcha narsadan buyukdir."},
+ {n:"Robbig'firli wa tub 'alayya — 5000 marta",son:5000,
+  t:"Robbig'firli wa tub 'alayya innaka Antat-Tawwabur-Rohiym.",
+  s:"Tirmiziy 3434 — Payg'ambar bir majlisda 100 martadan ortiq 'Allohim meni mag'fir et va tavbamni qabul qil' degan.",
+  m:"Robbim, meni mag'fir et va tavbamni qabul qil, albatta Sen tavbalarni qabul qiluvchi va rahmlisan."},
+ {n:"Rabbanaaa atinaa fid-dunyo — 3000 marta",son:3000,
+  t:"Robbanaaa atinaa fid-dunyaa hasanatan wa fil-aaxirati hasanatan wa qinaа 'azaaban-naar.",
+  s:"Baqara 2:201 — Payg'ambar ko'p aytgan duo (Buxoriy 6389); dunyo va oxirat xayrini birga so'raydi.",
+  m:"Robbimiz, bizga dunyoda ham yaxshilik, oxiratda ham yaxshilik ber va bizni do'zax azobidan asra."},
+ {n:"Salavoti juma — 3000 marta",son:3000,
+  t:"Allohumma solli wa sallim 'ala nabiyyina Muhammad.",
+  s:"Ibn Maja 1637 — 'Juma kuni menga ko'p salavot aytinglar' (Payg'ambar); juma kuni 3000 marta.",
+  m:"Allohim, Payg'ambarimiz Muhammadga salavot va salom yuborgil."},
+ {n:"Fotiha surasi — 500 marta",son:500,
+  t:"Bismillohir-Rohmanir-Rohiym. Alhamdu lillohi Robbil 'aalamiin. Ar-Rohmanir-Rohiym. Maaliki yawmid-diyn. Iyyaaka na'budu wa iyyaaka nasta'iin. Ihdinas-sirootal mustaqiim. Sirootal-laziyna an'amta 'alayhim, g'ayril mag'dubi 'alayhim wa lad-doolliyn.",
+  s:"Mashoyixlar 41 marta xojat uchun, 500 marta haftalik taqarub uchun tavsdiya qilishади; Fotiha — barcha duolar ichida eng aziz.",
+  m:"Barcha maqtovlar olamlar Rabbiga. Rahmoni va Rahimiyga. Qiyomat kunining Egasiga. Faqat Senga ibodat qilamiz, faqat Senden yordam so'raymiz. Bizni to'g'ri yo'lga hidoyat et — ne'matinga sazovor bo'lganlar yo'liga, g'azabingga uchraganlar va adashganlar yo'liga emas."},
+ {n:"Ikhlos surasi — 3000 marta",son:3000,
+  t:"Qul Huwалlohu Ahad. Allohu-s-Somad. Lam yalid wa lam yuulad. Wa lam yakul-lahu kufuwan ahad.",
+  s:"Buxoriy 5013 — 'Uchdan biriga teng'; 3000 marta o'qigan Qur'onni 1000 marta xatm qilgandek savob oladi.",
+  m:"De: U Alloh Yagonadir. Alloh hamma muhtoj, U muhtoj emas. U tug'magan va tug'ilmagan. Unga hech bir tengdosh yo'q."},
+ {n:"Oyatul-Kursiy — 700 marta",son:700,
+  t:"Allohu la ilaha illa Huwal Hayyul Qayyum, la ta'xuzuhu sinatun wa la nawm, lahu ma fis-samawati wa ma fil-ard, man zal-laziy yashfa'u 'indahu illa bi-iznih, ya'lamu ma bayna aydihim wa ma xalfahum, wa la yuhiytuna bi-shay'in min 'ilmihi illa bima sha', wasi'a kursiyyuhus-samawati wal-ard, wa la ya'uduhu hifzuhuma, wa Huwal 'aliyyul 'aziym.",
+  s:"Buxoriy 2311 — 'Namozdan keyin Oyatul-Kursiy o'qigan kishini jannаtdan faqat o'lim to'sadi.'",
+  m:"Alloh — Undan o'zga iloh yo'q, U Tirik va Barqarordir. Uni na mudroq va na uyqu egallamaydi. Osmon va yerdagi hamma narsa Uniki. Kim Uning iznisiz Huzurida shafaat qila oladi? U bandalarining o'tmishi va kelajagini biladi. Uning Kursi osmon va yerni qamrab olgan. Ularni saqlash Unga og'ir kelmaydi. U eng ulug' va azimdir."},
+ {n:"Salavoti Nuri — 3000 marta",son:3000,
+  t:"Allohumma solli 'ala Muhammadin nuril-anwari wa sirril-asrori wa sayyidil-abroori wa 'ala aalihi wa sahbihi wa sallim.",
+  s:"Tariqat ahli orasida keng tarqalgan salavot; 'Nurlar Nuri' laqabli salavot deb ham yuritiladi.",
+  m:"Allohim, nurlar nuri, sirlar siri, yaxshilar sayyidi Muhammad sallollohu alayhi vasallamga salavot yuborgil — va uning ahli va sahobalariga ham salavot va salom yuborgil."},
+ {n:"Salavoti Azim — 3000 marta",son:3000,
+  t:"Allohumma solli 'ala Muhammadin 'adada ma fi 'ilmillohi solatan daaimatan bi-dawaami mulkillohi.",
+  s:"Shayxul islom Ibn Taymiya va boshqa ulamolar zikr etgan; 'Alloh ilmidagi soncha salavot' ma'nosida.",
+  m:"Allohim, Alloh ilmidagi soncha, Alloh mulki barobarida doimiy salavot yuborgil Muhammadga."}
 ];
-/* Navbat haftalik jamoa topshirig'i bilan bir xil epoxdan sanaladi. */
+/* \u041d\u0430\u0432\u0431\u0430\u0442 \u04b3\u0430\u0444\u0442\u0430\u043b\u0438\u043a \u0436\u0430\u043c\u043e\u0430 \u0442\u043e\u043f\u0448\u0438\u0440\u0438\u0493\u0438 \u0431\u0438\u043b\u0430\u043d \u0431\u0438\u0440 \u0445\u0438\u043b \u044d\u043f\u043e\u0445\u0434\u0430\u043d \u0441\u0430\u043d\u0430\u043b\u0430\u0434\u0438. */
 function haftaAmali(a){
  const hafta=Math.floor(daysBetween(HAFTA_EPOX,weekRange(a)[0])/7);
  return AMALLAR[((hafta%AMALLAR.length)+AMALLAR.length)%AMALLAR.length]}
@@ -245,11 +322,13 @@ const inWin=(n,s,e)=>e>s?(n>=s&&n<e):(n>=s||n<e);
 /* Bitta belgining bali — reyting qanday sanasa, shunday. prayerRange ichidagi
    qoidalar bilan bir xil bo'lishi shart; test ikkalasining yig'indisini
    solishtirib turadi. */
-function belgiBall(c,p,r,st){
+function belgiBall(c,p,r,st,d){
  if(!r)return 0;
- if(st==="ontime")return 1+(r.j?JAMOAT_BALL:0);
- if(st==="qazo")return ayolRejimi(c)?AYOL_BALL:-P_QAZO;
- return -P_MISS}
+ const pk=p&&p.k?p.k:p;
+ const b=bomdodYangi(d)&&pk==="bomdod";
+ if(st==="ontime")return (b?BOMDOD_HOME:1)+(r.j?JAMOAT_BALL:0);
+ if(st==="qazo")return b?-BOMDOD_QAZO:(ayolRejimi(c)?AYOL_BALL:-P_QAZO);
+ return b?-BOMDOD_MISS:-P_MISS}
 
 /* ══════════════ QAYSI KUN, QAYSI VAQT ══════════════ */
 /* Baho har doim a'zoning SHAHRI vaqtida chiqariladi. Telefon boshqa mintaqada
@@ -272,7 +351,7 @@ function liveDay(pk,c){
     (2026-09-10, Sardor). Ilgari faqat xufton va ish rejimidagi peshin/asr/shom
     shunday edi, qolganlari yarim tunda uzilardi: kechqurun kechikib o'qilgan shom
     uchun −1 yozilib qolardi, holbuki u o'sha kechada o'qilgan. Endi kun ichida
-    kechikkani −0,25 bo'lib qolaveradi va faqat bomdod kirgach, o'qilmagani −1
+    kechikkani −0,5 bo'lib qolaveradi va faqat bomdod kirgach, o'qilmagani −1
     bo'ladi. Yengillik o'sha kechaga, cheksiz kechiktirishga emas.
     `pk` endi qarorga ta'sir qilmaydi, lekin chaqiruvlar joyida qoladi: qoida
     kelajakda yana namozga qarab bo'linishi mumkin. */
@@ -321,9 +400,9 @@ const SUNNATS=[
 {t:"Misvok (tish tozaligi)",d:"«Ummatimga og'ir bo'lmaganda edi, har namoz oldidan misvokni buyurar edim.»",a:"Kamida ikki vaqt namozdan oldin tish tozalang.",s:"Buxoriy, 887; Muslim, 252"},
 {t:"Uyqu odobi",d:"O'ng yonboshga yotib, qo'lni yuz ostiga qo'yib, taharat bilan uxlash sunnat.",a:"Bugun taharat bilan, o'ng yonboshda yoting.",s:"Buxoriy, 247; Muslim, 2710"},
 {t:"Yotishdan oldin himoya",d:"Oyatul Kursi, Ixlos, Falaq, Nos — o'qib, kaftga puflab, badanga surtiladi.",a:"Bugun kechqurun uch marta takrorlang.",s:"Buxoriy, 5017; Muslim, 2192"},
-{t:"Juma odobi",d:"G'usl, toza kiyim, xushbo'ylik, erta borish va Kahf surasini o'qish.",a:"Yaqin jumaga rejani bugundan yozib qo'ying.",s:"Buxoriy, 877; Muslim, 846 · Kahf: Hokim va Bayhaqiy"},
-{t:"Dushanba-payshanba ro'zasi",d:"Amallar shu ikki kunda ko'tariladi, Payg'ambarimiz ro'za tutishni yaxshi ko'rar edilar.",a:"Kelasi payshanbani belgilab qo'ying.",s:"Termiziy, 747; Nasoiy, 2358 — hasan"},
-{t:"Ayyomul biyz ro'zasi",d:"Har oyning 13, 14, 15-kunlari ro'za tutish — butun umr ro'za tutgandek.",a:"Kalendarga uch kunni belgilang.",s:"Nasoiy, 2420; Termiziy, 761 — hasan"},
+{t:"Juma odobi",d:"G'usl, toza kiyim, xushbo'ylik, erta borish va Kahf surasini o'qish.",a:"Bugun Juma odoblarini bajaring.",s:"Buxoriy, 877; Muslim, 846 · Kahf: Hokim va Bayhaqiy"},
+{t:"Dushanba-payshanba ro'zasi",d:"Amallar shu ikki kunda ko'tariladi, Payg'ambarimiz ro'za tutishni yaxshi ko'rar edilar.",a:"Bugun nafl ro'za tuting, agar sog'lig'ingiz va sharoitingiz imkon bersa.",s:"Termiziy, 747; Nasoiy, 2358 — hasan"},
+{t:"Ayyomul biyz ro'zasi",d:"Har oyning 13, 14, 15-kunlari ro'za tutish — butun umr ro'za tutgandek.",a:"Bugun Ayyomul biyz kuni bo'lsa, nafl ro'za tuting.",s:"Nasoiy, 2420; Termiziy, 761 — hasan"},
 {t:"Ishroq namozi",d:"Bomdodni jamoat bilan o'qib, quyosh chiqquncha zikrda o'tirib, so'ng ikki rakat o'qigan kishiga to'liq haj va umra savobi bor.",a:"Bugun bomdoddan keyin 20 daqiqa o'tiring.",s:"Termiziy, 586 — hasan"},
 {t:"Duho namozi",d:"Har bir bo'g'in uchun sadaqa lozim — ikki rakat duho shuning o'rnini bosadi.",a:"Peshingacha 2-4 rakat duho o'qing.",s:"Muslim, 720"},
 {t:"Namozdan keyingi tasbeh",d:"33 Subhanalloh, 33 Alhamdulillah, 34 Allohu akbar.",a:"Bugun besh vaqtda ham to'liq bajaring.",s:"Muslim, 597"},
@@ -375,8 +454,19 @@ const pretty=s=>{const d=new Date(s+"T12:00:00");return d.getDate()+" "+OY[d.get
 const fmt=n=>String(Math.round(n*100)/100).replace(".",",");
 const first=n=>n.split(" ")[0];
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-const sunnatOf=ds=>{const d=new Date(ds+"T12:00:00");
- const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/86400000);return SUNNATS[doy%SUNNATS.length]};
+/* Kunning sunnati bugun bajarib bo'ladigan amal bo'lishi shart. Kelajakdagi
+   payshanbani belgilash yoki keyingi ro'zaga tayyorgarlik kabi vazifalar o'z
+   kunidan tashqarida ko'rsatilmaydi. */
+function sunnatMos(x,ds){
+ const dow=new Date(ds+"T12:00:00").getDay();
+ if(x.t==="Juma odobi")return dow===5;
+ if(x.t==="Dushanba-payshanba ro'zasi")return dow===1||dow===4;
+ if(x.t==="Ayyomul biyz ro'zasi")return false; /* hijriy sana kalendar bilan olinmaguncha */
+ if(x.t==="Xurmo bilan iftor")return false; /* ro'za tutayotganiga bog'liq */
+ return true;
+}
+const sunnatOf=ds=>{const d=new Date(ds+"T12:00:00"),list=SUNNATS.filter(x=>sunnatMos(x,ds));
+ const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/86400000);return list[doy%list.length]};
 
 /* ══════════════ SAQLASH VA SINXRON ══════════════ */
 const LS={
@@ -468,6 +558,7 @@ async function pull(){
    deeds=j.deeds||[];rewards=j.rewards||[];skills=j.skills||[];
    medicines=j.medicines||[];doses=j.doses||[];promises=j.promises||[];
    quran=j.quran||[];quranDone=j.quran_done||[];quranStats=j.quran_stats||[];
+   zikrStats=j.zikr_stats||[];
    members.forEach(m=>{data[m.id]=Object.assign(blank(),j.data[m.id]||{})});
    LS.set("nd_members",members);LS.set("nd_data",data);
    online=true;syncMsg="";return true;
@@ -542,7 +633,8 @@ let medicines=[],doses=[],doriMsg="",doriErr=false;
 /* Zikrlar va kunlik vazifalar — faqat o'ziga. Ular /state bilan kelmaydi: u butun
    doirani har bir telefonga tashiydi, kim nima zikr qilgani va o'z ro'yxatiga nima
    yozgani esa oilaning ishi emas. Ball ham bermaydi — bu daftar, hisob emas. */
-let zikrs=[],zikrMarks=[],todos=[],todoMarks=[],shaxsiyMsg="",shaxsiyErr=false;
+let zikrs=[],zikrMarks=[],zikrStats=[],todos=[],todoMarks=[],shaxsiyMsg="",shaxsiyErr=false;
+let haftaSanoqlar=[],haftaSanoqKunlar=[],haftaSanoqMsg="",haftaSanoqErr=false;
 /* Va'dalar — ataylab ochiq: ismi yonidagi belgi shuni aytadi. */
 let promises=[];
 /* Qur'on: o'qilgan oyatlar jurnali va tugatilgan suralar. */
@@ -630,11 +722,12 @@ function score(u,c,child){
    if(o.oylar[d.slice(0,7)]==null)o.oylar[d.slice(0,7)]=0;
    PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&d!==ochiq[p.k];
     const st=holat(c,p.k,r);
-    if(!r){if(shut){jaza(d,P_MISS);o.bad++;o.per[p.k].bad++}return}
+    if(!r){if(shut){jaza(d,bomdodYangi(d)&&p.k==="bomdod"?BOMDOD_MISS:P_MISS);o.bad++;o.per[p.k].bad++}return}
     if(st==="ontime"){o.ontime++;o.per[p.k].ontime++;if(r.j)o.jamoat++}
     else if(st==="qazo"){o.qazo++;o.per[p.k].qazo++;
-     if(ayolRejimi(c))o.ayol++;else jaza(d,P_QAZO)}
-    else{jaza(d,P_MISS);o.bad++;o.per[p.k].bad++}});
+     if(bomdodYangi(d)&&p.k==="bomdod")jaza(d,BOMDOD_QAZO);
+     else if(ayolRejimi(c))o.ayol++;else jaza(d,P_QAZO)}
+    else{jaza(d,bomdodYangi(d)&&p.k==="bomdod"?BOMDOD_MISS:P_MISS);o.bad++;o.per[p.k].bad++}});
    o.eski+=qazoOf(day);
    if(day.quran)o.quran++}}
  /* Qarz — SHU OYNING jazosi, boshqa hech nima. Ilgari uni jamoat,
@@ -654,6 +747,33 @@ function streakOf(days,pk,c){let cur=c?todayFor(c):today(),n=0;
  if(!oq(cur))cur=shift(cur,-1);
  for(let i=0;i<400;i++){if(oq(cur)){n++;cur=shift(cur,-1)}else break}
  return n}
+/* Rekordlar reytingdagi hozirgi seriyadan alohida: tarixdagi eng uzun seriya
+   saqlanib qoladi. Shu sabab u faqat oxirgi kunlar oynasiga emas, telefonda bor
+   barcha kunlarga qaraydi. */
+function longestStreak(days,pk,c,perfect){
+ const ks=Object.keys(days||{}).filter(d=>d<=todayFor(c)).sort();
+ if(!ks.length)return 0;
+ let best=0,run=0,prev=null;
+ for(const d of ks){
+  const consecutive=prev&&shift(prev,1)===d;
+  if(!consecutive)run=0;
+  const day=days[d]||{};
+  const ok=perfect?PRAYERS.every(p=>holat(c,p.k,day[p.k])==="ontime"):
+    holat(c,pk,day[pk])==="ontime";
+  run=ok?run+1:0;best=Math.max(best,run);prev=d;
+ }
+ return best}
+function bomdodSeriyaBall(days,c,a,z){
+ const ks=Object.keys(days||{}).filter(d=>(!a||d>=a)&&(!z||d<=z)).sort();
+ let bonus=0,run=0,last=null,on=null;
+ const close=()=>{if(on===true)bonus+=Math.floor(run/7)*BOMDOD_SERIYA};
+ for(const d of ks){
+  if(last&&shift(last,1)!==d){close();run=0;on=null}
+  const yes=holat(c,"bomdod",(days[d]||{}).bomdod)==="ontime";
+  if(on===null||on!==yes){close();run=1;on=yes}else run++;
+  last=d;
+ }
+ close();return{bonus:bonus,penalty:0,ball:bonus}}
 const claimed=(u,pk)=>((u&&u.bonuses)||[]).filter(b=>b.p===pk).reduce((m,b)=>Math.max(m,b.lvl),0);
 
 /* ══════════════ KITOB HISOBI ══════════════ */
@@ -723,7 +843,7 @@ function periodDone(z,c){
  if(td<z)return false;
  return winState("xufton",z,c)!=="early"}
 
-/* Oraliqdagi namoz bali: vaqtida +1, qazo −0,25, o'qilmagan −1.
+/* Oraliqdagi namoz bali: vaqtida +1, qazo −0,5, o'qilmagan −1.
    Uzilgan eski qazo esa faqat qo'shadi. */
 function prayerRange(u,m,a,z){
  const c=cfgNow(m),days=(u&&u.days)||{},td=todayFor(c);
@@ -744,7 +864,8 @@ function prayerRange(u,m,a,z){
     qolib ketgan, endi uzilgan qazolar (plyus). Ikkalasi butunlay boshqa narsa,
     shuning uchun nomi ham boshqa: bittasini ikkinchisi bilan chalkashtirish shu
     yerda eng oson qilinadigan xato. */
- const o={ontime:0,qazo:0,bad:0,jamoat:0,eski:0,amal:0,amalYoq:0,boshlangich:0,quron:0,ball:0};
+ const o={ontime:0,qazo:0,bad:0,jamoat:0,sunnat:0,sunnatBall:0,bomdodSeriya:0,ontimeBall:0,jamoatBall:0,qazoBall:0,badBall:0,
+  eski:0,amal:0,amalYoq:0,boshlangich:0,quron:0,ball:0};
  /* Tugatilgan sura tugatilgan kuniga yoziladi, shunda u o'z haftasi, oyi va yiliga
     tushadi. Sanog'i namoz siklidan tashqarida: sura namoz daftarini ochmasligi
     kerak, aks holda faqat Qur'on o'qiyotgan odamga belgilanmagan namozlar uchun
@@ -764,11 +885,15 @@ function prayerRange(u,m,a,z){
   const day=days[d]||{},closed=d<td;
   PRAYERS.forEach(p=>{const r=day[p.k],shut=closed&&d!==ochiq[p.k];
    const st=holat(c,p.k,r);
-   if(!r){if(shut){o.bad++;o.ball-=P_MISS}return}
-   if(st==="ontime"){o.ontime++;o.ball+=1;if(r.j){o.jamoat++;o.ball+=JAMOAT_BALL}}
-   else if(st==="qazo"){o.qazo++;o.ball+=ayolRejimi(c)?AYOL_BALL:-P_QAZO}
-   else{o.bad++;o.ball-=P_MISS}});
+   const bb=bomdodYangi(d)&&p.k==="bomdod";
+   if(!r){if(shut){const b=-(bb?BOMDOD_MISS:P_MISS);o.bad++;o.badBall+=b;o.ball+=b}return}
+   if(st==="ontime"){o.ontime++;o.ontimeBall+=bb?BOMDOD_HOME:1;
+    o.ball+=bb?BOMDOD_HOME:1;if(r.j){o.jamoat++;o.jamoatBall+=JAMOAT_BALL;o.ball+=JAMOAT_BALL}}
+   else if(st==="qazo"){o.qazo++;const b=bb?-BOMDOD_QAZO:(ayolRejimi(c)?AYOL_BALL:-P_QAZO);
+    o.qazoBall+=b;o.ball+=b}
+   else{o.bad++;const b=bb?-BOMDOD_MISS:-P_MISS;o.badBall+=b;o.ball+=b}});
   o.eski+=qazoOf(day);o.ball+=qazoOf(day)*QAZO_BALL;
+  if(day.sunnat){o.sunnat++;o.sunnatBall+=SUNNAT_BALL;o.ball+=SUNNAT_BALL}
   /* Haftalik vazifa kunga emas, haftaga tegishli. Bajarilgani belgilangan kunga
      yoziladi; bajarilmagani esa hafta YOPILGANDA, uning oxirgi kuniga. Shu tufayli
      u kunlar sikliga tabiiy tushadi va oraliq qaysi haftani o'z ichiga olsa,
@@ -777,6 +902,7 @@ function prayerRange(u,m,a,z){
   const wk=weekRange(d);
   if(wk[1]===d&&d<td&&!(m&&m.is_child)&&!amalBajarilgan(u,wk)){
    o.amalYoq++;o.ball-=AMAL_JARIMA}}
+ const bs=bomdodSeriyaBall(days,c,a,z);o.bomdodSeriya=bs.ball;o.ball+=bs.ball;
  return o}
 
 /* Kitob bali: har normalik bet 1 ball, zametka +0,5, tugatilgan kitob +5. */
@@ -789,8 +915,12 @@ function bookRange(u,a,z){
  o.ball=o.bet/BET_NORMA+o.notes*K_NOTE+o.done*K_DONE;
  return o}
 
+/* CHOPISH rejimidagi odam vaqtincha reytingdan chiqariladi. Ma'lumotlari saqlanadi;
+   rejim tugashi bilan shu yordamchi uni yana barcha reytinglarga qaytaradi. */
+const ratingMembers=()=> (members||[]).filter(m=>!m.chopish);
+
 function rankBy(a,z,kind){
- return members.map(m=>{
+ return ratingMembers().map(m=>{
   const u=data[m.id]||blank();
   const o=kind==="namoz"?prayerRange(u,m,a,z):bookRange(u,a,z);
   return{m:m,o:o,ball:o.ball}}).sort((x,y)=>y.ball-x.ball)}
@@ -938,7 +1068,7 @@ function oyQahramonlari(y){
    uchun u eng tepada va eng katta shrift bilan turadi. */
 function oyQahramonView(td){
  const cfg=myCfg(),y=+td.slice(0,4),t=oyQahramonlari(y);
- const bor=(members||[]).filter(m=>t.count[m.id])
+ const bor=ratingMembers().filter(m=>t.count[m.id])
    .sort((a,b)=>t.count[b.id]-t.count[a.id]);
  let h=`<div class="panel p18 mb14" style="border-color:#C9A22766">
   <div class="eyebrow">Oy qahramonlari \u00B7 ${y}</div>
@@ -961,7 +1091,7 @@ function oyQahramonView(td){
     yozish o'sha oyda kimdir urinib ko'rgandek eshitiladi, holbuki ilova hali
     yo'q edi. */
  let eng=null;
- (members||[]).forEach(m=>{const ks=Object.keys((data[m.id]||{}).days||{}).sort();
+ ratingMembers().forEach(m=>{const ks=Object.keys((data[m.id]||{}).days||{}).sort();
   if(ks.length&&(!eng||ks[0]<eng))eng=ks[0]});
  t.rows.forEach(r=>{
   const oraliq=oyOraliq(y,r.oy);
@@ -986,6 +1116,8 @@ const TARKIB=[
  {n:"Jamoat",k:"jamoat"},
  {n:"Kechikkan",k:"qazo"},
  {n:"O'qilmagan",k:"bad"},
+ {n:"Kunning sunnati",k:"sunnat"},
+ {n:"Bomdod seriyasi",k:"bomdodSeriya"},
  {n:"Eski qazo",k:"eski"},
  {n:"Haftalik vazifa",k:"amal"},
  {n:"Vazifa qolgan",k:"amalYoq"},
@@ -994,10 +1126,12 @@ const TARKIB=[
 ];
 function ballTarkib(m,o,k){
  const c=cfgNow(m);
- if(k==="ontime")return o.ontime;
- if(k==="jamoat")return o.jamoat*JAMOAT_BALL;
- if(k==="qazo")return o.qazo*(ayolRejimi(c)?AYOL_BALL:-P_QAZO);
- if(k==="bad")return o.bad*-P_MISS;
+ if(k==="ontime")return o.ontimeBall;
+ if(k==="jamoat")return o.jamoatBall;
+ if(k==="qazo")return o.qazoBall;
+ if(k==="bad")return o.badBall;
+ if(k==="sunnat")return o.sunnatBall;
+ if(k==="bomdodSeriya")return o.bomdodSeriya;
  if(k==="eski")return o.eski*QAZO_BALL;
  if(k==="amal")return o.amal*AMAL_BALL;
  if(k==="amalYoq")return o.amalYoq*-AMAL_JARIMA;
@@ -1006,7 +1140,7 @@ function ballTarkib(m,o,k){
  return 0}
 
 function ballTarkibView(a,z){
- const kishi=(members||[]).map(m=>({m:m,o:prayerRange(data[m.id]||blank(),m,a,z)}));
+ const kishi=ratingMembers().map(m=>({m:m,o:prayerRange(data[m.id]||blank(),m,a,z)}));
  if(!kishi.length)return "";
  let h=`<div class="panel p14 mb14">
   <div class="flex between center">
@@ -1066,7 +1200,7 @@ function kpiHolat(m,a,z){
 
 function kpiView(a,z,tugadi){
  if(!isFamily())return "";
- const rows=(members||[]).map(m=>({m:m,k:kpiHolat(m,a,z)})).filter(x=>x.k.bor);
+ const rows=ratingMembers().map(m=>({m:m,k:kpiHolat(m,a,z)})).filter(x=>x.k.bor);
  if(!rows.length)return "";
  const egasi=ownsCircle(circles,circleId);
  const NOM=["Oson","O'rta","Qiyin"];
@@ -1099,7 +1233,7 @@ function kpiView(a,z,tugadi){
    shunday xohladi: "o'rinlar reytinglar tushunchasi bo'lmasin". Ballar bor, maqsadga
    qancha qolgani bor, poyga yo'q. Do'stlar doirasida kursi o'z joyida qoladi. */
 function oilaBallView(a,z,nom){
- const rows=(members||[]).map(m=>({m:m,o:prayerRange(data[m.id]||blank(),m,a,z)}));
+ const rows=ratingMembers().map(m=>({m:m,o:prayerRange(data[m.id]||blank(),m,a,z)}));
  if(!rows.length)return "";
  /* Tartib a'zolar ro'yxatidagidek — ballga qarab saralansa, u o'rin bo'lib qolardi. */
  const eng=Math.max(1,...rows.map(x=>Math.abs(x.o.ball)));
@@ -1282,7 +1416,7 @@ function doriJamoa(){
   const o=doriHolat(d);
   const k=kishi[d.member_id]||(kishi[d.member_id]={vaqtida:0,kechikkan:0,ichilmagan:0});
   k.vaqtida+=o.vaqtida;k.kechikkan+=o.kechikkan;k.ichilmagan+=o.ichilmagan});
- const rows=(members||[]).filter(m=>kishi[m.id]).map(m=>{
+ const rows=ratingMembers().filter(m=>kishi[m.id]).map(m=>{
   const k=kishi[m.id],kutilgan=k.vaqtida+k.kechikkan+k.ichilmagan;
   return{m:m,vaqtida:k.vaqtida,kechikkan:k.kechikkan,ichilmagan:k.ichilmagan,
    kutilgan:kutilgan,foiz:kutilgan?Math.round(k.vaqtida/kutilgan*100):0}});
@@ -1576,6 +1710,29 @@ function haftaTopshiriq(a,z){
 const toliqKun=(day,c)=>
  PRAYERS.filter(p=>p.fard&&holat(c,p.k,day[p.k])==="ontime").length===5;
 
+function zikrStat(id){
+ const x=(zikrStats||[]).find(z=>z.member_id===id);
+ return x||{member_id:id,marks:0,days:0,repetitions:0};
+}
+function zikrRepsOn(ds){
+ return (zikrs||[]).filter(z=>(zikrMarks||[]).some(k=>k.zikr_id===z.id&&k.day===ds))
+  .reduce((n,z)=>n+Number(z.count||0),0)}
+function zikrStreak(){
+ return zikrStreakFor(me);
+}
+function zikrStreakFor(id){
+ const cfg=myCfg(),days=new Set((zikrMarks||[]).filter(k=>k.member_id===id).map(k=>k.day));
+ let d=todayFor(cfg),n=0;
+ if(!days.has(d))d=shift(d,-1);
+ for(let i=0;i<400&&days.has(d);i++,d=shift(d,-1))n++;
+ return n}
+function ruhXabar(){
+ const z=zikrRepsOn(todayFor(myCfg())),st=zikrStreak(),s=score(data[me],myCfg(),isChild(me));
+ if(z>0)return `Bugun ${z} ta zikr aytildi — shu ruhda davom eting!`;
+ if(st>=3)return `${st} kunlik zikr seriyasi bor. Bugun uzib qo'ymang.`;
+ if(s.ontime>=3)return `${s.ontime} ta namoz vaqtida — ajoyib kun bo'lyapti.`;
+ return "Bugungi kichik qadam ertangi katta natijaning boshlanishi."}
+
 function nishonStat(m){
  const u=data[m.id]||blank(),c=cfgNow(m),days=u.days||{};
  const s=score(u,c,!!(m&&m.is_child)),k=bookScore(u,c);
@@ -1585,7 +1742,7 @@ function nishonStat(m){
   if(toliqKun(day,c)){mukammalKun++;if(new Date(d+"T12:00:00").getDay()===5)jumaMukammal++}});
  /* Qur'on nishonlari endi "o'qidim" belgisidan emas, o'qilgan joydan chiqadi:
     o'sha belgi olib tashlangan, va u qancha o'qilganini hech qachon bilmagan. */
- const q=quronYigma(m&&m.id);
+ const q=quronYigma(m&&m.id),z=zikrStat(m&&m.id);
  return{s:s,k:k,mukammalKun:mukammalKun,quranKun:q.kunlar,jumaMukammal:jumaMukammal,
   suralar:quronTugatgani(m&&m.id),oyat:q.oyat,
   quronStreak:quronKetma(m&&m.id,todayFor(c)),
@@ -1593,7 +1750,7 @@ function nishonStat(m){
   bomdodStreak:streakOf(days,"bomdod",c),mukammalStreak:perfectStreak(days,c),
   kunlar:Object.keys(days).length,shaharlar:((u.places)||[]).length,
   /* Qarz odamning profilida turadi, hujjatida emas. */
-  qazoQarz:(m&&m.qazo_debt)||0}}
+  qazoQarz:(m&&m.qazo_debt)||0,zikr:z.repetitions||0,zikrKun:z.days}}
 
 const NISHONLAR=[
  {n:"Ilk qadam",ic:"\u{1F331}",d:"Birinchi namozni vaqtida belgilash",kerak:1,v:t=>t.s.ontime},
@@ -1648,6 +1805,11 @@ const NISHONLAR=[
  {n:"Yil daftari",ic:"\u{1F4C6}",d:"365 kun daftar yuritilgan",kerak:365,v:t=>t.kunlar},
  {n:"Safarda ham",ic:"\u{1F30D}",d:"Ikki xil shaharda namoz belgilash",kerak:2,v:t=>t.shaharlar},
  {n:"Qur'on yuz kun",ic:"\u{1F5D2}\uFE0F",d:"100 kun Qur'on o'qilgan",kerak:100,v:t=>t.quranKun}
+ ,/* ---- zikr ---- */
+ {n:"Ilk zikr",ic:"\u{1F64F}",d:"Birinchi marta zikrni belgilash",kerak:1,v:t=>t.zikr}
+ ,{n:"Zikrli hafta",ic:"\u{1F31A}",d:"7 kun zikr bilan",kerak:7,v:t=>t.zikrKun}
+ ,{n:"Yuz zikr",ic:"\u{1F4AF}",d:"100 marta zikr bajarish",kerak:100,v:t=>t.zikr}
+ ,{n:"Ming zikr",ic:"\u{1F31F}",d:"1000 marta zikr bajarish",kerak:1000,v:t=>t.zikr}
 ];
 
 /* ══════════════ HAFTALIK JAMOA NISHONI ══════════════ */
@@ -1925,7 +2087,15 @@ const A={
    await api("/members/"+encodeURIComponent(id)+"/woman-mode",
      {method:"POST",body:JSON.stringify({woman_mode:on})});
    await A.loadRoster();await pull();render()}
-  catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+ catch(e){alert(e.message||"O'zgartirib bo'lmadi")}},
+ async setChopish(id,on){
+  const m=(members||[]).find(x=>x.id===id)||{};
+  if(!confirm((on?"CHOPISH rejimi yoqilsinmi? ":"CHOPISH rejimi o'chirilsinmi? ")+(m.name||id)
+    +(on?" — vazifasi bajarilmaguncha odatdagi ekranga kira olmaydi.":"")))return;
+  try{await api("/members/"+encodeURIComponent(id)+"/chopish",
+    {method:"POST",body:JSON.stringify({chopish:on})});
+   await A.loadRoster();await pull();render()}
+  catch(e){alert(e.message||"CHOPISH rejimini o'zgartirib bo'lmadi")}},
  async setWorkShift(id,on){
   /* Yengillik odamning o'ziga emas, doira egasiga tegishli: o'z bahosini
      yengillashtirishni hech kim jimgina qila olmasligi kerak. */
@@ -2012,7 +2182,11 @@ const A={
    document.getElementById("p_cur").value="";document.getElementById("p_new").value="";
   }catch(e){box.textContent=e.message||"O'zgartirib bo'lmadi";box.className="clay small"}},
  pick(id){me=id;LS.set("nd_me",id);screen="app";pinFor=null;render()},
- async refresh(){await pull();await A.loadPrivate();render()},
+ async refresh(){
+  /* Eski telefonda boshqa a'zo doirasi tanlanib qolsa, /state 403 qaytaradi va
+     foydalanuvchi bekorga "doira topilmadi" ekranida qolib ketardi. Avval o'z
+     doiralarini yangilaymiz, keyin tanlangan doirani yuklaymiz. */
+  await A.loadCircles();await pull();await A.loadPrivate();render()},
  async pushDayFor(d){await pushDay(me,d)},
  async mark(pk,how,ds){
   /* Ro'yxatda yo'q vaqt belgilanmaydi. Tahajjud olib tashlangach, eski telefon
@@ -2058,6 +2232,11 @@ const A={
   const day=Object.assign({},(data[me].days||{})[date]||{});day[f]=v;
   data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[date]:day})});
   render();await pushDay(me,date)},
+ async sunnat(on,ds){
+  const d=ds||date,day=Object.assign({},(data[me].days||{})[d]||{});
+  if(on)day.sunnat="done";else delete day.sunnat;
+  data[me]=Object.assign({},data[me],{days:Object.assign({},data[me].days,{[d]:day})});
+  render();await pushDay(me,d);render()},
  rak:0,tas:0,tasKalit:null,
  /* Sanoq 500 da to'xtab qolardi — ikkinchi va uchinchi pog'onada esa 1000 va 2000
     tasbeh kerak, ya'ni «Bajardim» tugmasi hech qachon yonmasdi va vazifani yopib
@@ -2169,6 +2348,18 @@ const A={
    const j=await api("/me/private");
    zikrs=j.zikrs||[];zikrMarks=j.zikr_marks||[];
    todos=j.todos||[];todoMarks=j.todo_marks||[];
+   haftaSanoqlar=j.hafta_sanoqlar||[];haftaSanoqKunlar=j.hafta_sanoq_kunlar||[];
+   const td=todayFor(myCfg()),wk=weekRange(td);
+   const amal=haftaAmali(td);
+   const weekNum=Math.floor(daysBetween(HAFTA_EPOX,wk[0])/7);
+   const skipKey='skip_auto_amal_'+weekNum;
+   if(!haftaSanoqlar.some(s=>s.name===amal.n)&&!localStorage.getItem(skipKey)){
+    try{
+     const ns=await api("/me/hafta-sanoqlar",{method:"POST",
+       body:JSON.stringify({name:amal.n,target:amal.son})});
+     if(ns&&ns.id)haftaSanoqlar=[ns,...haftaSanoqlar];
+    }catch(e){}
+   }
   }catch(e){}},
  async addZikr(){
   const val=id=>{const el=document.getElementById(id);return ((el&&el.value)||"").trim()};
@@ -2217,6 +2408,53 @@ const A={
      +encodeURIComponent(todayFor(myCfg()))+"?on="+(on?"true":"false"));
    await A.loadPrivate()}
   catch(e){shaxsiyMsg=e.message||"Belgilab bo'lmadi";shaxsiyErr=true}
+  render()},
+ /* ────────── HAFTALIK SANOQ ────────── */
+ haftaSanoqOchiq:false,haftaKunOchiq:null,haftaKunSon:"",
+ haftaSanoqForm(on){A.haftaSanoqOchiq=!!on;haftaSanoqMsg="";haftaSanoqErr=false;render()},
+ haftaKunOch(sanoqId,day){
+  A.haftaKunOchiq={sanoqId,day};
+  const k=(haftaSanoqKunlar||[]).find(x=>x.sanoq_id===sanoqId&&x.day===day);
+  A.haftaKunSon=k?String(k.amount):"";render()},
+ haftaKunYop(){A.haftaKunOchiq=null;A.haftaKunSon="";render()},
+ async addHaftaSanoq(){
+  const val=id=>{const el=document.getElementById(id);return ((el&&el.value)||"").trim()};
+  const name=val("hs_name");
+  const target=Math.round(Number(val("hs_target")));
+  if(!name){haftaSanoqMsg="Vazifa nomini yozing";haftaSanoqErr=true;render();return}
+  if(!isFinite(target)||target<1||target>1000000){
+   haftaSanoqMsg="Nechta ekanini yozing (1–1 000 000)";haftaSanoqErr=true;render();return}
+  try{
+   await api("/me/hafta-sanoqlar",{method:"POST",
+     body:JSON.stringify({name:name,target:target})});
+   A.haftaSanoqOchiq=false;haftaSanoqMsg="";haftaSanoqErr=false;await A.loadPrivate();
+  }catch(e){haftaSanoqMsg=e.message||"Qo'shib bo'lmadi";haftaSanoqErr=true}
+  render()},
+ async dropHaftaSanoq(id){
+  if(!confirm("Bu vazifa o'chirilsinmi?"))return;
+  const s=(haftaSanoqlar||[]).find(x=>x.id===id);
+  if(s){
+   const td=todayFor(myCfg()),wk=weekRange(td);
+   const amal=haftaAmali(td);
+   if(s.name===amal.n){
+    const weekNum=Math.floor(daysBetween(HAFTA_EPOX,wk[0])/7);
+    localStorage.setItem('skip_auto_amal_'+weekNum,'1');
+   }
+  }
+  try{await api("/me/hafta-sanoqlar/"+encodeURIComponent(id),{method:"DELETE"});await A.loadPrivate()}
+  catch(e){haftaSanoqMsg=e.message||"O'chirib bo'lmadi";haftaSanoqErr=true}
+  render()},
+ async saveHaftaKun(){
+  if(!A.haftaKunOchiq)return;
+  const {sanoqId,day}=A.haftaKunOchiq;
+  const amount=Math.round(Number(A.haftaKunSon));
+  if(!isFinite(amount)||amount<0||amount>1000000){
+   haftaSanoqMsg="To'g'ri son yozing (0–1 000 000)";haftaSanoqErr=true;render();return}
+  try{
+   await api("/me/hafta-sanoqlar/"+encodeURIComponent(sanoqId)+"/day/"+encodeURIComponent(day),
+    {method:"PUT",body:JSON.stringify({amount:amount})});
+   A.haftaKunOchiq=null;A.haftaKunSon="";haftaSanoqMsg="";haftaSanoqErr=false;await A.loadPrivate();
+  }catch(e){haftaSanoqMsg=e.message||"Saqlab bo'lmadi";haftaSanoqErr=true}
   render()},
  /* ────────── DORILAR ────────── */
  doriOchiq:false,doriKim:null,
@@ -2328,6 +2566,10 @@ const A={
    deedMsg="";deedErr=false;await pull();
   }catch(e){deedMsg=e.message||"Yozib bo'lmadi";deedErr=true}
   render()},
+ amalMatnOchiq:false,amalSanoq:0,
+ amalMatn(on){A.amalMatnOchiq=!!on;render()},
+ addAmalSanoq(n){A.amalSanoq=Math.max(0,A.amalSanoq+n);render()},
+ resetAmalSanoq(){A.amalSanoq=0;render()},
  /* Haftalik vazifa: belgi bugungi kunga tushadi, hisob esa haftaniki — hafta
     ichida qaysi kuni bosilgani ahamiyatsiz. */
  async setAmal(on){
@@ -2391,6 +2633,13 @@ const A={
     {d:todayFor(myCfg()),rak:owed.jazo.rak,tas:owed.jazo.tas,lvl:owed.daraja,oy:owed.oy}])});
   A.rak=0;A.tas=0;A.tasKalit=null;LS.set("nd_tas",null);
   render();await pushData(me);render()},
+ async finishChopishTask(){
+  const box=document.getElementById("chop_done"),owed=vazifaQarzi(data[me],M(me));
+  if(!box||!box.checked||!owed)return;
+  await A.finishTask();
+  try{await api("/members/"+encodeURIComponent(me)+"/chopish-complete",{method:"POST"});
+   await pull();render()}
+  catch(e){alert(e.message||"Vazifa yopilmadi")}},
  /* ────────── KITOB ────────── */
  bookView:"mine",bookOpenId:null,bookErr:"",
  setBookView(v){A.bookView=v;A.bookErr="";window.scrollTo(0,0);render()},
@@ -2550,6 +2799,28 @@ const A={
 
 /* ══════════════ KO'RINISH ══════════════ */
 function shell(inner){return inner}
+
+function chopishScreen(){
+ const m=M(me)||{},owed=vazifaQarzi(data[me],m),j=owed&&owed.jazo;
+ const vazifa=j?((j.rak?j.rak+" rakat nafl":"")+(j.rak&&j.tas?" va ":"")+(j.tas?j.tas+" tasbeh":"")):"Hozircha vazifa ma'lumoti topilmadi";
+ return `<div style="max-width:520px;margin:0 auto;padding:18px 0 34px">
+  <div style="border:3px solid #c9333d;background:linear-gradient(145deg,#3a1018,#160d14);border-radius:18px;padding:26px 18px;text-align:center;box-shadow:0 12px 34px #0008">
+   <div style="font-size:44px;line-height:1">🛑</div>
+   <div style="color:#ff6570;font-size:12px;font-weight:800;letter-spacing:2px;margin-top:10px">CHOPISH REJIMI</div>
+   <h1 style="color:#fff;font-size:28px;line-height:1.16;margin:12px 0 10px">SIZ VAZIFALARINGIZNI<br>BAJARMASDAN DAVOM ETA OLMAYSIZ</h1>
+   <p style="color:#ffd8d8;font-size:14px;line-height:1.65;margin:0">Bu jazo emas — o'zingizni va jamoani yana oldinga qaytarish uchun qisqa to'xtash. Vazifani tugating, keyin odatdagi rejimga qaytasiz.</p>
+   <div style="margin-top:18px;padding:16px;border:1px solid #e35a63;border-radius:12px;background:#5b1720;text-align:left">
+    <div style="color:#ffb1b5;font-size:11px;text-transform:uppercase;letter-spacing:1px">Sizning majburiy vazifangiz</div>
+    <div style="color:#fff;font-family:var(--serif);font-size:22px;margin-top:6px">${esc(vazifa)}</div>
+    ${owed?`<div style="color:#ffd8d8;font-size:12px;margin-top:6px">Daraja ${owed.daraja+1} · qarz: ${fmt(owed.qarz||0)} ball</div>`:""}
+   </div>
+   <div style="margin-top:18px;padding:13px 12px;border-radius:10px;background:#24151a;color:#ffdfe0;font-size:13px;line-height:1.6;text-align:left"><b>“Ey mo'minlar! Nega qilmaydigan narsangizni aytasizlar?”</b><br><span style="color:#ff9ea4">Saff surasi, 2–3-oyatlar</span><br><span style="color:#ffc5c8">So'zda emas, amalda oldinga chiqing — jamoa sizga muhtoj.</span></div>
+   <label style="display:flex;gap:10px;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;margin:20px 0 12px;cursor:pointer"><input id="chop_done" type="checkbox" style="width:22px;height:22px;accent-color:#ff5964"> Vazifani to'liq bajardim</label>
+   <button class="btn btn-wide" style="background:#d43f49;border-color:#ff8b91;color:#fff;font-weight:800" onclick="A.finishChopishTask()">✓ Bajardim — davom etaman</button>
+   <button class="btn btn-wide" style="margin-top:9px;border-color:#ff9ea4;color:#ffd8d8" onclick="A.logout()">Chiqish</button>
+  </div>
+ </div>`;
+}
 
 function loginScreen(){
  let h=`<div style="max-width:420px;margin:0 auto">
@@ -2766,6 +3037,10 @@ function syncScreen(){
         ?"border-color:var(--jade);color:var(--jade)":""}"
         onclick="A.setWomanMode('${esc(m.id)}',${ayol?"false":"true"})">${ayol
         ?"\u{1F338} Ayollar rejimi yoqilgan — o'chirish":"Ayollar rejimini yoqish"}</button>
+      ${!prof.is_child?`<button class="btn btn-wide" style="margin-top:7px;font-size:11px;${prof.chopish
+        ?"border-color:#ff6973;color:#ff6973;background:#35131a":""}"
+        onclick="A.setChopish('${esc(m.id)}',${prof.chopish?"false":"true"})">${prof.chopish
+        ?"🛑 CHOPISH yoqilgan — o'chirish":"🧱 CHOPISH rejimini yoqish"}</button>`:""}
       ${prof.is_child?`<button class="btn btn-wide" style="margin-top:7px;font-size:11px"
         onclick="A.setRewardGoal('${esc(m.id)}')">\u{1F381} Tilak uchun ${
           prof.reward_goal||100} ball — o'zgartirish</button>`
@@ -3000,19 +3275,41 @@ function quronPanel(cfg){
       yetganingizda "tugatdim" tugmasi chiqadi \u2014 har bir sura +${QURON_BALL} ball.</div>`}
   </div></div>`}
 
-/* Haftalik vazifa. Bir hafta — bitta amal, bitta belgi. Ataylab sodda: ro'yxat
-   ham, bosqich ham, muddat tanlash ham yo'q — bajardingizmi yoki yo'qmi. */
+/* Haftalik vazifa. Bir hafta — bitta zikr yoki salavot; bosib to’liq
+   arab matni ochiladi. */
 function amalPanel(cfg){
  const td=todayFor(cfg),wk=weekRange(td);
  const u=data[me]||blank(),bor=amalBajarilgan(u,wk);
  const qoldi=daysBetween(td,wk[1]);
+ const amal=haftaAmali(td);
  return `<div class="panel p14 mt14" style="border-color:${bor?"#4CAF8B66":"#C9A22744"}">
   <div class="flex between center">
    <div><div class="eyebrow">Haftalik vazifa</div>
     <div class="muted small" style="margin-top:3px">${pretty(wk[0])} — ${pretty(wk[1])}</div></div>
-   <div style="font-size:26px;${bor?"":"opacity:.25;filter:grayscale(1)"}">\u{1F91D}</div></div>
-  <p style="font-size:14.5px;line-height:1.55;margin:11px 0 0;font-family:var(--serif)">${
-    esc(haftaAmali(td))}</p>
+   <div style="font-size:26px;${bor?"":"opacity:.25;filter:grayscale(1)"}">\u{1F4FF}</div></div>
+  <p style="font-family:var(--serif);font-size:16px;margin:11px 0 6px;line-height:1.4">${esc(amal.n)}</p>
+  <button class="link" style="font-size:12px" onclick="A.amalMatn(${A.amalMatnOchiq?"false":"true"})">
+   ${A.amalMatnOchiq?"▲ Yopish":"▼ Toʼliq matn va sanoq"}</button>
+  ${A.amalMatnOchiq?`<div style="margin-top:10px;padding:12px;background:var(--panel2);
+     border-radius:10px;border:1px solid var(--line)">
+    <p style="font-family:var(--serif);font-size:13.5px;line-height:1.85;margin:0 0 8px">${esc(amal.t)}</p>
+    <p style="font-size:13px;line-height:1.65;margin:0 0 10px;color:var(--fg)">${esc(amal.m)}</p>
+    <div class="muted tiny" style="line-height:1.55;margin-bottom:12px">${esc(amal.s)}</div>
+    <div style="padding-top:12px;border-top:1px solid var(--line)">
+     <div class="flex between tiny" style="margin-bottom:6px">
+      <span class="eyebrow">Sanoq</span>
+      <span class="${A.amalSanoq>=(amal.son||1)?"jade":"brass"}">${fmt(A.amalSanoq)} / ${fmt(amal.son||1)}</span></div>
+     <div class="bar" style="height:5px;margin-bottom:10px">
+      <div style="width:${Math.min(100,A.amalSanoq/(amal.son||1)*100)}%;background:${A.amalSanoq>=(amal.son||1)?"var(--jade)":"var(--brass)"}"></div></div>
+     <div class="flex gap2">
+      <button onclick="A.addAmalSanoq(1)" style="flex:1;padding:14px 0;border-radius:12px;background:var(--panel2);
+        border:1px solid #C9A22755;color:var(--brass);font-family:var(--serif);font-size:18px;cursor:pointer">+1</button>
+      <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(10)">+10</button>
+      <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(33)">+33</button>
+      <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(100)">+100</button>
+      <button class="btn" style="padding:14px 10px" onclick="A.resetAmalSanoq()">↺</button></div>
+    </div>
+   </div>`:""}
   ${bor
    ?`<div class="jade small" style="margin-top:12px">\u2713 Bajarildi \u00B7 +${fmt(AMAL_BALL)} ball</div>
      <button class="link" style="font-size:11px;margin-top:6px" onclick="A.setAmal(false)">belgini olib tashlash</button>`
@@ -3106,6 +3403,7 @@ function todayTab(){
   </div>
   <button class="btn" ${date>=todayFor(cfg)?'style="opacity:.3"':""} onclick="${date>=todayFor(cfg)?"":"A.setDate(1)"}">›</button>
  </div>
+ <div class="panel p14 mb14" style="border-color:#4CAF8B55"><span class="jade">${esc(ruhXabar())}</span></div>
  <div class="grid2 mb14">
   <div class="panel stat"><b class="${dayBall<0?"clay":"jade"}">${
     dayBall===0?"0":(dayBall>0?"+":"")+fmt(dayBall)}</b><i>Shu kun bali</i></div>
@@ -3132,7 +3430,7 @@ function todayTab(){
   const yengil=!!r&&st!==r.s;
   /* Ayollar rejimida kechikkan namoz holatini o'zgartirmaydi — faqat bali. */
   const ayolQazo=st==="qazo"&&ayolRejimi(cfg);
-  const bal=belgiBall(cfg,p,r,st);
+  const bal=belgiBall(cfg,p,r,st,tgt);
   const state=isT?winState(p.k,tgt,cfg):null;
   /* Nafl uchun oyna faqat tavsiya — belgilash hech qachon to'silmaydi. */
   const open=state==="open",notYet=p.fard&&state==="early",shifted=tgt!==date;
@@ -3183,8 +3481,11 @@ function todayTab(){
     !p.fard?"Nafl — minus yo'q. Istalgan vaqtda o'qiysiz, har biri qarzni "+fmt(NAFL_BALL)+" ballga kamaytiradi"
     :notYet?"Vaqti kirmagan — vaqti kirgach belgilanadi"
     :open?"Vaqti ichida — hozir belgilasangiz 0 ball"
-    :isT?"Vaqti o'tdi — bugun qazo qilsangiz −0,25, ertaga qolsa −1"
-    :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)"}</div>`}
+    :isT?(p.k==="bomdod"&&bomdodYangi(tgt)?"Vaqti o'tdi — bugun qazo qilsangiz −2,5, ertaga qolsa −3,5"
+      :(ayolRejimi(cfg)?"Vaqti o'tdi — keyingi bomdodgacha o'qisangiz +"+fmt(AYOL_BALL)+" ball, o'qilmay qolsa −1"
+       :"Vaqti o'tdi — bugun qazo qilsangiz −0,5, ertaga qolsa −1"))
+    :(p.k==="bomdod"&&bomdodYangi(tgt)?"Belgilanmagan — bomdod o'tkazib yuborilgan hisoblanadi (−3,5)"
+      :"Belgilanmagan — o'tkazib yuborilgan hisoblanadi (−1)")}</div>`}
   h+=`</div>`});
  h+=quronPanel(cfg);
  h+=amalPanel(cfg);
@@ -3289,7 +3590,7 @@ function statsTab(){
  ch+=duelView();
  /* Taqqoslash — foizlar va o'rinlar. Oilada ko'rsatilmaydi. */
  if(isFamily())return ch+oilaTahlilView()+quronJamoaView();
- const ranked=members.slice().sort((a,b)=>{
+ const ranked=ratingMembers().slice().sort((a,b)=>{
   const sa=score(data[a.id],cfgNow(a),!!a.is_child),sb=score(data[b.id],cfgNow(b),!!b.is_child);
   const pa=sa.ontime+sa.qazo+sa.bad,pb=sb.ontime+sb.qazo+sb.bad;
   return (pb?sb.ontime/pb:0)-(pa?sa.ontime/pa:0)});
@@ -3332,7 +3633,11 @@ function statsTab(){
     <span>${p.n}</span><span class="${st?"brass":"muted"} small">${st} kun</span></div>
    <div class="bar"><div style="width:${prog*100}%;background:var(--jade)"></div></div>
   </div>`});
- h+=`</div>`;
+h+=`</div>`;
+ h+=rekordlarView(td);
+ h+=haftalikHisobotView();
+ h+=zikrReytingView();
+ h+=doriReytingView();
  return h}
 
 /* Kim qaysi surada va qancha o'qiyapti. Sardor buni so'radi: o'qish yolg'iz ish,
@@ -3363,7 +3668,7 @@ function quronHafta(id,td){
  return n}
 function quronJamoaView(){
  const td=todayFor(myCfg());
- const bor=members.filter(m=>quronJami(m.id)>0||quronTugatgani(m.id)>0);
+ const bor=ratingMembers().filter(m=>quronJami(m.id)>0||quronTugatgani(m.id)>0);
  if(!bor.length)return "";
  const eng=Math.max.apply(null,bor.map(m=>quronHafta(m.id,td)).concat([1]));
  let h=`<div class="panel p14 mb14"><div class="eyebrow">Qur'on \u00B7 jamoa</div>
@@ -3387,6 +3692,60 @@ function quronJamoaView(){
      Math.round(hafta/eng*100)}%;background:var(--jade)"></div></div>
    <div class="muted tiny" style="margin-top:3px">shu hafta ${hafta} oyat</div></div>`});
  return h+`</div>`}
+
+function rekordlarView(td){
+ const cfg=myCfg();
+ const rows=[
+  {n:"Eng uzun bomdod seriyasi",unit:"kun",v:m=>longestStreak((data[m.id]||{}).days||{},"bomdod",cfg,false)},
+  {n:"Eng uzun mukammal seriya",unit:"kun",v:m=>longestStreak((data[m.id]||{}).days||{},null,cfg,true)},
+  {n:"Eng ko'p jamoat",unit:"namoz",v:m=>(score(data[m.id],cfgNow(m),!!m.is_child).jamoat||0)},
+  {n:"Eng ko'p yaxshi amal",unit:"amal",v:m=>Object.keys((data[m.id]||{}).days||{}).filter(d=>(data[m.id].days[d]||{}).amal).length},
+  {n:"Eng ko'p Qur'on",unit:"oyat",v:m=>quronYigma(m.id).oyat||0},
+  {n:"Eng ko'p kitob",unit:"bet",v:m=>(data[m.id]||{}).books?bookReadAll(data[m.id]):0}
+ ];
+ const active=rows.map(r=>({...r,vals:ratingMembers().map(m=>({m:m,n:r.v(m)})).filter(x=>x.n>0)}))
+  .filter(r=>r.vals.length);
+ if(!active.length)return "";
+ let h=`<div class="panel p14 mb14" style="border-color:#C9A22744">
+  <div class="eyebrow">Rekordlar</div>
+  <p class="muted small" style="margin:6px 0 10px;line-height:1.55">Hozirgacha qilingan ishlar bo'yicha eng yaxshi natijalar.</p>`;
+ active.forEach(r=>{
+  const top=Math.max(...r.vals.map(x=>x.n)),names=r.vals.filter(x=>x.n===top).map(x=>first(x.m.name)).join(", ");
+  h+=`<div class="flex between center" style="padding:7px 0;border-top:1px solid var(--line);gap:10px">
+   <span class="small">${esc(r.n)}</span><span style="text-align:right;color:var(--brass);white-space:nowrap">
+    <b style="font-family:var(--serif);font-size:18px">${top}</b> <span class="muted tiny">${r.unit} · ${esc(names)}</span></span></div>`;
+ });
+ return h+`</div>`}
+
+function zikrReytingView(){
+ const rows=ratingMembers().map(m=>({m:m,s:zikrStat(m.id)}))
+  .sort((a,b)=>b.s.days-a.s.days);
+ if(!rows.length)return "";
+ let h=`<div class="panel p14 mb14" style="border-color:#C9A22744">
+  <div class="eyebrow">Zikr reytingi</div>
+  <p class="muted small" style="margin:6px 0 10px;line-height:1.55">Zikr aytilgan jami kunlar ko‘rsatiladi.</p>`;
+ rows.forEach((x,i)=>{h+=`<div class="flex between center" style="padding:8px 0;border-top:1px solid var(--line);gap:8px">
+  <span><span class="muted tiny">${i+1}.</span> <span style="color:${colorOf(x.m.id)}">${esc(first(x.m.name))}</span></span>
+  <span style="text-align:right;white-space:nowrap" class="${x.s.days?"jade":"muted"}">${x.s.days} kun</span></div>`});
+ return h+`</div>`}
+
+function haftalikHisobotView(){
+ const cfg=myCfg(),td=todayFor(cfg),wk=weekRange(td),o=prayerRange(data[me]||blank(),M(me),wk[0],wk[1]),z=zikrStat(me);
+ const total=o.ontime+o.qazo+o.bad,foiz=total?Math.round(o.ontime/total*100):0;
+ const mood=foiz>=81?['😄','Malades, shunqor! Bu hafta yorvording!']
+  :foiz<=70?['😔',"SHEF parot qivosizku, iltimos uyg‘oning!"]
+  :['🙂','Yaxshi ketayapti, yana ozgina kuchaytiring.'];
+ return `<div class="panel p14 mb14" style="border-color:#6C8CD566"><div class="eyebrow">Haftalik hisobot</div>
+  <div class="muted tiny" style="margin:5px 0 10px">${pretty(wk[0])} — ${pretty(wk[1])}</div>
+  <div style="font-size:28px;margin-bottom:7px">${mood[0]} <span style="font-family:var(--serif);font-size:18px">${mood[1]}</span></div>
+  <div class="grid2" style="gap:8px"><div><b class="jade" style="font-family:var(--serif);font-size:22px">${foiz}%</b><div class="muted tiny">vaqtida o'qilgan</div></div>
+   <div><b class="brass" style="font-family:var(--serif);font-size:22px">${z.week_repetitions||0}</b><div class="muted tiny">zikr aytilgan</div></div></div>
+  <div class="row" style="margin-top:10px"><span>Namozlar</span><span>${o.ontime} vaqtida · ${o.qazo} qazo · ${o.bad} qoldi</span></div>
+  <div class="row"><span>Jamoat</span><span>${o.jamoat} ta</span></div>
+  <div class="row"><span>Zikr kunlari</span><span>${z.week_days||0} kun</span></div>
+ </div>`}
+
+function bookReadAll(u){return ((u&&u.books)||[]).reduce((n,b)=>n+bookRead(b),0)}
 
 /* Har haftaning o'z topshirig'i. "Hammamiz uchun" ahdi joyida qoladi — bu uning
    o'rniga emas, yoniga qo'shiladi, va keyingi hafta boshqasi keladi. */
@@ -3415,6 +3774,7 @@ function haftaTopshiriqView(wk){
 /* ────────── SUNNAT ────────── */
 function sunnatTab(){
  const s=sunnatOf(date);
+ const done=!!(((data[me]||blank()).days||{})[date]||{}).sunnat;
  /* Faqat o'qish uchun: har kuni bitta sunnat, matni ostida manbasi bilan. */
  return `<div class="eyebrow">Kunning sunnati · ${pretty(date)}</div>
  <div class="panel p18 mb14" style="margin-top:10px;border-color:#C9A22744">
@@ -3423,9 +3783,12 @@ function sunnatTab(){
   <div class="muted tiny" style="margin-top:10px">Manba: ${esc(s.s)}</div>
   <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
    <div class="eyebrow">Bugungi mashq</div>
-   <p class="muted" style="font-size:13px;margin:5px 0 0">${esc(s.a)}</p></div></div>
+   <p class="muted" style="font-size:13px;margin:5px 0 0">${esc(s.a)}</p>
+   <button class="btn ${done?"btn-green":""}" style="margin-top:10px" onclick="A.sunnat(${done?"false":"true"},'${date}')">
+    ${done?"✓ Bajarildi · +1 ball":"Bajardim · +1 ball"}</button></div></div>
  ${doriPanel()}
  ${zikrPanel()}
+ ${haftaSanoqPanel()}
  ${isChild(me)?"":`<div style="height:18px"></div>`+vazifaBloki()}
  <div style="height:16px"></div>`}
 
@@ -3433,8 +3796,8 @@ function sunnatTab(){
    marta aytilishi; kuniga bir marta belgilanadi. Ball bermaydi. */
 function zikrPanel(){
  const td=todayFor(myCfg());
- let h=`<div style="height:18px"></div>
-  <div class="panel p14"><div class="flex between center">
+ let h=`<div style="height:10px"></div>
+  <div class="panel p10"><div class="flex between center">
    <div><div class="eyebrow">Zikrlar</div>
     <div class="muted small" style="margin-top:3px">Faqat sizga ko'rinadi</div></div>
    <button class="btn" style="font-size:11px" onclick="A.zikrForm(${A.zikrOchiq?"false":"true"})">${
@@ -3465,6 +3828,73 @@ function zikrPanel(){
       onclick="A.markZikr(${z.id},${bor?"false":"true"})">\u2713</button></div>
    <button class="link" style="font-size:11px;margin-top:8px" onclick="A.dropZikr(${z.id})">o'chirish</button>
   </div>`});
+ return h+`</div>`}
+
+/* Haftalik sanoqli maqsadlar. Faqat o'ziga ko'rinadi. Hafta davomida muayyan
+   sonni yig'ish: har kuni nechta bajarganini kiritadi, progress ko'rsatiladi. */
+function haftaSanoqPanel(){
+ const cfg=myCfg(),td=todayFor(cfg),wk=weekRange(td);
+ const KUN_QISQA=["Du","Se","Ch","Pa","Ju","Sh","Ya"];
+ function kunlar(){
+  const a=[];let d=wk[0];
+  for(let i=0;i<7;i++){a.push(d);d=shift(d,1);}
+  return a;}
+ function haftaJami(s){
+  return (haftaSanoqKunlar||[]).filter(k=>k.sanoq_id===s.id&&k.day>=wk[0]&&k.day<=wk[1])
+   .reduce((n,k)=>n+k.amount,0);}
+ function kunAmount(sId,day){
+  const k=(haftaSanoqKunlar||[]).find(x=>x.sanoq_id===sId&&x.day===day);
+  return k?k.amount:0;}
+ let h=`<div style="height:10px"></div>
+  <div class="panel p10"><div class="flex between center">
+   <div><div class="eyebrow">Haftalik sanoqli vazifalar</div>
+    <div class="muted small" style="margin-top:3px">Faqat sizga ko'rinadi</div></div>
+   <button class="btn" style="font-size:11px" onclick="A.haftaSanoqForm(${A.haftaSanoqOchiq?"false":"true"})">${
+     A.haftaSanoqOchiq?"Yopish":"+ Qo'shish"}</button></div>`;
+ if(A.haftaSanoqOchiq){
+  h+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+   <div class="label" style="margin-top:0">Vazifa nomi (zikr, duo yoki amal)</div>
+   <input id="hs_name" class="input" maxlength="300" placeholder="masalan: Salavot">
+   <div class="label">Haftalik maqsad (nechta)</div>
+   <input id="hs_target" class="input" type="number" min="1" max="1000000" placeholder="4444">
+   <button class="btn btn-green btn-wide" style="margin-top:12px" onclick="A.addHaftaSanoq()">Qo'shish</button>
+  </div>`}
+ if(haftaSanoqMsg)h+=`<div class="${haftaSanoqErr?"clay":"jade"} small" style="margin-top:9px">${esc(haftaSanoqMsg)}</div>`;
+ if(!(haftaSanoqlar||[]).length&&!A.haftaSanoqOchiq){
+  h+=`<p class="muted small" style="margin:11px 0 0;line-height:1.6">Hozircha haftalik
+   sanoqli vazifa yo'q. Qo'shsangiz, har kuni nechta bajarganingizni kiritib borasiz.</p>`}
+ (haftaSanoqlar||[]).forEach(s=>{
+  const jami=haftaJami(s),ok=jami>=s.target;
+  const pct=s.target>0?Math.min(100,Math.round(jami/s.target*100)):0;
+  const kunList=kunlar();
+  let kunHtml="";
+  kunList.forEach((day,i)=>{
+   const am=kunAmount(s.id,day);
+   const tanlangan=A.haftaKunOchiq&&A.haftaKunOchiq.sanoqId===s.id&&A.haftaKunOchiq.day===day;
+   kunHtml+=`<div style="text-align:center;min-width:0">
+    <div class="muted" style="font-size:10px;margin-bottom:3px">${KUN_QISQA[i]}</div>
+    <button class="btn" style="padding:5px 0;font-size:12px;width:100%;${
+      am>0?"border-color:var(--jade);color:var(--jade)":""}" onclick="A.haftaKunOch(${s.id},'${day}')">${
+      am>0?fmt(am):"—"}</button></div>`;});
+  h+=`<div class="panel p14" style="margin-top:11px;border-color:${ok?"#4CAF8B66":"var(--line)"}">
+   <div style="font-family:var(--serif);font-size:15px;line-height:1.4;margin-bottom:10px">${esc(s.name)}</div>
+   <div class="flex between tiny" style="margin-bottom:5px">
+    <span class="muted">Bu hafta</span>
+    <span class="${ok?"jade":"brass"}">${fmt(jami)} / ${fmt(s.target)}</span></div>
+   <div class="bar" style="height:5px;margin-bottom:10px">
+    <div style="width:${pct}%;background:${ok?"var(--jade)":"var(--brass)"}"></div></div>
+   <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${kunHtml}</div>`;
+  if(A.haftaKunOchiq&&A.haftaKunOchiq.sanoqId===s.id){
+   h+=`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+    <div class="label" style="margin-top:0">${pretty(A.haftaKunOchiq.day)} — nechta bajardingiz?</div>
+    <div class="flex gap2">
+     <input id="hs_kun_son" class="input" type="number" min="0" max="1000000"
+       value="${esc(A.haftaKunSon)}" oninput="A.haftaKunSon=this.value" placeholder="0"
+       style="flex:1;margin-bottom:0">
+     <button class="btn btn-green" onclick="A.saveHaftaKun()">Saqlash</button>
+     <button class="btn" onclick="A.haftaKunYop()">Bekor</button></div></div>`;}
+  h+=`<button class="link" style="font-size:11px;margin-top:8px" onclick="A.dropHaftaSanoq(${s.id})">o'chirish</button>
+  </div>`;});
  return h+`</div>`}
 
 /* Kunlik vazifalar — Bugun sahifasining eng pastida, faqat o'ziga. Takroriysi har
@@ -3534,16 +3964,15 @@ function todoPanel(){
 /* Oila birga dori ichadi: kim nimani, qaysi soatlarda, qachongacha. Kurs — reja,
    doza — bo'lgan voqea, va ikkalasi alohida turadi. */
 function doriPanel(){
- if(!isFamily())return "";
  const td=todayFor(myCfg());
  const RANG={vaqtida:"var(--jade)",kechikkan:"var(--brass)",
    kechikmoqda:"var(--clay)",kutilmoqda:"var(--mut)",ichilmagan:"var(--clay)"};
  const NOM={vaqtida:"vaqtida",kechikkan:"kechikkan",kechikmoqda:"vaqti o'tdi",
    kutilmoqda:"kutilmoqda",ichilmagan:"ichilmagan"};
  let h=`<div style="height:18px"></div>
-  <div class="panel p14"><div class="flex between center">
+  <div class="panel p10"><div class="flex between center">
    <div><div class="eyebrow">Dorilar</div>
-    <div class="muted small" style="margin-top:3px">Oilada kim nima ichadi</div></div>
+    <div class="muted tiny" style="margin-top:2px">Doirada kim nima ichadi</div></div>
    <button class="btn" style="font-size:11px" onclick="A.doriForm(${A.doriOchiq?"false":"true"})">${
      A.doriOchiq?"Yopish":"+ Dori qo'shish"}</button></div>`;
  if(A.doriOchiq){
@@ -3571,26 +4000,26 @@ function doriPanel(){
   const kishi=(members||[]).find(m=>m.id===d.member_id);
   const kunlik=doriKunlik(d,td),jam=doriHolat(d);
   const qoldi=Math.max(0,daysBetween(td,d.ends));
-  h+=`<div class="panel p14" style="margin-top:11px">
+  h+=`<div class="panel p10" style="margin-top:6px">
    <div class="flex between center">
-    <div><div style="font-family:var(--serif);font-size:16px">${esc(d.name)}</div>
-     <div class="muted small" style="margin-top:2px">${
+    <div><div style="font-family:var(--serif);font-size:15px">${esc(d.name)}</div>
+     <div class="muted tiny" style="margin-top:1px">${
        kishi?esc(first(kishi.name)):esc(d.member_id)} \u00B7 ${
        qoldi?qoldi+" kun qoldi":"oxirgi kuni"}</div></div>
     <button class="link" style="font-size:11px" onclick="A.dropMedicine(${d.id})">o'chirish</button></div>
-   <div style="margin-top:10px">`;
+   <div style="margin-top:5px">`;
   kunlik.forEach(x=>{
    const ich=!!x.taken;
-   h+=`<div class="flex between center" style="padding:6px 0">
-    <span style="font-size:13px">${x.slot}
+   h+=`<div class="flex between center" style="padding:1px 0;min-height:28px">
+    <span style="font-size:12px;line-height:1.2">${x.slot}
      <span class="tiny" style="color:${RANG[x.holat]}">\u00B7 ${NOM[x.holat]}${
        x.taken?" ("+x.taken+")":""}</span></span>
-    <button class="mbtn" style="${ich
+    <button class="mbtn" style="width:27px;height:27px;min-width:27px;padding:0;font-size:13px;${ich
       ?"background:"+RANG[x.holat]+";border-color:transparent;color:#0D1220":""}"
       onclick="${ich?`A.untakeDose(${d.id},'${x.slot}')`:`A.takeDose(${d.id},'${x.slot}')`}">\u2713</button>
    </div>`});
   h+=`</div>
-   <div class="muted tiny" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+   <div class="muted tiny" style="margin-top:4px;padding-top:5px;border-top:1px solid var(--line)">
     <span class="jade">${jam.vaqtida} vaqtida</span> \u00B7
     <span class="brass">${jam.kechikkan} kechikkan</span> \u00B7
     <span class="clay">${jam.ichilmagan} ichilmagan</span>${
@@ -3604,7 +4033,7 @@ function doriPanel(){
   tugagan.forEach(d=>{
    const kishi=(members||[]).find(m=>m.id===d.member_id),jam=doriHolat(d);
    const jamiDoza=jam.vaqtida+jam.kechikkan+jam.ichilmagan;
-   h+=`<div class="panel p14 mb10 flex between center">
+   h+=`<div class="panel p10 mb6 flex between center">
     <div style="min-width:0">
      <div style="font-size:14px">${esc(d.name)}</div>
      <div class="muted tiny" style="margin-top:3px">${
@@ -3621,7 +4050,7 @@ function doriPanel(){
  if(jamoa.rows.length){
   const kat="padding:5px 4px;text-align:right;white-space:nowrap";
   h+=`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
-   <div class="eyebrow" style="margin-bottom:8px">Oila bo'yicha</div>
+   <div class="eyebrow" style="margin-bottom:8px">${isFamily()?"Oila":"Doira"} bo'yicha</div>
    <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;width:100%">
     <tr><th style="${kat};text-align:left"></th>
      <th style="${kat};font-weight:400" class="jade">vaqtida</th>
@@ -3646,6 +4075,21 @@ function doriPanel(){
   </div>`}
  return h+`</div>`}
 
+function doriReytingView(){
+ const j=doriJamoa();
+ if(!j.rows.length)return "";
+ let h=`<div class="panel p14 mb14" style="border-color:#58BFC955">
+  <div class="eyebrow">Dori reytingi</div>
+  <p class="muted small" style="margin:6px 0 10px;line-height:1.55">Har bir odamning dozasi: vaqtida, kechikib ichilgan va umuman ichilmagan.</p>`;
+ j.rows.slice().sort((a,b)=>b.foiz-a.foiz||b.vaqtida-a.vaqtida).forEach((r,i)=>{
+  h+=`<div style="padding:8px 0;border-top:1px solid var(--line)">
+   <div class="flex between center"><span><span class="muted tiny">${i+1}.</span> <span style="color:${colorOf(r.m.id)}">${esc(first(r.m.name))}</span></span>
+    <span class="jade" style="font-family:var(--serif);font-size:18px">${r.foiz}%</span></div>
+   <div class="muted tiny" style="margin-top:4px"><span class="jade">${r.vaqtida} vaqtida</span> ·
+    <span class="brass">${r.kechikkan} kechikib ichdi</span> ·
+    <span class="clay">${r.ichilmagan} ichilmadi</span></div></div>`});
+ return h+`</div>`}
+
 /* ────────── VAZIFA ────────── */
 /* Qoidalar, jazo pog'onalari va qarz ko'rsatkichlari — Nishon sahifasida.
    Ular kunlik ish emas, bir marta o'qib qo'yiladigan narsa. */
@@ -3654,8 +4098,10 @@ function jazoQoida(){
  return `<div class="eyebrow">Ahd shartlari</div><h2 style="font-size:24px;margin:6px 0 12px">Ball va vazifa</h2>
  <div class="panel p14 mb14"><div class="muted" style="font-size:12px;line-height:1.75">
   <div><span class="jade">Vaqtida o'qilsa</span> — qarz yozilmaydi</div>
-  <div><span class="brass">Vaqti o'tib, keyingi bomdodgacha qazo qilinsa</span> — ${fmt(P_QAZO)} qarz</div>
-  <div><span class="clay">Keyingi kunning bomdodi kirib ketsa</span> — ${fmt(P_MISS)} qarz</div>
+  <div><span class="brass">Bomdod vaqti o'tib, shu kun qazo qilinsa</span> — ${fmt(BOMDOD_QAZO)} qarz</div>
+  <div><span class="clay">Bomdod ham o'qilmay, keyingi kun kirib ketsa</span> — ${fmt(BOMDOD_MISS)} qarz</div>
+  <div><span class="brass">Qolgan namoz vaqti o'tib, qazo qilinsa</span> — ${fmt(P_QAZO)} qarz</div>
+  <div><span class="clay">Qolgan namoz keyingi bomdodgacha o'qilmasa</span> — ${fmt(P_MISS)} qarz</div>
   <div><span class="jade">Ayollar rejimi</span> — kun ichida qazo qilinsa qarz yozilmaydi</div>
   <div><span class="jade">Ish rejimi</span> — peshin, asr, shom kun ichida o'qilsa qarz yozilmaydi</div>
  </div>
@@ -4028,6 +4474,11 @@ function render(){
  const app=document.getElementById("app");
  const y=window.scrollY;
  if(!loggedIn()||screen==="login"){app.innerHTML=loginScreen();return}
+ /* CHOPISH mutlaq blok: foydalanuvchi eski telefonda Sozlamalar, Qo'shish yoki
+    boshqa ichki ekranga kirib qolgan bo'lsa ham, faqat majburiy vazifa oynasi
+    ko'rinadi. Rejim serverdan o'chmaguncha hech bir bo'limga o'tkazmaymiz. */
+ if(!isAdmin&&me&&members.some(x=>x.id===me)&&data[me]&&(M(me)||{}).chopish){
+  app.innerHTML=chopishScreen();return}
  if(screen==="add"){app.innerHTML=addScreen();return}
  if(screen==="admin"){app.innerHTML=adminScreen();return}
  if(screen==="sync"){app.innerHTML=syncScreen();return}
@@ -4044,7 +4495,8 @@ function render(){
    ${syncMsg?`<p class="clay small">${esc(syncMsg)}</p>`:""}
    <button class="btn btn-gold btn-wide" style="margin-top:16px" onclick="A.refresh()">Qayta urinish</button>
    <button class="btn btn-wide" style="margin-top:10px" onclick="A.logout()">Chiqish</button>
-  </div>`;return}
+   </div>`;return}
+ if((M(me)||{}).chopish){app.innerHTML=chopishScreen();return}
  const cfg=myCfg();
  let h=`<div class="flex between center mb18">
   <div class="flex center gap3">

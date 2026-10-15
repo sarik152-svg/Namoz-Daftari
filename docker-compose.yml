@@ -2,19 +2,19 @@
 #
 # The database keeps its own named volume and is published only on localhost, so a
 # dump or a psql session is one command away on the box and nothing is reachable
-# from outside. The app is published on the IP because that is where the circle
-# will find it.
+# from outside. Nginx terminates HTTPS and proxies to the loopback-only app port.
 services:
   db:
-    image: postgres:16-alpine
+    # Match Railway's major version; keep the old PG16 volume untouched.
+    image: postgres:18-bookworm
     container_name: namoz-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: namoz
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: namoz
     volumes:
-      - namoz_pgdata:/var/lib/postgresql/data
+      - namoz_pgdata18:/var/lib/postgresql
     ports:
       - "127.0.0.1:5433:5432"
     healthcheck:
@@ -22,6 +22,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   web:
     build: .
@@ -31,13 +36,24 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://namoz:${DB_PASSWORD}@db:5432/namoz
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      PIN_ENCRYPTION_KEY: ${PIN_ENCRYPTION_KEY}
+      DATABASE_URL: postgresql://namoz:${DB_PASSWORD:?DB_PASSWORD is required}@db:5432/namoz
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      PIN_ENCRYPTION_KEY: ${PIN_ENCRYPTION_KEY:?PIN_ENCRYPTION_KEY is required}
       SEED_MEMBERS: ""
       PORT: "8080"
     ports:
-      - "8095:8080"
+      - "127.0.0.1:8095:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
-  namoz_pgdata:
+  namoz_pgdata18:

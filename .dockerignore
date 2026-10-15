@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.worktrees
+**/.DS_Store
+**/._*
+backups
+*.dump
+*.sql.gz

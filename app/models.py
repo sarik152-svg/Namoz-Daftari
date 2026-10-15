@@ -345,6 +345,8 @@ class MemberProfile(BaseModel):
     # because this member's shift covers all three. Everything else is judged the
     # same as anyone's, including a prayer left until the next day.
     work_shift: bool = False
+    # Vaqtinchalik majburiy vazifa rejimi: admin yoqadi, vazifa yopilgach o'chadi.
+    chopish: bool = False
     # How many points this child needs for one wish. Per child, because a
     # four-year-old and a twelve-year-old should not be held to the same number.
     reward_goal: int = Field(default=100, ge=10, le=10_000)
@@ -879,6 +881,55 @@ class Marked(BaseModel):
     day: Date
 
 
+class ZikrStat(BaseModel):
+    """Circle-visible totals for completed personal zikrs.
+
+    The zikr list itself stays private; only the fact that a daily zikr was
+    completed is shared for the optional circle leaderboard.
+    """
+
+    member_id: str
+    marks: int = 0
+    days: int = 0
+    repetitions: int = 0
+    week_marks: int = 0
+    week_days: int = 0
+    week_repetitions: int = 0
+
+
+class HaftaSanoq(BaseModel):
+    """A weekly counted target: say this dhikr N times before the week ends."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    name: str = Field(min_length=1, max_length=300)
+    target: int = Field(ge=1, le=1_000_000)
+
+
+class HaftaSanoqCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=300)
+    target: int = Field(ge=1, le=1_000_000)
+
+
+class HaftaSanoqKun(BaseModel):
+    """How many were done on a single day for one weekly target."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sanoq_id: int
+    day: Date
+    amount: int = Field(ge=1, le=1_000_000)
+
+
+class HaftaSanoqKunSet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount: int = Field(ge=0, le=1_000_000)
+
+
 class Private(BaseModel):
     """Everything that belongs to the caller alone. Never part of `/state`."""
 
@@ -886,6 +937,8 @@ class Private(BaseModel):
     zikr_marks: list[Marked] = Field(default_factory=list)
     todos: list[Todo] = Field(default_factory=list)
     todo_marks: list[Marked] = Field(default_factory=list)
+    hafta_sanoqlar: list[HaftaSanoq] = Field(default_factory=list)
+    hafta_sanoq_kunlar: list[HaftaSanoqKun] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -893,6 +946,8 @@ class Private(BaseModel):
             "zikr_marks": [m.model_dump(mode="json", exclude_none=True) for m in self.zikr_marks],
             "todos": [t.model_dump(mode="json") for t in self.todos],
             "todo_marks": [m.model_dump(mode="json", exclude_none=True) for m in self.todo_marks],
+            "hafta_sanoqlar": [s.model_dump(mode="json") for s in self.hafta_sanoqlar],
+            "hafta_sanoq_kunlar": [k.model_dump(mode="json") for k in self.hafta_sanoq_kunlar],
         }
 
 
@@ -1048,6 +1103,14 @@ class WomanModeFlag(BaseModel):
     woman_mode: bool
 
 
+class ChopishFlag(BaseModel):
+    """A firm, temporary lock until the member closes their assigned task."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    chopish: bool
+
+
 class GroupState(BaseModel):
     """The whole group in one response. Drives the comparison screen.
 
@@ -1071,6 +1134,7 @@ class GroupState(BaseModel):
     quran: list[QuranRead] = Field(default_factory=list)
     quran_done: list[QuranDone] = Field(default_factory=list)
     quran_stats: list[QuranStat] = Field(default_factory=list)
+    zikr_stats: list[ZikrStat] = Field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {
@@ -1088,4 +1152,5 @@ class GroupState(BaseModel):
             "quran": [q.model_dump(mode="json") for q in self.quran],
             "quran_done": [q.model_dump(mode="json") for q in self.quran_done],
             "quran_stats": [q.model_dump(mode="json") for q in self.quran_stats],
+            "zikr_stats": [z.model_dump() for z in self.zikr_stats],
         }

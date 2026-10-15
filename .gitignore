@@ -1,4 +1,8 @@
 .env
+.env.*
+!.env.example
+*.dump
+backups/
 .venv
 venv/
 __pycache__/
