@@ -2564,10 +2564,11 @@ const A={
    deedMsg="";deedErr=false;await pull();
   }catch(e){deedMsg=e.message||"Yozib bo'lmadi";deedErr=true}
   render()},
- amalMatnOchiq:false,amalSanoq:0,
+ amalMatnOchiq:false,
+ get amalSanoq(){const wk=weekRange(todayFor(myCfg()));return parseInt(localStorage.getItem('amal_sanoq_'+wk[0])||'0',10)},
  amalMatn(on){A.amalMatnOchiq=!!on;render()},
- addAmalSanoq(n){A.amalSanoq=Math.max(0,A.amalSanoq+n);render()},
- resetAmalSanoq(){A.amalSanoq=0;render()},
+ addAmalSanoq(n){const wk=weekRange(todayFor(myCfg()));const k='amal_sanoq_'+wk[0];const v=Math.max(0,(parseInt(localStorage.getItem(k)||'0',10))+n);localStorage.setItem(k,v);render()},
+ resetAmalSanoq(){const wk=weekRange(todayFor(myCfg()));localStorage.removeItem('amal_sanoq_'+wk[0]);render()},
  /* Haftalik vazifa: belgi bugungi kunga tushadi, hisob esa haftaniki — hafta
     ichida qaysi kuni bosilgani ahamiyatsiz. */
  async setAmal(on){
