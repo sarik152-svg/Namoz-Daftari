@@ -1887,6 +1887,12 @@ function allNotes(){
   const a=x.n.d+" "+(x.n.t||"00:00"),z=y.n.d+" "+(y.n.t||"00:00");
   return a<z?1:a>z?-1:0})}
 
+function amalSanoqKey(){
+ const d=new Date(),day=d.getDay(),mon=new Date(d);
+ mon.setDate(d.getDate()-(day===0?6:day-1));
+ return 'amal_sanoq_'+mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');
+}
+
 /* ══════════════ AMALLAR ══════════════ */
 const A={
  async boot(){
@@ -2565,10 +2571,10 @@ const A={
   }catch(e){deedMsg=e.message||"Yozib bo'lmadi";deedErr=true}
   render()},
  amalMatnOchiq:false,
- get amalSanoq(){const wk=weekRange(todayFor(myCfg()));return parseInt(localStorage.getItem('amal_sanoq_'+wk[0])||'0',10)},
+ get amalSanoq(){return parseInt(localStorage.getItem(amalSanoqKey())||'0',10)},
  amalMatn(on){A.amalMatnOchiq=!!on;render()},
- addAmalSanoq(n){const wk=weekRange(todayFor(myCfg()));const k='amal_sanoq_'+wk[0];const v=Math.max(0,(parseInt(localStorage.getItem(k)||'0',10))+n);localStorage.setItem(k,v);render()},
- resetAmalSanoq(){const wk=weekRange(todayFor(myCfg()));localStorage.removeItem('amal_sanoq_'+wk[0]);render()},
+ addAmalSanoq(n){const k=amalSanoqKey();const v=Math.max(0,(parseInt(localStorage.getItem(k)||'0',10))+n);localStorage.setItem(k,v);render()},
+ resetAmalSanoq(){localStorage.removeItem(amalSanoqKey());render()},
  /* Haftalik vazifa: belgi bugungi kunga tushadi, hisob esa haftaniki — hafta
     ichida qaysi kuni bosilgani ahamiyatsiz. */
  async setAmal(on){
