@@ -1892,6 +1892,15 @@ function amalSanoqKey(){
  mon.setDate(d.getDate()-(day===0?6:day-1));
  return 'amal_sanoq_'+mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');
 }
+function amalSanoqServerTotal(){
+ try{
+  const td=todayFor(myCfg()),wk=weekRange(td);
+  const amal=haftaAmali(td);
+  const s=(haftaSanoqlar||[]).find(x=>x.name===amal.n);
+  if(!s)return 0;
+  return (haftaSanoqKunlar||[]).filter(k=>k.sanoq_id===s.id&&k.day>=wk[0]&&k.day<=wk[1]).reduce((n,k)=>n+k.amount,0);
+ }catch(e){return 0}
+}
 
 /* ══════════════ AMALLAR ══════════════ */
 const A={
@@ -2570,11 +2579,25 @@ const A={
    deedMsg="";deedErr=false;await pull();
   }catch(e){deedMsg=e.message||"Yozib bo'lmadi";deedErr=true}
   render()},
- amalMatnOchiq:false,
- get amalSanoq(){return parseInt(localStorage.getItem(amalSanoqKey())||'0',10)},
+ amalMatnOchiq:false,amalSaqlandiMsg:false,
+ get amalSanoq(){return amalSanoqServerTotal()+parseInt(localStorage.getItem(amalSanoqKey())||'0',10)},
  amalMatn(on){A.amalMatnOchiq=!!on;render()},
  addAmalSanoq(n){const k=amalSanoqKey();const v=Math.max(0,(parseInt(localStorage.getItem(k)||'0',10))+n);localStorage.setItem(k,v);render()},
  resetAmalSanoq(){localStorage.removeItem(amalSanoqKey());render()},
+ async saveAmalSanoq(){
+  try{
+   const td=todayFor(myCfg()),wk=weekRange(td);
+   const amal=haftaAmali(td);
+   const s=(haftaSanoqlar||[]).find(x=>x.name===amal.n);
+   if(!s)return;
+   await api("/me/hafta-sanoqlar/"+encodeURIComponent(s.id)+"/day/"+encodeURIComponent(td),
+    {method:"PUT",body:JSON.stringify({amount:A.amalSanoq})});
+   localStorage.removeItem(amalSanoqKey());
+   await A.loadPrivate();
+   A.amalSaqlandiMsg=true;render();
+   setTimeout(()=>{A.amalSaqlandiMsg=false;render()},2000);
+  }catch(e){render()}
+ },
  /* Haftalik vazifa: belgi bugungi kunga tushadi, hisob esa haftaniki — hafta
     ichida qaysi kuni bosilgani ahamiyatsiz. */
  async setAmal(on){
@@ -3287,6 +3310,8 @@ function amalPanel(cfg){
  const u=data[me]||blank(),bor=amalBajarilgan(u,wk);
  const qoldi=daysBetween(td,wk[1]);
  const amal=haftaAmali(td);
+ const sanoq=A.amalSanoq,son=amal.son||1;
+ const localPending=parseInt(localStorage.getItem(amalSanoqKey())||'0',10);
  return `<div class="panel p14 mt14" style="border-color:${bor?"#4CAF8B66":"#C9A22744"}">
   <div class="flex between center">
    <div><div class="eyebrow">Haftalik vazifa</div>
@@ -3294,27 +3319,30 @@ function amalPanel(cfg){
    <div style="font-size:26px;${bor?"":"opacity:.25;filter:grayscale(1)"}">\u{1F4FF}</div></div>
   <p style="font-family:var(--serif);font-size:16px;margin:11px 0 6px;line-height:1.4">${esc(amal.n)}</p>
   <button class="link" style="font-size:12px" onclick="A.amalMatn(${A.amalMatnOchiq?"false":"true"})">
-   ${A.amalMatnOchiq?"▲ Yopish":"▼ Toʼliq matn va sanoq"}</button>
+   ${A.amalMatnOchiq?"▲ Yopish":"▼ Toʼliq matn"}</button>
   ${A.amalMatnOchiq?`<div style="margin-top:10px;padding:12px;background:var(--panel2);
-     border-radius:10px;border:1px solid var(--line)">
+     border-radius:10px;border:1px solid var(--line);margin-bottom:10px">
     <p style="font-family:var(--serif);font-size:13.5px;line-height:1.85;margin:0 0 8px">${esc(amal.t)}</p>
     <p style="font-size:13px;line-height:1.65;margin:0 0 10px;color:var(--fg)">${esc(amal.m)}</p>
-    <div class="muted tiny" style="line-height:1.55;margin-bottom:12px">${esc(amal.s)}</div>
-    <div style="padding-top:12px;border-top:1px solid var(--line)">
-     <div class="flex between tiny" style="margin-bottom:6px">
-      <span class="eyebrow">Sanoq</span>
-      <span class="${A.amalSanoq>=(amal.son||1)?"jade":"brass"}">${fmt(A.amalSanoq)} / ${fmt(amal.son||1)}</span></div>
-     <div class="bar" style="height:5px;margin-bottom:10px">
-      <div style="width:${Math.min(100,A.amalSanoq/(amal.son||1)*100)}%;background:${A.amalSanoq>=(amal.son||1)?"var(--jade)":"var(--brass)"}"></div></div>
-     <div class="flex gap2">
-      <button onclick="A.addAmalSanoq(1)" style="flex:1;padding:14px 0;border-radius:12px;background:var(--panel2);
-        border:1px solid #C9A22755;color:var(--brass);font-family:var(--serif);font-size:18px;cursor:pointer">+1</button>
-      <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(10)">+10</button>
-      <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(33)">+33</button>
-      <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(100)">+100</button>
-      <button class="btn" style="padding:14px 10px" onclick="A.resetAmalSanoq()">↺</button></div>
-    </div>
+    <div class="muted tiny" style="line-height:1.55">${esc(amal.s)}</div>
    </div>`:""}
+  <div style="margin-top:10px;padding:12px;background:var(--panel2);border-radius:10px;border:1px solid var(--line)">
+   <div class="flex between tiny" style="margin-bottom:6px">
+    <span class="eyebrow">Sanoq</span>
+    <span class="${sanoq>=son?"jade":"brass"}">${fmt(sanoq)} / ${fmt(son)}</span></div>
+   <div class="bar" style="height:5px;margin-bottom:10px">
+    <div style="width:${Math.min(100,sanoq/son*100)}%;background:${sanoq>=son?"var(--jade)":"var(--brass)"}"></div></div>
+   <div class="flex gap2" style="margin-bottom:8px">
+    <button onclick="A.addAmalSanoq(1)" style="flex:1;padding:14px 0;border-radius:12px;background:var(--panel2);
+      border:1px solid #C9A22755;color:var(--brass);font-family:var(--serif);font-size:18px;cursor:pointer">+1</button>
+    <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(10)">+10</button>
+    <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(33)">+33</button>
+    <button class="btn" style="padding:14px 10px" onclick="A.addAmalSanoq(100)">+100</button>
+    <button class="btn" style="padding:14px 10px" onclick="A.resetAmalSanoq()">↺</button></div>
+   ${A.amalSaqlandiMsg
+    ?`<div class="jade small" style="text-align:center;padding:9px;border-radius:8px">\u2713 Saqlandi!</div>`
+    :`<button class="btn btn-green btn-wide" style="padding:12px 0;font-size:14px" onclick="A.saveAmalSanoq()">💾 Saqlash${localPending>0?" · +"+fmt(localPending)+" ta yangi":""}</button>`}
+  </div>
   ${bor
    ?`<div class="jade small" style="margin-top:12px">\u2713 Bajarildi \u00B7 +${fmt(AMAL_BALL)} ball</div>
      <button class="link" style="font-size:11px;margin-top:6px" onclick="A.setAmal(false)">belgini olib tashlash</button>`
