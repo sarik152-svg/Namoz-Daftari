@@ -633,6 +633,7 @@ let medicines=[],doses=[],doriMsg="",doriErr=false;
    yozgani esa oilaning ishi emas. Ball ham bermaydi — bu daftar, hisob emas. */
 let zikrs=[],zikrMarks=[],zikrStats=[],todos=[],todoMarks=[],shaxsiyMsg="",shaxsiyErr=false;
 let haftaSanoqlar=[],haftaSanoqKunlar=[],haftaSanoqMsg="",haftaSanoqErr=false;
+let amalSanoqTimer=null;
 /* Va'dalar — ataylab ochiq: ismi yonidagi belgi shuni aytadi. */
 let promises=[];
 /* Qur'on: o'qilgan oyatlar jurnali va tugatilgan suralar. */
@@ -2582,7 +2583,7 @@ const A={
  amalMatnOchiq:false,amalSaqlandiMsg:false,
  get amalSanoq(){return amalSanoqServerTotal()+parseInt(localStorage.getItem(amalSanoqKey())||'0',10)},
  amalMatn(on){A.amalMatnOchiq=!!on;render()},
- addAmalSanoq(n){const k=amalSanoqKey();const v=Math.max(0,(parseInt(localStorage.getItem(k)||'0',10))+n);localStorage.setItem(k,v);render()},
+ addAmalSanoq(n){const k=amalSanoqKey();const v=Math.max(0,(parseInt(localStorage.getItem(k)||'0',10))+n);localStorage.setItem(k,v);render();clearTimeout(amalSanoqTimer);amalSanoqTimer=setTimeout(()=>A.saveAmalSanoq(),1200)},
  resetAmalSanoq(){localStorage.removeItem(amalSanoqKey());render()},
  async saveAmalSanoq(){
   try{
@@ -2590,10 +2591,13 @@ const A={
    const amal=haftaAmali(td);
    const s=(haftaSanoqlar||[]).find(x=>x.name===amal.n);
    if(!s)return;
+   const total=A.amalSanoq;
    await api("/me/hafta-sanoqlar/"+encodeURIComponent(s.id)+"/day/"+encodeURIComponent(td),
-    {method:"PUT",body:JSON.stringify({amount:A.amalSanoq})});
+    {method:"PUT",body:JSON.stringify({amount:total})});
+   const idx=haftaSanoqKunlar.findIndex(k=>k.sanoq_id===s.id&&k.day===td);
+   if(idx>=0)haftaSanoqKunlar[idx].amount=total;
+   else haftaSanoqKunlar.push({sanoq_id:s.id,day:td,amount:total});
    localStorage.removeItem(amalSanoqKey());
-   await A.loadPrivate();
    A.amalSaqlandiMsg=true;render();
    setTimeout(()=>{A.amalSaqlandiMsg=false;render()},2000);
   }catch(e){render()}
