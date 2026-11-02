@@ -105,7 +105,7 @@ const JAMOAT_BALL=0.5;
    o'qish («qazo» holati, −0,5) bilan hech qanday aloqasi yo'q — u minus, bu
    plyus. Shuning uchun ilovada ular hech qachon bir xil so'z bilan atalmaydi.
    Uzilgan qazo — savob, shuning uchun u reytingda sanaladi. */
-const QAZO_BALL=0.25,QAZO_MAX=20;
+const QAZO_BALL=0.5,QAZO_MAX=20;
 const QAZO_VAQT=["bomdod","peshin","asr","shom","xufton"];
 /* Ish rejimi. Peshin, asr va shomning vaqti ish smenasining ichida o'tadi, uyga
    kelgach uchalasi birdan o'qiladi. Shu kun ichida qazo qilib o'qilgani vaqtida
@@ -899,7 +899,7 @@ function prayerRange(u,m,a,z){
      o'shaniki hisoblanadi. */
   if(day.amal&&amalKuni[weekRange(d)[0]]===d){o.amal++;o.ball+=AMAL_BALL}
   const wk=weekRange(d);
-  if(wk[1]===d&&d<td&&!(m&&m.is_child)&&!amalBajarilgan(u,wk)){
+  if(wk[1]===d&&d<td&&d<"2026-11-01"&&!(m&&m.is_child)&&!amalBajarilgan(u,wk)){
    o.amalYoq++;o.ball-=AMAL_JARIMA}}
  const bs=bomdodSeriyaBall(days,c,a,z);o.bomdodSeriya=bs.ball;o.ball+=bs.ball;
  return o}
@@ -3352,8 +3352,7 @@ function amalPanel(cfg){
      <button class="link" style="font-size:11px;margin-top:6px" onclick="A.setAmal(false)">belgini olib tashlash</button>`
    :`<button class="btn btn-green btn-wide" style="margin-top:12px" onclick="A.setAmal(true)">\u2713 Bajardim</button>
      <div class="muted tiny" style="margin-top:7px;line-height:1.55">${
-       qoldi>0?qoldi+" kun qoldi":"bugun \u2014 haftaning oxirgi kuni"}.
-      Hafta oxirigacha bajarilmasa \u2212${fmt(AMAL_JARIMA)} ball.</div>`}
+       qoldi>0?qoldi+" kun qoldi":"bugun \u2014 haftaning oxirgi kuni"}${wk[1]>="2026-11-01"?"":". Hafta oxirigacha bajarilmasa \u2212"+fmt(AMAL_JARIMA)+" ball"}.</div>`}
  </div>`}
 
 /* ────────── QAZO DAFTARI ────────── */
