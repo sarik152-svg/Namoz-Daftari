@@ -1247,7 +1247,7 @@ class RevalidatingStatic(StaticFiles):
 
     def file_response(self, *args, **kwargs):
         response = super().file_response(*args, **kwargs)
-        response.headers.setdefault("Cache-Control", "no-cache")
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
 
 
